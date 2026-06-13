@@ -48,29 +48,17 @@ function Balon({ size = 200, sw = 5.5, gid = 'gbal', cols }) {
     </svg>
   )
 }
-function IconoMapa({ size = 20, cols }) {
-  return <Icono nombre="mapa" size={size} cols={cols} />
-}
-
-function Icono({ nombre, size = 20, cols }) {
-  const gid = `gic-${nombre}-${size}`
-  const grad = (
-    <defs><linearGradient id={gid} gradientUnits="userSpaceOnUse" x1="50" y1="12" x2="50" y2="88">
-      <stop offset="0%" stopColor={cols[0]} /><stop offset="100%" stopColor={cols[2]} /></linearGradient></defs>
+function IconoTechado({ size = 22, cols }) {
+  const gid = 'gtech' + size
+  return (
+    <svg viewBox="0 0 100 100" width={size} height={size} style={{ display: 'block' }}>
+      <defs><linearGradient id={gid} gradientUnits="userSpaceOnUse" x1="50" y1="15" x2="50" y2="85">
+        <stop offset="0%" stopColor={cols[0]} /><stop offset="100%" stopColor={cols[2]} /></linearGradient></defs>
+      <g fill="none" stroke={`url(#${gid})`} strokeWidth="6" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M16 47 L50 23 L84 47" /><path d="M26 45 V78 M74 45 V78" /><line x1="20" y1="78" x2="80" y2="78" />
+      </g>
+    </svg>
   )
-  const st = { fill: 'none', stroke: `url(#${gid})`, strokeWidth: 6, strokeLinecap: 'round', strokeLinejoin: 'round' }
-  const paths = {
-    inicio: <g style={st}><path d="M20 50 L50 24 L80 50" /><path d="M30 46 V78 H70 V46" /></g>,
-    torneos: <g style={st}><path d="M32 22 H68 V40 Q68 56 50 58 Q32 56 32 40 Z" /><path d="M32 28 H22 Q22 42 34 44 M68 28 H78 Q78 42 66 44" /><path d="M50 58 V70 M40 78 H60 M44 70 H56" /></g>,
-    mapa: <g style={st}><path d="M50 22 Q68 22 68 42 Q68 60 50 80 Q32 60 32 42 Q32 22 50 22 Z" /><circle cx="50" cy="42" r="9" /></g>,
-    techado: <g style={st}><path d="M18 48 L50 24 L82 48" /><path d="M28 46 V78 M72 46 V78" /><line x1="22" y1="78" x2="78" y2="78" /></g>,
-    rankings: <g style={st}><path d="M50 20 L59 39 L80 42 L65 57 L68 78 L50 68 L32 78 L35 57 L20 42 L41 39 Z" /></g>,
-    perfil: <g style={st}><circle cx="50" cy="38" r="16" /><path d="M22 80 Q22 58 50 58 Q78 58 78 80" /></g>,
-    juego: <g style={st}><path d="M54 18 L28 54 H48 L44 82 L72 44 H52 Z" /></g>,
-    crearTorneo: <g style={st}><path d="M34 24 H66 V40 Q66 54 50 56 Q34 54 34 40 Z" /><path d="M50 56 V66 M40 74 H60" /><line x1="50" y1="74" x2="50" y2="86" /><line x1="44" y1="80" x2="56" y2="80" /></g>,
-    crearLiga: <g style={st}><circle cx="36" cy="36" r="12" /><circle cx="66" cy="40" r="10" /><path d="M16 78 Q16 56 36 56 Q50 56 54 64" /><path d="M52 78 Q52 60 66 60 Q82 60 82 78" /></g>,
-  }
-  return <svg viewBox="0 0 100 100" width={size} height={size} style={{ display: 'block' }}>{grad}{paths[nombre] || paths.inicio}</svg>
 }
 
 const TORNEOS = [
@@ -91,26 +79,17 @@ const RANKING = [
   { rk: 5, ini: 'ED', nombre: 'Elvin De León', equipo: 'Metro Santiago', val: '11.9' },
 ]
 
-const DESTACADOS = [
-  { ini: 'BT', nombre: 'Brayan Tavárez', stat: '32 PTS', detalle: 'anoche', torneo: 'Copa Jícome', lugar: 'Cancha Jícome, Valverde', color: '#2fbf71' },
-  { ini: 'SP', nombre: 'Starlin Polanco', stat: '28 PTS', detalle: 'hace 2 días', torneo: 'Liga Superior', lugar: 'Polideportivo Santiago', color: '#e0a64b' },
-  { ini: 'RB', nombre: 'Ramón Bautista', stat: '14 REB', detalle: 'doble-doble', torneo: 'Torneo Mao Centro', lugar: 'Multiuso Mao', color: '#d88f3a' },
-  { ini: 'JM', nombre: 'Julio Martínez', stat: '11 AST', detalle: 'récord del torneo', torneo: 'Copa del Sur', lugar: 'Cancha Caciques', color: '#3d9be0' },
-  { ini: 'ED', nombre: 'Elvin De León', stat: '26 PTS', detalle: 'remontada', torneo: 'Liga Metro', lugar: 'Metro Santiago', color: '#2fbf71' },
-]
-
 const NAV = [
-  { id: 'inicio', txt: 'Inicio', icono: 'inicio' },
-  { id: 'torneos', txt: 'Torneos', icono: 'torneos' },
-  { id: 'mapa', txt: 'Mapa', icono: 'mapa' },
+  { id: 'inicio', txt: 'Inicio', icono: '⌂' },
+  { id: 'torneos', txt: 'Torneos', icono: '🏆' },
   { id: 'techado', txt: 'El Techado', icono: 'techado' },
-  { id: 'rankings', txt: 'Rankings', icono: 'rankings' },
-  { id: 'perfil', txt: 'Mi Perfil', icono: 'perfil' },
+  { id: 'rankings', txt: 'Rankings', icono: '★' },
+  { id: 'perfil', txt: 'Mi Perfil', icono: '◉' },
 ]
 const ACCIONES = [
-  { id: 'juego', txt: 'Armar juego rápido', icono: 'juego' },
-  { id: 'crearTorneo', txt: 'Crear torneo', icono: 'crearTorneo' },
-  { id: 'crearLiga', txt: 'Crear liga', icono: 'crearLiga' },
+  { id: 'juego', txt: '⚡ Armar juego rápido' },
+  { id: 'crearTorneo', txt: '🏆 Crear torneo' },
+  { id: 'crearLiga', txt: '🤝 Crear liga' },
 ]
 
 const VIDRIO = 'linear-gradient(150deg, rgba(24,26,30,0.82), rgba(12,14,18,0.86))'
@@ -174,7 +153,7 @@ export default function PantallaPublica({ onAccion }) {
 
   const TituloAcento = ({ children, icono }) => (
     <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 11 }}>
-      {icono === 'techado' && <Icono nombre="techado" size={18} cols={T.balon} />}
+      {icono === 'techado' && <IconoTechado size={18} cols={T.balon} />}
       <h3 style={{ fontSize: 12, letterSpacing: 1.8, textTransform: 'uppercase', fontWeight: 800, margin: 0, ...ORO_TEXTO }}>{children}</h3>
     </div>
   )
@@ -254,29 +233,6 @@ export default function PantallaPublica({ onAccion }) {
     </Placa>
   )
 
-  const ListaDestacados = () => (
-    <>{DESTACADOS.map((d, i) => (
-      <div key={i} style={{ marginBottom: 10 }}>
-        <Placa radio={15} pad={13}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 13 }}>
-            <div style={{ width: 44, height: 44, borderRadius: '50%', background: T.avatar, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, color: T.avatarTexto, flexShrink: 0 }}>{d.ini}</div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 14.5, fontWeight: 700, color: C.texto }}>{d.nombre}</span>
-                <span style={{ fontSize: 12, fontWeight: 800, color: T.acento }}>{d.stat}</span>
-                <span style={{ fontSize: 10.5, color: C.tenue }}>· {d.detalle}</span>
-              </div>
-              <div style={{ fontSize: 11.5, color: C.tenue, marginTop: 4, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 8.5, fontWeight: 800, letterSpacing: 0.5, padding: '2px 7px', borderRadius: 7, textTransform: 'uppercase', color: d.color, background: `${d.color}26` }}>{d.torneo}</span>
-                📍 {d.lugar}
-              </div>
-            </div>
-          </div>
-        </Placa>
-      </div>
-    ))}</>
-  )
-
   const Bienvenida = ({ grande }) => (
     <div style={{ marginBottom: grande ? 24 : 8 }}>
       <div style={{ display: 'inline-flex', alignItems: 'center', gap: 9, marginBottom: 10 }}>
@@ -311,18 +267,16 @@ export default function PantallaPublica({ onAccion }) {
           <div style={{ marginBottom: 26, paddingLeft: 6 }}><Logo /></div>
           {NAV.map((n) => (
             <button key={n.id} onClick={() => click(n.id)} style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left', background: n.id === 'inicio' ? T.navActivoBg : 'transparent', border: n.id === 'inicio' ? `1px solid ${T.navActivoBorde}` : '1px solid transparent', color: n.id === 'inicio' ? T.acento : '#d3dae0', fontSize: 14.5, fontWeight: 600, padding: '11px 12px', borderRadius: 11, cursor: 'pointer', marginBottom: 4 }}>
-              <span style={{ width: 22, display: 'inline-flex', justifyContent: 'center' }}><Icono nombre={n.icono} size={19} cols={T.balon} /></span>{n.txt}
+              <span style={{ fontSize: 17, width: 22, display: 'inline-flex', justifyContent: 'center' }}>{n.icono === 'techado' ? <IconoTechado size={18} cols={T.balon} /> : n.icono}</span>{n.txt}
             </button>
           ))}
           <div style={{ height: 1, background: 'rgba(255,255,255,.08)', margin: '14px 6px' }} />
           {ACCIONES.map((a) => (
-            <button key={a.id} onClick={() => click(a.id)} style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left', background: 'transparent', border: 'none', color: '#d3dae0', fontSize: 14, fontWeight: 600, padding: '10px 12px', borderRadius: 9, cursor: 'pointer' }}>
-              <span style={{ width: 22, display: 'inline-flex', justifyContent: 'center' }}><Icono nombre={a.icono} size={18} cols={T.balon} /></span>{a.txt}
-            </button>
+            <button key={a.id} onClick={() => click(a.id)} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'transparent', border: 'none', color: '#d3dae0', fontSize: 14, fontWeight: 600, padding: '10px 12px', borderRadius: 9, cursor: 'pointer' }}>{a.txt}</button>
           ))}
           <div style={{ position: 'absolute', bottom: 18, left: 16, right: 16 }}>
             <button onClick={() => click('registro')} style={{ width: '100%', border: 'none', borderRadius: 12, padding: 12, background: T.boton, color: '#1a1205', fontWeight: 800, fontSize: 14, cursor: 'pointer' }}>Crear cuenta gratis</button>
-            <button onClick={() => click('entrar')} style={{ width: '100%', marginTop: 8, background: 'transparent', border: '1px solid rgba(255,255,255,.12)', borderRadius: 12, padding: 10, color: C.tenue, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Entrar</button>
+            <button onClick={() => click('entrar')} style={{ width: '100%', marginTop: 8, background: 'transparent', border: '1px solid rgba(255,255,255,.12)', borderRadius: 12, padding: 10, color: C.tenue, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Iniciar sesión</button>
           </div>
         </aside>
         <main style={{ flex: 1, position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'center', padding: '26px 28px', gap: 26, alignItems: 'flex-start', maxWidth: 1180, margin: '0 auto' }}>
@@ -331,7 +285,6 @@ export default function PantallaPublica({ onAccion }) {
             <div style={{ marginBottom: 24 }}><EnVivo /></div>
             <SecHead titulo="El Techado" icono="techado" accion={{ txt: 'Ver todo →', fn: () => click('techado') }} />
             <ListaTechado />
-            <div style={{ marginTop: 8 }}><SecHead titulo="Destacados de la semana" accion={{ txt: 'Ver todos →', fn: () => click('rankings') }} /><ListaDestacados /></div>
           </div>
           <div style={{ width: 320, flexShrink: 0 }}>
             <div style={{ marginBottom: 24 }}><SecHead titulo="Torneos populares" accion={{ txt: 'Ver todos →', fn: () => click('torneos') }} /><ListaTorneos /></div>
@@ -356,10 +309,8 @@ export default function PantallaPublica({ onAccion }) {
           </div>
           {menuAbierto && (
             <div style={{ position: 'absolute', top: 60, right: 2, zIndex: 30, width: 230, background: 'rgba(20,18,16,.95)', border: `1px solid ${T.navActivoBorde}`, borderRadius: 14, padding: 8, boxShadow: '0 10px 30px rgba(0,0,0,.6)', backdropFilter: 'blur(12px)' }}>
-              {[{ id: 'mapa', txt: 'Mapa de torneos', icono: 'mapa' }, ...ACCIONES, { id: 'registro', txt: 'Crear mi cuenta gratis', icono: 'perfil' }, { id: 'entrar', txt: 'Entrar', icono: null }].map((a) => (
-                <button key={a.id} onClick={() => click(a.id)} style={{ display: 'flex', alignItems: 'center', gap: 11, width: '100%', textAlign: 'left', background: 'transparent', border: 'none', color: C.texto, fontSize: 14, fontWeight: 600, padding: '12px', borderRadius: 9, cursor: 'pointer' }}>
-                  {a.icono && <span style={{ width: 20, display: 'inline-flex', justifyContent: 'center' }}><Icono nombre={a.icono} size={17} cols={T.balon} /></span>}{a.txt}
-                </button>
+              {[...ACCIONES, { id: 'registro', txt: '✦ Crear mi cuenta gratis' }, { id: 'entrar', txt: '→ Iniciar sesión' }].map((a) => (
+                <button key={a.id} onClick={() => click(a.id)} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'transparent', border: 'none', color: C.texto, fontSize: 14, fontWeight: 600, padding: '12px', borderRadius: 9, cursor: 'pointer' }}>{a.txt}</button>
               ))}
             </div>
           )}
@@ -368,14 +319,13 @@ export default function PantallaPublica({ onAccion }) {
         <div style={{ marginTop: 22 }}><EnVivo /></div>
         <div style={{ marginTop: 22 }}><SecHead titulo="Torneos populares" /><ListaTorneos /></div>
         <div style={{ marginTop: 22 }}><SecHead titulo="El Techado" icono="techado" accion={{ txt: 'Ver todo →', fn: () => click('techado') }} /><ListaTechado /></div>
-        <div style={{ marginTop: 22 }}><SecHead titulo="Destacados de la semana" /><ListaDestacados /></div>
         <div style={{ marginTop: 22 }}><SecHead titulo="Ranking nacional" accion={{ txt: 'Ver todo →', fn: () => click('rankings') }} /><ListaRanking n={5} /></div>
         <CtaRegistro />
       </div>
       <div style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: 480, display: 'flex', background: 'rgba(8,9,12,.92)', backdropFilter: 'blur(12px)', borderTop: `1px solid ${T.navActivoBorde}`, padding: '9px 0 calc(9px + env(safe-area-inset-bottom))', zIndex: 40 }}>
-        {NAV.filter((n) => n.id !== 'mapa').map((n) => (
+        {NAV.map((n) => (
           <button key={n.id} onClick={() => click(n.id)} style={{ flex: 1, background: 'transparent', border: 'none', textAlign: 'center', color: n.id === 'inicio' ? T.acento : C.tenue, fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>
-            <div style={{ marginBottom: 3, display: 'flex', justifyContent: 'center' }}><Icono nombre={n.icono} size={18} cols={T.balon} /></div>{n.txt}
+            <div style={{ fontSize: 17, marginBottom: 3, display: 'flex', justifyContent: 'center' }}>{n.icono === 'techado' ? <IconoTechado size={17} cols={T.balon} /> : n.icono}</div>{n.txt}
           </button>
         ))}
       </div>
