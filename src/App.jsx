@@ -5,11 +5,18 @@ import PantallaPublica from './componentes/PantallaPublica'
 import PantallaRegistro from './componentes/PantallaRegistro'
 import PantallaLogin from './componentes/PantallaLogin'
 import PantallaPerfil from './componentes/PantallaPerfil'
+import PantallaJuegoConfig from './componentes/PantallaJuegoConfig'
+import PantallaJuegoJugadores from './componentes/PantallaJuegoJugadores'
+import PantallaJuegoVivo from './componentes/PantallaJuegoVivo'
+import PantallaJuegoResultado from './componentes/PantallaJuegoResultado'
 
 function App() {
   const [mostrarIntro, setMostrarIntro] = useState(true)
-  const [vista, setVista] = useState('publica') // 'publica' | 'registro' | 'login' | 'perfil'
+  const [vista, setVista] = useState('publica')
   const [sesion, setSesion] = useState(null)
+  const [configJuego, setConfigJuego] = useState(null)
+  const [resultadoJuego, setResultadoJuego] = useState(null)
+  const [destinoTrasLogin, setDestinoTrasLogin] = useState('perfil')
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSesion(data.session))
@@ -22,30 +29,52 @@ function App() {
   }
 
   if (vista === 'registro') {
-    return (
-      <PantallaRegistro
-        onListo={() => setVista('perfil')}
-        onIrLogin={() => setVista('login')}
-        onVolver={() => setVista('publica')}
-      />
-    )
+    return <PantallaRegistro onListo={() => setVista(destinoTrasLogin)} onIrLogin={() => setVista('login')} onVolver={() => setVista('publica')} />
   }
 
   if (vista === 'login') {
+    return <PantallaLogin onListo={() => setVista(destinoTrasLogin)} onIrRegistro={() => setVista('registro')} onVolver={() => setVista('publica')} />
+  }
+
+  if (vista === 'perfil') {
+    return <PantallaPerfil onVolver={() => setVista('publica')} onSalir={() => setVista('publica')} />
+  }
+
+  if (vista === 'juegoConfig') {
     return (
-      <PantallaLogin
-        onListo={() => setVista('perfil')}
-        onIrRegistro={() => setVista('registro')}
+      <PantallaJuegoConfig
+        onListo={(config) => { setConfigJuego(config); setVista('juegoJugadores') }}
         onVolver={() => setVista('publica')}
       />
     )
   }
 
-  if (vista === 'perfil') {
+  if (vista === 'juegoJugadores') {
     return (
-      <PantallaPerfil
+      <PantallaJuegoJugadores
+        config={configJuego}
+        onListo={(configCompleta) => { setConfigJuego(configCompleta); setVista('juegoVivo') }}
+        onVolver={() => setVista('juegoConfig')}
+      />
+    )
+  }
+
+  if (vista === 'juegoVivo') {
+    return (
+      <PantallaJuegoVivo
+        config={configJuego}
+        onTerminar={(res) => { setResultadoJuego(res); setVista('juegoResultado') }}
         onVolver={() => setVista('publica')}
-        onSalir={() => setVista('publica')}
+      />
+    )
+  }
+
+  if (vista === 'juegoResultado') {
+    return (
+      <PantallaJuegoResultado
+        resultado={resultadoJuego}
+        onNuevo={() => { setConfigJuego(null); setResultadoJuego(null); setVista('juegoConfig') }}
+        onInicio={() => { setConfigJuego(null); setResultadoJuego(null); setVista('publica') }}
       />
     )
   }
@@ -55,11 +84,17 @@ function App() {
       haySesion={!!sesion}
       onAccion={(id) => {
         if (id === 'perfil') {
+          setDestinoTrasLogin('perfil')
           setVista(sesion ? 'perfil' : 'login')
         } else if (id === 'registro') {
+          setDestinoTrasLogin('perfil')
           setVista('registro')
         } else if (id === 'entrar') {
+          setDestinoTrasLogin('perfil')
           setVista('login')
+        } else if (id === 'juego') {
+          setDestinoTrasLogin('juegoConfig')
+          setVista(sesion ? 'juegoConfig' : 'login')
         } else {
           alert('Módulo "' + id + '" — aquí irá su pantalla (próximamente)')
         }
