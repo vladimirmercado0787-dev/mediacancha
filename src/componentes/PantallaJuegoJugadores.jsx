@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import fondoCancha from '../assets/fondo-cancha.png'
+import fondoJuego from '../assets/fondo-juego.png'
 
 const TEMAS = {
   dorado: {
@@ -27,7 +27,7 @@ export default function PantallaJuegoJugadores({ config, onListo, onVolver }) {
 
   const initNombre = (eq, def) => {
     if (equipoFijo === eq) return config?.nombreEquipoFijo || def
-    return def
+    return '' // vacío para que el usuario escriba directo (el placeholder muestra Equipo A/B)
   }
   const initJug = (eq) => {
     if (equipoFijo === eq) return fijosComoInputs.length ? fijosComoInputs : vacios(eq)
@@ -78,10 +78,12 @@ export default function PantallaJuegoJugadores({ config, onListo, onVolver }) {
     <div style={{ position: 'relative', borderRadius: 18, padding: 1.5, background: T.borde, marginBottom: 14, opacity: esFijo ? 0.82 : 1 }}>
       <div style={{ borderRadius: 17, padding: 16, background: 'linear-gradient(150deg, rgba(24,26,30,0.86), rgba(12,14,18,0.92))', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}>
         {esFijo && <div style={{ fontSize: 10, fontWeight: 800, color: T.acento, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>🏆 Ganador · se queda</div>}
+        <div style={{ fontSize: 10.5, fontWeight: 700, color: C.tenue, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 5 }}>✏️ Nombre del equipo (tócalo para cambiarlo)</div>
         <input
           value={nombreEq}
           onChange={(e) => setNombreEq(e.target.value)}
-          style={{ ...inputBase, width: '100%', fontWeight: 800, fontSize: 16, marginBottom: 14, color: equipo === 0 ? C.texto : T.acento, background: 'transparent', border: 'none', borderBottom: '1px solid rgba(255,255,255,.14)', borderRadius: 0, padding: '4px 2px' }}
+          placeholder={equipo === 0 ? 'Equipo A' : 'Equipo B'}
+          style={{ ...inputBase, width: '100%', fontWeight: 800, fontSize: 17, marginBottom: 14, color: equipo === 0 ? C.texto : T.acento, background: 'rgba(255,255,255,.05)', border: `1px solid ${T.acento}55`, borderRadius: 10, padding: '11px 12px' }}
         />
         {lista.map((j, idx) => (
           <div key={idx} style={{ display: 'flex', gap: 8, marginBottom: 9, alignItems: 'center' }}>
@@ -107,7 +109,7 @@ export default function PantallaJuegoJugadores({ config, onListo, onVolver }) {
 
   return (
     <div style={{ minHeight: '100vh', position: 'relative', fontFamily: C.font, background: '#08090c', color: C.texto }}>
-      <div style={{ position: 'fixed', inset: 0, zIndex: 0, backgroundImage: `url(${fondoCancha})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
+      <div style={{ position: 'fixed', inset: 0, zIndex: 0, backgroundImage: `url(${fondoJuego})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
       <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: 'linear-gradient(180deg, rgba(8,9,12,0.84) 0%, rgba(8,9,12,0.92) 100%)' }} />
       <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: `radial-gradient(ellipse 60% 40% at 50% 15%, ${T.glow}, transparent 70%)` }} />
 

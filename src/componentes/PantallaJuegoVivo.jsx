@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import fondoCancha from '../assets/fondo-cancha.png'
+import fondoJuego from '../assets/fondo-juego.png'
 
 const TEMAS = {
   dorado: { acento: '#e8b65a', borde: 'linear-gradient(140deg,#f7d785,#b9802c 40%,#5e4318 70%,#caa050)', texto: 'linear-gradient(120deg,#fbe08a,#c8842e)', boton: 'linear-gradient(150deg, #f3cf63, #c8842e)', glow: 'rgba(190,135,55,0.20)' },
@@ -56,6 +56,8 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
   const [avisoFin, setAvisoFin] = useState(null)
 
   const esPorReloj = config?.tipoFin === 'reloj'
+  const totalCuartos = config?.cuartos || 1
+  const [cuartoActual, setCuartoActual] = useState(1)
   const [segs, setSegs] = useState(esPorReloj ? (config.minutos || 10) * 60 : 0)
   const [corriendo, setCorriendo] = useState(false)
   const intervalo = useRef(null)
@@ -63,11 +65,28 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
   useEffect(() => {
     if (corriendo && esPorReloj) {
       intervalo.current = setInterval(() => {
-        setSegs((s) => { if (s <= 1) { clearInterval(intervalo.current); setCorriendo(false); setAvisoFin('reloj'); return 0 } return s - 1 })
+        setSegs((s) => {
+          if (s <= 1) {
+            clearInterval(intervalo.current)
+            setCorriendo(false)
+            // ¿Es el último cuarto? -> fin del juego. Si no -> fin del cuarto.
+            if (cuartoActual >= totalCuartos) setAvisoFin('reloj')
+            else setAvisoFin('cuarto')
+            return 0
+          }
+          return s - 1
+        })
       }, 1000)
     }
     return () => clearInterval(intervalo.current)
-  }, [corriendo, esPorReloj])
+  }, [corriendo, esPorReloj, cuartoActual, totalCuartos])
+
+  // Pasar al siguiente cuarto
+  const siguienteCuarto = () => {
+    setCuartoActual((c) => c + 1)
+    setSegs((config.minutos || 10) * 60)
+    setAvisoFin(null)
+  }
 
   useEffect(() => {
     if (config?.tipoFin !== 'puntos' || avisoFin) return
@@ -188,7 +207,7 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
   return (
     <div style={{ fontFamily: font, background: '#08090c', color: TEXTO, maxWidth: 480, margin: '0 auto', display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', position: 'relative' }}>
       {/* fondo de cancha como el resto de la app */}
-      <div style={{ position: 'absolute', inset: 0, zIndex: 0, backgroundImage: `url(${fondoCancha})`, backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.5 }} />
+      <div style={{ position: 'absolute', inset: 0, zIndex: 0, backgroundImage: `url(${fondoJuego})`, backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.5 }} />
       <div style={{ position: 'absolute', inset: 0, zIndex: 0, background: 'linear-gradient(180deg, rgba(8,9,12,0.86), rgba(8,9,12,0.93))' }} />
 
       <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -208,7 +227,8 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
             <div style={{ flexShrink: 0, padding: '0 12px', textAlign: 'center' }}>
               {esPorReloj ? (
                 <>
-                  <div style={{ fontSize: 18, fontWeight: 800, fontFamily: 'monospace', ...ORO }}>{segs === 0 ? 'FINAL' : fmt(segs)}</div>
+                  {totalCuartos > 1 && <div style={{ fontSize: 9, fontWeight: 800, color: TENUE, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 1 }}>{cuartoActual}º de {totalCuartos}</div>}
+                  <div style={{ fontSize: 18, fontWeight: 800, fontFamily: 'monospace', ...ORO }}>{segs === 0 ? (cuartoActual >= totalCuartos ? 'FINAL' : 'FIN Q' + cuartoActual) : fmt(segs)}</div>
                   <button onClick={() => setCorriendo(!corriendo)} disabled={segs === 0} style={{ marginTop: 3, fontSize: 9, fontWeight: 800, padding: '4px 10px', borderRadius: 7, border: 'none', background: corriendo ? 'rgba(224,86,63,.18)' : 'rgba(47,191,113,.18)', color: corriendo ? ROJO : VERDE, cursor: 'pointer', textTransform: 'uppercase' }}>{corriendo ? '⏸ Pausa' : (segs === (config.minutos || 10) * 60 ? '▶ Iniciar' : '▶ Seguir')}</button>
                 </>
               ) : (
@@ -326,7 +346,8 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
       {sustituyendo && <ModalSustituir T={T} eq={EQ} jugada={sustituyendo} jugadores={jugadores} acciones={accionesTodas} onCancelar={() => setSustituyendo(null)} onConfirmar={(a, j) => sustituir(sustituyendo, a, j)} />}
       {cambioEquipo !== null && <ModalCambio T={T} eq={EQ} equipo={cambioEquipo} nombreEquipo={cambioEquipo === 0 ? config?.nombreA : config?.nombreB} jugadores={jugadoresEq(cambioEquipo)} jugSel={jugASustituir} setJugSel={setJugASustituir} nombre={nuevoNombre} numero={nuevoNumero} setNombre={setNuevoNombre} setNumero={setNuevoNumero} onCancelar={() => { setCambioEquipo(null); setJugASustituir(null); setNuevoNombre(''); setNuevoNumero('') }} onConfirmar={aplicarCambio} />}
       {confirmarFin && <ModalConfirmar T={T} titulo="¿Terminar el juego?" mensaje="Vas a cerrar el juego y ver el resultado. ¿Seguro?" textoSi="Sí, terminar" textoNo="No, seguir jugando" onSi={() => { vibrar([60, 30, 60, 30, 100]); onTerminar && onTerminar({ ...config, jugadores, historial }) }} onNo={() => setConfirmarFin(false)} />}
-      {avisoFin && <ModalConfirmar T={T} titulo={avisoFin === 'puntos' ? '¡Se llegó a la meta!' : '¡Se acabó el tiempo!'} mensaje={avisoFin === 'puntos' ? `Un equipo llegó a ${config.puntosMeta} puntos. ¿Terminar?` : 'El reloj llegó a cero. ¿Terminar?'} textoSi="Terminar juego" textoNo="Seguir jugando" onSi={() => { vibrar([60, 30, 60, 30, 100]); onTerminar && onTerminar({ ...config, jugadores, historial }) }} onNo={() => setAvisoFin(null)} />}
+      {avisoFin === 'cuarto' && <ModalConfirmar T={T} titulo={`Fin del ${cuartoActual}º cuarto`} mensaje={`Terminó el cuarto ${cuartoActual} de ${totalCuartos}. ¿Pasar al siguiente?`} textoSi={`▶ Cuarto ${cuartoActual + 1}`} textoNo="Esperar" onSi={() => { vibrar([40, 30, 40]); siguienteCuarto() }} onNo={() => setAvisoFin(null)} />}
+      {(avisoFin === 'reloj' || avisoFin === 'puntos') && <ModalConfirmar T={T} titulo={avisoFin === 'puntos' ? '¡Se llegó a la meta!' : '¡Se acabó el tiempo!'} mensaje={avisoFin === 'puntos' ? `Un equipo llegó a ${config.puntosMeta} puntos. ¿Terminar?` : 'El reloj llegó a cero. ¿Terminar?'} textoSi="Terminar juego" textoNo="Seguir jugando" onSi={() => { vibrar([60, 30, 60, 30, 100]); onTerminar && onTerminar({ ...config, jugadores, historial }) }} onNo={() => setAvisoFin(null)} />}
     </div>
   )
 }

@@ -112,6 +112,7 @@ export default function PantallaPublica({ onAccion, haySesion }) {
   const [verHistorialDia, setVerHistorialDia] = useState(false) // ventana del historial del día
   const [miId, setMiId] = useState(null) // id del usuario actual (para mostrar botón eliminar)
   const [pubAbierta, setPubAbierta] = useState(null) // publicación abierta en ventana de detalle
+  const [juegoAPublicar, setJuegoAPublicar] = useState(null) // juego del historial esperando elegir plantilla
 
   // Cargar el historial del día (local) y el Techado (Supabase)
   const recargarTechado = async () => {
@@ -122,6 +123,12 @@ export default function PantallaPublica({ onAccion, haySesion }) {
       const mapa = await misReacciones(pubs.map((p) => p.id))
       setMisReacc(mapa)
     }
+    // Si hay una publicación abierta en detalle, actualizarla con los datos frescos
+    setPubAbierta((abierta) => {
+      if (!abierta) return abierta
+      const actualizada = pubs.find((p) => p.id === abierta.id)
+      return actualizada || abierta
+    })
     setCargandoTechado(false)
   }
 
@@ -130,6 +137,27 @@ export default function PantallaPublica({ onAccion, haySesion }) {
     recargarTechado()
     miUsuarioId().then((id) => setMiId(id))
   }, [])
+
+  // Bloquear el scroll del fondo cuando hay una ventana (modal) abierta
+  useEffect(() => {
+    const hayModal = pubAbierta || verHistorialDia || juegoAPublicar
+    if (hayModal) {
+      const scrollY = window.scrollY
+      document.body.style.position = 'fixed'
+      document.body.style.top = `-${scrollY}px`
+      document.body.style.left = '0'
+      document.body.style.right = '0'
+      document.body.style.width = '100%'
+      return () => {
+        document.body.style.position = ''
+        document.body.style.top = ''
+        document.body.style.left = ''
+        document.body.style.right = ''
+        document.body.style.width = ''
+        window.scrollTo(0, scrollY)
+      }
+    }
+  }, [pubAbierta, verHistorialDia, juegoAPublicar])
 
   // Borrar una publicación propia del Techado
   const onBorrarPublicacion = async (pubId) => {
@@ -148,7 +176,6 @@ export default function PantallaPublica({ onAccion, haySesion }) {
 
   // Publicar un juego del historial del día en el Techado (Supabase)
   const [publicandoId, setPublicandoId] = useState(null)
-  const [juegoAPublicar, setJuegoAPublicar] = useState(null) // juego del historial esperando elegir plantilla
 
   // Al tocar "Publicar" en el historial: abrir el selector de plantilla
   const abrirSelectorParaJuego = (juego) => {

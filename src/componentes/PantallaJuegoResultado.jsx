@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import fondoCancha from '../assets/fondo-cancha.png'
+import fondoJuego from '../assets/fondo-juego.png'
 import { publicarJuego } from '../techado'
 
 const TEMAS = {
@@ -71,7 +71,7 @@ export default function PantallaJuegoResultado({ resultado, onNuevo, onInicio, o
 
   return (
     <div style={{ minHeight: '100vh', position: 'relative', fontFamily: C.font, background: '#08090c', color: C.texto }}>
-      <div style={{ position: 'fixed', inset: 0, zIndex: 0, backgroundImage: `url(${fondoCancha})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
+      <div style={{ position: 'fixed', inset: 0, zIndex: 0, backgroundImage: `url(${fondoJuego})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
       <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: 'linear-gradient(180deg, rgba(8,9,12,0.86) 0%, rgba(8,9,12,0.93) 100%)' }} />
       <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: `radial-gradient(ellipse 70% 40% at 50% 12%, ${T.glow}, transparent 70%)` }} />
 

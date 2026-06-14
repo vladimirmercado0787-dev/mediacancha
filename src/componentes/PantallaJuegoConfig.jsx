@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import fondoCancha from '../assets/fondo-cancha.png'
+import fondoJuego from '../assets/fondo-juego.png'
 
 const TEMAS = {
   dorado: {
@@ -44,6 +44,7 @@ export default function PantallaJuegoConfig({ onListo, onVolver }) {
   const [formato, setFormato] = useState('5v5')
   const [tipoFin, setTipoFin] = useState('reloj') // 'reloj' | 'puntos'
   const [minutos, setMinutos] = useState(10)
+  const [cuartos, setCuartos] = useState(4) // cantidad de cuartos (default 4, de 1 a 6)
   const [puntosMeta, setPuntosMeta] = useState(21)
   const [porDif2, setPorDif2] = useState(false)
   const [modoAnotacion, setModoAnotacion] = useState('jugada') // 'jugada' | 'jugador'
@@ -51,6 +52,13 @@ export default function PantallaJuegoConfig({ onListo, onVolver }) {
   const [avisoPago, setAvisoPago] = useState('')
 
   const jugadoresPorLado = parseInt(formato[0], 10)
+  const esCincoVcinco = formato === '5v5'
+
+  // El reloj SOLO está disponible en 5v5. Si cambia a otro formato, forzar "puntos".
+  const cambiarFormato = (f) => {
+    setFormato(f)
+    if (f !== '5v5' && tipoFin === 'reloj') setTipoFin('puntos')
+  }
 
   const toggleStat = (id) => {
     if (id === 'pts') return // obligatorio
@@ -88,6 +96,7 @@ export default function PantallaJuegoConfig({ onListo, onVolver }) {
       nombreJuego: nombreJuego.trim() || 'Juego rápido',
       formato, jugadoresPorLado, tipoFin,
       minutos: tipoFin === 'reloj' ? minutos : null,
+      cuartos: tipoFin === 'reloj' ? cuartos : null,
       puntosMeta: tipoFin === 'puntos' ? puntosMeta : null,
       porDif2, modoAnotacion, statsActivas,
     }
@@ -101,7 +110,7 @@ export default function PantallaJuegoConfig({ onListo, onVolver }) {
 
   return (
     <div style={{ minHeight: '100vh', position: 'relative', fontFamily: C.font, background: '#08090c', color: C.texto }}>
-      <div style={{ position: 'fixed', inset: 0, zIndex: 0, backgroundImage: `url(${fondoCancha})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
+      <div style={{ position: 'fixed', inset: 0, zIndex: 0, backgroundImage: `url(${fondoJuego})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
       <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: 'linear-gradient(180deg, rgba(8,9,12,0.84) 0%, rgba(8,9,12,0.92) 100%)' }} />
       <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: `radial-gradient(ellipse 60% 40% at 50% 15%, ${T.glow}, transparent 70%)` }} />
 
@@ -128,7 +137,7 @@ export default function PantallaJuegoConfig({ onListo, onVolver }) {
           <>
             {tituloSeccion('Formato')}
             <div style={{ display: 'flex', gap: 8 }}>
-              {FORMATOS.map((f) => pastilla(formato === f, () => setFormato(f), f, f))}
+              {FORMATOS.map((f) => pastilla(formato === f, () => cambiarFormato(f), f, f))}
             </div>
             <div style={{ fontSize: 12, color: C.tenue, marginTop: 10 }}>{jugadoresPorLado} {jugadoresPorLado === 1 ? 'jugador' : 'jugadores'} por equipo.</div>
           </>
@@ -138,14 +147,25 @@ export default function PantallaJuegoConfig({ onListo, onVolver }) {
         {placa(
           <>
             {tituloSeccion('¿Cómo se gana?')}
-            <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-              {pastilla(tipoFin === 'reloj', () => setTipoFin('reloj'), '⏱ Por reloj', 'reloj')}
+            <div style={{ display: 'flex', gap: 8, marginBottom: esCincoVcinco ? 14 : 8 }}>
+              {esCincoVcinco && pastilla(tipoFin === 'reloj', () => setTipoFin('reloj'), '⏱ Por reloj', 'reloj')}
               {pastilla(tipoFin === 'puntos', () => setTipoFin('puntos'), '🎯 Por puntos', 'puntos')}
             </div>
+            {!esCincoVcinco && (
+              <div style={{ fontSize: 11.5, color: C.tenue, marginBottom: 14, fontStyle: 'italic', lineHeight: 1.5 }}>
+                ⏱ El reloj está disponible solo en 5 vs 5. Los demás formatos se juegan por puntos.
+              </div>
+            )}
 
             {tipoFin === 'reloj' ? (
               <div>
-                <div style={{ fontSize: 12.5, color: C.tenue, marginBottom: 8 }}>Minutos por juego</div>
+                <div style={{ fontSize: 12.5, color: C.tenue, marginBottom: 8 }}>Cantidad de cuartos</div>
+                <div style={{ display: 'flex', gap: 6, marginBottom: 18, flexWrap: 'wrap' }}>
+                  {[1, 2, 3, 4, 5, 6].map((c) => (
+                    <button key={c} onClick={() => setCuartos(c)} style={{ flex: 1, minWidth: 42, border: cuartos === c ? `1.5px solid ${T.acento}` : '1px solid rgba(255,255,255,.14)', background: cuartos === c ? `${T.acento}1a` : 'transparent', color: cuartos === c ? T.acento : C.tenue, borderRadius: 9, padding: '9px 0', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>{c}</button>
+                  ))}
+                </div>
+                <div style={{ fontSize: 12.5, color: C.tenue, marginBottom: 8 }}>Minutos por cuarto</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <button onClick={() => setMinutos((m) => Math.max(1, m - 1))} style={btnMas(T)}>−</button>
                   <div style={{ fontSize: 30, fontWeight: 800, minWidth: 70, textAlign: 'center', ...ORO }}>{minutos}</div>
@@ -155,6 +175,9 @@ export default function PantallaJuegoConfig({ onListo, onVolver }) {
                       <button key={m} onClick={() => setMinutos(m)} style={{ border: '1px solid rgba(255,255,255,.14)', background: minutos === m ? 'rgba(255,255,255,.08)' : 'transparent', color: C.tenue, borderRadius: 8, padding: '6px 9px', fontSize: 12, cursor: 'pointer' }}>{m}</button>
                     ))}
                   </div>
+                </div>
+                <div style={{ fontSize: 11.5, color: C.tenue, marginTop: 12, fontStyle: 'italic' }}>
+                  {cuartos} {cuartos === 1 ? 'cuarto' : 'cuartos'} de {minutos} min = {cuartos * minutos} min de juego
                 </div>
               </div>
             ) : (
