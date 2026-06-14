@@ -21,10 +21,23 @@ export default function PantallaJuegoJugadores({ config, onListo, onVolver }) {
   const n = config?.jugadoresPorLado || 5
   const vacios = (eq) => Array.from({ length: n }, (_, i) => ({ nombre: '', numero: '', equipo: eq }))
 
-  const [nombreA, setNombreA] = useState('Equipo A')
-  const [nombreB, setNombreB] = useState('Equipo B')
-  const [jugA, setJugA] = useState(vacios(0))
-  const [jugB, setJugB] = useState(vacios(1))
+  // Si viene de "sustituir el perdedor", un equipo está fijo (el ganador)
+  const equipoFijo = config?.equipoFijo // 0, 1, o undefined
+  const fijosComoInputs = (config?.jugadoresFijos || []).map((j) => ({ nombre: j.nombre || '', numero: j.numero || '', equipo: j.equipo }))
+
+  const initNombre = (eq, def) => {
+    if (equipoFijo === eq) return config?.nombreEquipoFijo || def
+    return def
+  }
+  const initJug = (eq) => {
+    if (equipoFijo === eq) return fijosComoInputs.length ? fijosComoInputs : vacios(eq)
+    return vacios(eq)
+  }
+
+  const [nombreA, setNombreA] = useState(initNombre(0, 'Equipo A'))
+  const [nombreB, setNombreB] = useState(initNombre(1, 'Equipo B'))
+  const [jugA, setJugA] = useState(initJug(0))
+  const [jugB, setJugB] = useState(initJug(1))
   const [error, setError] = useState('')
 
   const setJ = (equipo, idx, campo, valor) => {
@@ -51,7 +64,9 @@ export default function PantallaJuegoJugadores({ config, onListo, onVolver }) {
       etiqueta: j.nombre.trim() || ('#' + j.numero.trim()),
       pts: 0, reb: 0, ast: 0, rob: 0,
     }))
-    onListo && onListo({ ...config, nombreA: nombreA.trim() || 'Equipo A', nombreB: nombreB.trim() || 'Equipo B', jugadores })
+    // Limpiar campos de "sustituir perdedor" para que no afecten el próximo juego
+    const { equipoFijo: _ef, nombreEquipoFijo: _nef, jugadoresFijos: _jf, ...configLimpia } = config || {}
+    onListo && onListo({ ...configLimpia, nombreA: nombreA.trim() || 'Equipo A', nombreB: nombreB.trim() || 'Equipo B', jugadores })
   }
 
   const inputBase = {
@@ -59,9 +74,10 @@ export default function PantallaJuegoJugadores({ config, onListo, onVolver }) {
     borderRadius: 10, padding: '11px 12px', color: C.texto, fontSize: 15, outline: 'none', fontFamily: C.font, boxSizing: 'border-box',
   }
 
-  const bloqueEquipo = (equipo, nombreEq, setNombreEq, lista) => (
-    <div style={{ position: 'relative', borderRadius: 18, padding: 1.5, background: T.borde, marginBottom: 14 }}>
+  const bloqueEquipo = (equipo, nombreEq, setNombreEq, lista, esFijo) => (
+    <div style={{ position: 'relative', borderRadius: 18, padding: 1.5, background: T.borde, marginBottom: 14, opacity: esFijo ? 0.82 : 1 }}>
       <div style={{ borderRadius: 17, padding: 16, background: 'linear-gradient(150deg, rgba(24,26,30,0.86), rgba(12,14,18,0.92))', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}>
+        {esFijo && <div style={{ fontSize: 10, fontWeight: 800, color: T.acento, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>🏆 Ganador · se queda</div>}
         <input
           value={nombreEq}
           onChange={(e) => setNombreEq(e.target.value)}
@@ -101,11 +117,15 @@ export default function PantallaJuegoJugadores({ config, onListo, onVolver }) {
           <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1, textTransform: 'uppercase', ...ORO }}>{config?.formato || ''} · {config?.nombreJuego || 'Juego rápido'}</span>
         </div>
 
-        <h1 style={{ fontSize: 24, fontWeight: 800, margin: '0 0 4px' }}>¿Quiénes juegan?</h1>
-        <p style={{ fontSize: 13.5, color: C.tenue, margin: '0 0 22px' }}>Pon nombre o número a cada jugador (al menos uno). Toca el nombre del equipo para cambiarlo.</p>
+        <h1 style={{ fontSize: 24, fontWeight: 800, margin: '0 0 4px' }}>{equipoFijo !== undefined ? 'Sustituir el perdedor' : '¿Quiénes juegan?'}</h1>
+        {equipoFijo !== undefined ? (
+          <p style={{ fontSize: 13.5, color: C.tenue, margin: '0 0 22px' }}>🏆 <b style={{ color: T.acento }}>{config?.nombreEquipoFijo}</b> se queda (ganó). Pon el equipo retador que entra.</p>
+        ) : (
+          <p style={{ fontSize: 13.5, color: C.tenue, margin: '0 0 22px' }}>Pon nombre o número a cada jugador (al menos uno). Toca el nombre del equipo para cambiarlo.</p>
+        )}
 
-        {bloqueEquipo(0, nombreA, setNombreA, jugA)}
-        {bloqueEquipo(1, nombreB, setNombreB, jugB)}
+        {bloqueEquipo(0, nombreA, setNombreA, jugA, equipoFijo === 0)}
+        {bloqueEquipo(1, nombreB, setNombreB, jugB, equipoFijo === 1)}
 
         {error && <div style={{ padding: '11px 14px', borderRadius: 11, background: 'rgba(226,75,74,.14)', border: '1px solid rgba(226,75,74,.3)', color: '#f09595', fontSize: 13, marginBottom: 14 }}>{error}</div>}
 

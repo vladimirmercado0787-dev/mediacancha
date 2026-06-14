@@ -75,6 +75,26 @@ function App() {
         resultado={resultadoJuego}
         onNuevo={() => { setConfigJuego(null); setResultadoJuego(null); setVista('juegoConfig') }}
         onInicio={() => { setConfigJuego(null); setResultadoJuego(null); setVista('publica') }}
+        onRepetir={() => {
+          // Mismos equipos, mismas reglas: solo resetea stats y marcador
+          const jugadoresLimpios = (resultadoJuego.jugadores || []).map((j) => ({ ...j, pts: 0, reb: 0, ast: 0, rob: 0, tap: 0 }))
+          setConfigJuego({ ...resultadoJuego, jugadores: jugadoresLimpios })
+          setResultadoJuego(null)
+          setVista('juegoVivo')
+        }}
+        onSustituirPerdedor={(ganadorEq) => {
+          // El ganador se queda (stats reseteadas), se va a editar el perdedor
+          const ganadores = (resultadoJuego.jugadores || []).filter((j) => j.equipo === ganadorEq).map((j) => ({ ...j, pts: 0, reb: 0, ast: 0, rob: 0, tap: 0 }))
+          const nombreGanador = ganadorEq === 0 ? resultadoJuego.nombreA : resultadoJuego.nombreB
+          setConfigJuego({
+            ...resultadoJuego,
+            equipoFijo: ganadorEq,
+            nombreEquipoFijo: nombreGanador,
+            jugadoresFijos: ganadores,
+          })
+          setResultadoJuego(null)
+          setVista('juegoJugadores')
+        }}
       />
     )
   }
