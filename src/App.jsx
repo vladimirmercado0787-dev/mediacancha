@@ -9,6 +9,7 @@ import PantallaJuegoConfig from './componentes/PantallaJuegoConfig'
 import PantallaJuegoJugadores from './componentes/PantallaJuegoJugadores'
 import PantallaJuegoVivo from './componentes/PantallaJuegoVivo'
 import PantallaJuegoResultado from './componentes/PantallaJuegoResultado'
+import { guardarJuegoDelDia } from './historialDia'
 
 function App() {
   const [mostrarIntro, setMostrarIntro] = useState(true)
@@ -63,7 +64,7 @@ function App() {
     return (
       <PantallaJuegoVivo
         config={configJuego}
-        onTerminar={(res) => { setResultadoJuego(res); setVista('juegoResultado') }}
+        onTerminar={(res) => { guardarJuegoDelDia(res); setResultadoJuego(res); setVista('juegoResultado') }}
         onVolver={() => setVista('publica')}
       />
     )

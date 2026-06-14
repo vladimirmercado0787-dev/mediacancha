@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react'
 import fondoCancha from '../assets/fondo-cancha.png'
+import { leerHistorialDia, haceCuanto as haceCuantoLocal, publicarEnTechado, quitarDelTechado } from '../historialDia'
+import { leerTechado, misReacciones, reaccionar, leerComentarios, comentar, borrarComentario, haceCuanto, borrarPublicacion, miUsuarioId } from '../techado'
+import { plantillaPorId, PLANTILLA_DEFAULT, PLANTILLAS, puedeUsar } from '../plantillas'
 
 const TEMAS = {
   dorado: {
@@ -67,9 +70,8 @@ const TORNEOS = [
   { nombre: 'Torneo Mao Centro', meta: 'Mao, Valverde · 10 equipos', nivel: 'Intermedio', color: '#d88f3a', likes: 612 },
 ]
 const TECHADO = [
-  { tag: 'RESULTADO', tagColor: '#2fbf71', titulo: 'Los Tígres remontan y van a semis', texto: 'Vencieron 67-61 a Leones Mao. MVP: Starlin Polanco con 22 pts.', tiempo: 'hace 12 min', likes: 340 },
-  { tag: 'RÉCORD', tagColor: '#f0c44c', titulo: 'Doble-doble de Bautista', texto: '14 puntos y 13 rebotes anoche en Jícome. Tercer doble-doble del torneo.', tiempo: 'hace 3 h', likes: 188 },
-  { tag: 'POPULAR', tagColor: '#e8a94b', titulo: 'La Copa Jícome es la #1 de Valverde', texto: 'Con 1,240 me gusta, lidera la provincia esta semana.', tiempo: 'hace 5 h', likes: 95 },
+  // Vacío por ahora: las noticias de torneos/ligas se agregarán cuando construyamos esos módulos.
+  // Por ahora El Techado solo muestra los juegos rápidos que la persona elige publicar (duran 24h).
 ]
 const RANKING = [
   { rk: 1, ini: 'BT', nombre: 'Brayan Tavárez', equipo: 'Águilas Esperanza', val: '24.5' },
@@ -94,7 +96,7 @@ const ACCIONES = [
 
 const VIDRIO = 'linear-gradient(150deg, rgba(24,26,30,0.82), rgba(12,14,18,0.86))'
 
-export default function PantallaPublica({ onAccion }) {
+export default function PantallaPublica({ onAccion, haySesion }) {
   const [esEscritorio, setEsEscritorio] = useState(typeof window !== 'undefined' ? window.innerWidth >= 900 : false)
   const [menuAbierto, setMenuAbierto] = useState(false)
   const [likes, setLikes] = useState({})
@@ -102,6 +104,109 @@ export default function PantallaPublica({ onAccion }) {
     if (typeof window !== 'undefined') return localStorage.getItem('mc_tema') || 'dorado'
     return 'dorado'
   })
+  const [juegosDia, setJuegosDia] = useState([])
+  const [publicaciones, setPublicaciones] = useState([])
+  const [misReacc, setMisReacc] = useState({}) // { publicacionId: 'like'|'dislike' }
+  const [cargandoTechado, setCargandoTechado] = useState(true)
+  const [comentariosAbiertos, setComentariosAbiertos] = useState(null) // id de publicación con comentarios abiertos
+  const [verHistorialDia, setVerHistorialDia] = useState(false) // ventana del historial del día
+  const [miId, setMiId] = useState(null) // id del usuario actual (para mostrar botón eliminar)
+  const [pubAbierta, setPubAbierta] = useState(null) // publicación abierta en ventana de detalle
+
+  // Cargar el historial del día (local) y el Techado (Supabase)
+  const recargarTechado = async () => {
+    const res = await leerTechado()
+    const pubs = res.data || []
+    setPublicaciones(pubs)
+    if (haySesion && pubs.length) {
+      const mapa = await misReacciones(pubs.map((p) => p.id))
+      setMisReacc(mapa)
+    }
+    setCargandoTechado(false)
+  }
+
+  useEffect(() => {
+    setJuegosDia(leerHistorialDia())
+    recargarTechado()
+    miUsuarioId().then((id) => setMiId(id))
+  }, [])
+
+  // Borrar una publicación propia del Techado
+  const onBorrarPublicacion = async (pubId) => {
+    if (!window.confirm('¿Eliminar esta publicación del Techado?')) return
+    const res = await borrarPublicacion(pubId)
+    if (res.error) alert(res.error)
+    else recargarTechado()
+  }
+
+  // Reaccionar a una publicación (like/dislike)
+  const onReaccionar = async (pubId, tipo) => {
+    if (!haySesion) { click('entrar'); return }
+    await reaccionar(pubId, tipo)
+    recargarTechado()
+  }
+
+  // Publicar un juego del historial del día en el Techado (Supabase)
+  const [publicandoId, setPublicandoId] = useState(null)
+  const [juegoAPublicar, setJuegoAPublicar] = useState(null) // juego del historial esperando elegir plantilla
+
+  // Al tocar "Publicar" en el historial: abrir el selector de plantilla
+  const abrirSelectorParaJuego = (juego) => {
+    if (!haySesion) { click('entrar'); return }
+    if (juego.publicado || publicandoId) return
+    setJuegoAPublicar(juego)
+  }
+
+  // Confirmar publicación con la plantilla y texto elegidos
+  const confirmarPublicarJuego = async (plantillaId, textoExtra) => {
+    const juego = juegoAPublicar
+    if (!juego) return
+    setJuegoAPublicar(null)
+    setPublicandoId(juego.id)
+    publicarEnTechado(juego.id)
+    setJuegosDia(leerHistorialDia())
+    const { publicarJuego } = await import('../techado')
+    const res = await publicarJuego({
+      nombreA: juego.nombreA, nombreB: juego.nombreB,
+      jugadores: juego.jugadores || [],
+      nombreJuego: juego.nombreJuego,
+      plantilla: plantillaId,
+      textoExtra: textoExtra || null,
+    })
+    if (res.error) {
+      quitarDelTechado(juego.id)
+      setJuegosDia(leerHistorialDia())
+      alert(res.error)
+    } else {
+      await recargarTechado()
+    }
+    setPublicandoId(null)
+  }
+
+  const publicarJuegoDia = async (juego) => {
+    if (!haySesion) { click('entrar'); return }
+    // Protección anti-duplicado: si ya está publicado o publicándose, no hacer nada
+    if (juego.publicado || publicandoId) return
+    setPublicandoId(juego.id)
+    // Marcar local de una vez (optimista) para bloquear el botón inmediatamente
+    publicarEnTechado(juego.id)
+    setJuegosDia(leerHistorialDia())
+    const { publicarJuego } = await import('../techado')
+    const res = await publicarJuego({
+      nombreA: juego.nombreA, nombreB: juego.nombreB,
+      jugadores: juego.jugadores || [],
+      nombreJuego: juego.nombreJuego,
+    })
+    if (res.error) {
+      // si falló, revertir la marca local para que pueda reintentar
+      quitarDelTechado(juego.id)
+      setJuegosDia(leerHistorialDia())
+      alert(res.error)
+    } else {
+      await recargarTechado()
+    }
+    setPublicandoId(null)
+  }
 
   const T = TEMAS[tema]
   const ORO_TEXTO = { background: T.texto, WebkitBackgroundClip: 'text', backgroundClip: 'text', WebkitTextFillColor: 'transparent' }
@@ -202,23 +307,72 @@ export default function PantallaPublica({ onAccion }) {
     ))}</>
   )
 
-  const ListaTechado = () => (
-    <>{TECHADO.map((p, i) => (
-      <div key={i} style={{ marginBottom: 10 }}>
-        <Placa radio={15} pad={14}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-            <span style={{ fontSize: 8.5, fontWeight: 800, letterSpacing: 0.5, padding: '3px 8px', borderRadius: 8, textTransform: 'uppercase', color: p.tagColor, background: `${p.tagColor}26` }}>{p.tag}</span>
-            <span style={{ fontSize: 11, color: C.tenue }}>{p.tiempo}</span>
-          </div>
-          <div style={{ fontSize: 15, fontWeight: 800, lineHeight: 1.25, color: '#f4f7f9' }}>{p.titulo}</div>
-          <div style={{ fontSize: 13, color: '#c3ccd4', marginTop: 5, lineHeight: 1.5 }}>{p.texto}</div>
-          <div onClick={() => toggleLike(`p${i}`, p.likes)} style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 11, cursor: 'pointer', color: likes[`p${i}`] ? T.acento : C.tenue, fontSize: 12.5, fontWeight: 600 }}>
-            <span style={{ fontSize: 14 }}>♥</span> {verLikes(`p${i}`, p.likes).toLocaleString('en-US')}
+  const ListaTechado = () => {
+    if (cargandoTechado) {
+      return <Placa radio={15} pad={20}><div style={{ textAlign: 'center', color: C.tenue, fontSize: 13 }}>Cargando el Techado…</div></Placa>
+    }
+    if (publicaciones.length === 0) {
+      return (
+        <Placa radio={15} pad={20}>
+          <div style={{ textAlign: 'center', color: C.tenue, fontSize: 13, lineHeight: 1.5 }}>
+            Todavía no hay nada en el Techado.<br />
+            Cuando juegues, puedes publicar tus juegos aquí (duran 24 horas).
           </div>
         </Placa>
-      </div>
-    ))}</>
-  )
+      )
+    }
+    return (
+      <>{publicaciones.map((p) => {
+        let datos = p.datos || {}
+        if (typeof datos === 'string') { try { datos = JSON.parse(datos) } catch (e) { datos = {} } }
+        const plant = plantillaPorId(datos.plantilla || PLANTILLA_DEFAULT)
+        const tieneImg = plant && plant.img
+        return (
+        <div key={p.id} style={{ marginBottom: 10 }}>
+          <Placa radio={15} pad={0}>
+            {/* zona con imagen de fondo (clickeable para abrir detalle) */}
+            <div onClick={() => setPubAbierta(p)} style={{ position: 'relative', cursor: 'pointer', borderRadius: '14px 14px 0 0', overflow: 'hidden', padding: 14, minHeight: tieneImg ? 150 : 'auto', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', background: tieneImg ? `linear-gradient(180deg, rgba(8,9,12,.2) 0%, rgba(8,9,12,.55) 55%, rgba(8,9,12,.92) 100%), url(${plant.img}) center/cover` : 'transparent' }}>
+              {/* autor + tag */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 9, position: tieneImg ? 'absolute' : 'static', top: 12, left: 12, right: 12 }}>
+                <div style={{ width: 34, height: 34, borderRadius: '50%', background: p.autor_foto ? `url(${p.autor_foto}) center/cover` : T.avatar, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: T.avatarTexto, flexShrink: 0, border: tieneImg ? '1.5px solid rgba(255,255,255,.35)' : 'none' }}>
+                  {!p.autor_foto && ((p.autor_nombre || '?').slice(0, 1).toUpperCase())}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: tieneImg ? '#fff' : C.texto, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textShadow: tieneImg ? '0 1px 4px rgba(0,0,0,.8)' : 'none' }}>{p.autor_nombre || 'Usuario'}{p.autor_apellido ? ` ${p.autor_apellido}` : ''}</div>
+                  <div style={{ fontSize: 11, color: tieneImg ? 'rgba(255,255,255,.8)' : C.tenue, textShadow: tieneImg ? '0 1px 4px rgba(0,0,0,.8)' : 'none' }}>{haceCuanto(p.creado_en)}</div>
+                </div>
+                {p.tag && <span style={{ fontSize: 8.5, fontWeight: 800, letterSpacing: 0.5, padding: '3px 8px', borderRadius: 8, textTransform: 'uppercase', color: tieneImg ? '#fff' : (p.tag_color || T.acento), background: tieneImg ? (p.tag_color || T.acento) : `${p.tag_color || T.acento}26`, boxShadow: tieneImg ? '0 1px 6px rgba(0,0,0,.5)' : 'none' }}>{p.tag}</span>}
+                {miId && p.autor_id === miId && (
+                  <span onClick={(e) => { e.stopPropagation(); onBorrarPublicacion(p.id) }} title="Eliminar" style={{ fontSize: 16, color: tieneImg ? '#fff' : C.tenue, cursor: 'pointer', padding: '2px 4px', marginLeft: 2 }}>🗑️</span>
+                )}
+              </div>
+              {/* contenido (título + texto) */}
+              <div style={{ position: 'relative' }}>
+                <div style={{ fontSize: 15, fontWeight: 800, lineHeight: 1.25, color: '#f4f7f9', textShadow: tieneImg ? '0 1px 6px rgba(0,0,0,.9)' : 'none' }}>{p.titulo}</div>
+                {p.texto && <div style={{ fontSize: 13, color: tieneImg ? '#e6ebef' : '#c3ccd4', marginTop: 5, lineHeight: 1.5, textShadow: tieneImg ? '0 1px 5px rgba(0,0,0,.9)' : 'none' }}>{p.texto}</div>}
+                <div style={{ fontSize: 11.5, color: tieneImg ? 'rgba(255,255,255,.7)' : C.tenue, marginTop: 7, fontWeight: 600 }}>Toca para ver los detalles ›</div>
+              </div>
+            </div>
+            {/* barra de interacción */}
+            <div style={{ padding: '0 14px 14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 18, marginTop: 12, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,.06)' }}>
+                <div onClick={() => onReaccionar(p.id, 'like')} style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', color: misReacc[p.id] === 'like' ? T.acento : C.tenue, fontSize: 13, fontWeight: 700 }}>
+                  <span style={{ fontSize: 15 }}>♥</span> {p.likes || 0}
+                </div>
+                <div onClick={() => onReaccionar(p.id, 'dislike')} style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', color: misReacc[p.id] === 'dislike' ? '#e0563f' : C.tenue, fontSize: 13, fontWeight: 700 }}>
+                  <span style={{ fontSize: 15 }}>👎</span> {p.dislikes || 0}
+                </div>
+                <div onClick={() => setPubAbierta(p)} style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', color: C.tenue, fontSize: 13, fontWeight: 700 }}>
+                  <span style={{ fontSize: 15 }}>💬</span> {p.num_comentarios || 0}
+                </div>
+              </div>
+            </div>
+          </Placa>
+        </div>
+        )
+      })}</>
+    )
+  }
 
   const ListaRanking = ({ n }) => (
     <Placa radio={15} pad={6}>
@@ -231,6 +385,64 @@ export default function PantallaPublica({ onAccion }) {
         </div>
       ))}
     </Placa>
+  )
+
+  const BotonHistorial = () => {
+    if (juegosDia.length === 0) return null
+    return (
+      <button onClick={() => setVerHistorialDia(true)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 11, padding: '13px 15px', borderRadius: 14, marginBottom: 22, cursor: 'pointer', background: 'rgba(255,255,255,.04)', border: `1px solid ${T.navActivoBorde || 'rgba(255,255,255,.1)'}`, textAlign: 'left' }}>
+        <span style={{ fontSize: 19 }}>🗓️</span>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: C.texto }}>Historial de hoy</div>
+          <div style={{ fontSize: 11.5, color: C.tenue }}>{juegosDia.length} {juegosDia.length === 1 ? 'juego jugado' : 'juegos jugados'} hoy</div>
+        </div>
+        <span style={{ fontSize: 18, color: C.tenue }}>›</span>
+      </button>
+    )
+  }
+
+  const ListaHistorialDia = () => (
+    <>
+      {juegosDia.map((j) => {
+        const ganoA = !j.hayEmpate && j.nombreGanador === j.nombreA
+        const ganoB = !j.hayEmpate && j.nombreGanador === j.nombreB
+        return (
+          <div key={j.id} style={{ marginBottom: 10 }}>
+            <Placa radio={15} pad={13}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 9 }}>
+                <span style={{ fontSize: 11, color: C.tenue }}>{j.nombreJuego}</span>
+                <span style={{ fontSize: 10.5, color: C.tenue }}>{haceCuantoLocal(j.ts)}</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ flex: 1, textAlign: 'center' }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: ganoA ? T.acento : C.tenue, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{j.nombreA}{ganoA ? ' 🏆' : ''}</div>
+                  <div style={{ fontSize: 28, fontWeight: 800, color: ganoA ? '#fff' : C.tenue, lineHeight: 1.1 }}>{j.totalA}</div>
+                </div>
+                <div style={{ fontSize: 12, color: C.tenue, padding: '0 8px' }}>—</div>
+                <div style={{ flex: 1, textAlign: 'center' }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: ganoB ? T.acento : C.tenue, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{j.nombreB}{ganoB ? ' 🏆' : ''}</div>
+                  <div style={{ fontSize: 28, fontWeight: 800, color: ganoB ? '#fff' : C.tenue, lineHeight: 1.1 }}>{j.totalB}</div>
+                </div>
+              </div>
+              {j.destacadoNombre && (
+                <div style={{ marginTop: 9, paddingTop: 9, borderTop: '1px solid rgba(255,255,255,.06)', fontSize: 11.5, color: C.tenue, textAlign: 'center' }}>
+                  ⭐ <b style={{ color: C.texto }}>{j.destacadoNombre}</b> · {j.destacadoPts} pts{j.destacadoReb ? ` · ${j.destacadoReb} reb` : ''}{j.destacadoAst ? ` · ${j.destacadoAst} ast` : ''}
+                </div>
+              )}
+              <button onClick={() => { if (!j.publicado) abrirSelectorParaJuego(j) }} disabled={j.publicado || publicandoId === j.id} style={{ width: '100%', marginTop: 10, padding: '9px', borderRadius: 9, fontSize: 12, fontWeight: 700, cursor: j.publicado ? 'default' : 'pointer', border: j.publicado ? `1px solid ${T.acento}` : '1px solid rgba(255,255,255,.14)', background: j.publicado ? `${T.acento}1a` : 'transparent', color: j.publicado ? T.acento : C.tenue }}>
+                {j.publicado ? '✓ Publicado en el Techado' : (publicandoId === j.id ? 'Publicando…' : '↗ Publicar en el Techado')}
+              </button>
+            </Placa>
+          </div>
+        )
+      })}
+    </>
+  )
+
+  const AvisoHistorialDia = () => (
+    <div style={{ fontSize: 11, color: C.tenue, textAlign: 'center', marginTop: 4, marginBottom: 2, fontStyle: 'italic' }}>
+      Este historial se borra cada 24 horas.
+    </div>
   )
 
   const Bienvenida = ({ grande }) => (
@@ -258,6 +470,49 @@ export default function PantallaPublica({ onAccion }) {
     <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: `radial-gradient(ellipse 55% 40% at 42% 55%, ${T.glow}, transparent 70%)` }} />
   </>)
 
+  // Modales que van en AMBAS vistas (escritorio y móvil)
+  const Modales = () => (
+    <>
+      {juegoAPublicar && (
+        <SelectorPlantilla
+          T={T} C={C}
+          esEscritorio={esEscritorio}
+          usuarioPago={false}
+          onCancelar={() => setJuegoAPublicar(null)}
+          onConfirmar={confirmarPublicarJuego}
+        />
+      )}
+      {pubAbierta && (
+        <DetallePublicacion
+          pub={pubAbierta}
+          T={T} C={C} ORO_TEXTO={ORO_TEXTO}
+          haySesion={haySesion}
+          esMia={miId && pubAbierta.autor_id === miId}
+          onCerrar={() => setPubAbierta(null)}
+          onPedirLogin={() => { setPubAbierta(null); click('entrar') }}
+          onReaccionar={onReaccionar}
+          miReaccion={misReacc[pubAbierta.id]}
+          onBorrar={() => { onBorrarPublicacion(pubAbierta.id); setPubAbierta(null) }}
+          onCambioComentarios={recargarTechado}
+        />
+      )}
+      {verHistorialDia && (
+        <div onClick={() => setVerHistorialDia(false)} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(4,5,7,0.8)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', display: 'flex', alignItems: esEscritorio ? 'center' : 'flex-end', justifyContent: 'center', padding: esEscritorio ? 20 : 0 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 480, maxHeight: '88vh', display: 'flex', flexDirection: 'column', borderRadius: esEscritorio ? 20 : '20px 20px 0 0', padding: 1.5, background: T.borde }}>
+            <div style={{ borderRadius: esEscritorio ? 19 : '19px 19px 0 0', background: 'linear-gradient(180deg, #14161a, #0c0e12)', padding: '18px 16px 24px', overflowY: 'auto' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                <span style={{ fontSize: 18, fontWeight: 800, color: C.texto }}>🗓️ Historial de hoy</span>
+                <span onClick={() => setVerHistorialDia(false)} style={{ fontSize: 24, color: C.tenue, cursor: 'pointer', lineHeight: 1 }}>×</span>
+              </div>
+              <div style={{ fontSize: 12, color: C.tenue, marginBottom: 16 }}>Los juegos que jugaste hoy. Se borran cada 24 horas.</div>
+              {ListaHistorialDia()}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  )
+
   if (esEscritorio) {
     return (
       <div style={{ minHeight: '100vh', color: C.texto, fontFamily: C.font, position: 'relative', display: 'flex', background: '#08090c' }}>
@@ -283,6 +538,7 @@ export default function PantallaPublica({ onAccion }) {
           <div style={{ flex: 1, maxWidth: 600 }}>
             <Bienvenida grande />
             <div style={{ marginBottom: 24 }}><EnVivo /></div>
+            {BotonHistorial()}
             <SecHead titulo="El Techado" icono="techado" accion={{ txt: 'Ver todo →', fn: () => click('techado') }} />
             <ListaTechado />
           </div>
@@ -293,6 +549,7 @@ export default function PantallaPublica({ onAccion }) {
             <button onClick={() => click('rankings')} style={{ width: '100%', marginTop: 10, background: T.navActivoBg, border: `1px solid ${T.navActivoBorde}`, borderRadius: 12, padding: 11, color: T.acento, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Ver ranking completo →</button>
           </div>
         </main>
+        {Modales()}
       </div>
     )
   }
@@ -317,6 +574,7 @@ export default function PantallaPublica({ onAccion }) {
         </div>
         <div style={{ marginTop: 14 }}><Bienvenida /></div>
         <div style={{ marginTop: 22 }}><EnVivo /></div>
+        <div style={{ marginTop: 22 }}>{BotonHistorial()}</div>
         <div style={{ marginTop: 22 }}><SecHead titulo="Torneos populares" /><ListaTorneos /></div>
         <div style={{ marginTop: 22 }}><SecHead titulo="El Techado" icono="techado" accion={{ txt: 'Ver todo →', fn: () => click('techado') }} /><ListaTechado /></div>
         <div style={{ marginTop: 22 }}><SecHead titulo="Ranking nacional" accion={{ txt: 'Ver todo →', fn: () => click('rankings') }} /><ListaRanking n={5} /></div>
@@ -328,6 +586,252 @@ export default function PantallaPublica({ onAccion }) {
             <div style={{ fontSize: 17, marginBottom: 3, display: 'flex', justifyContent: 'center' }}>{n.icono === 'techado' ? <IconoTechado size={17} cols={T.balon} /> : n.icono}</div>{n.txt}
           </button>
         ))}
+      </div>
+
+      {Modales()}
+    </div>
+  )
+}
+
+// ---- Componente de comentarios (carga de Supabase) ----
+function Comentarios({ pubId, haySesion, T, C, onPedirLogin, onCambio }) {
+  const [lista, setLista] = useState([])
+  const [texto, setTexto] = useState('')
+  const [cargando, setCargando] = useState(true)
+  const [enviando, setEnviando] = useState(false)
+
+  const cargar = async () => {
+    const res = await leerComentarios(pubId)
+    setLista(res.data || [])
+    setCargando(false)
+  }
+  useEffect(() => { cargar() }, [pubId])
+
+  const enviar = async () => {
+    if (!haySesion) { onPedirLogin && onPedirLogin(); return }
+    const limpio = texto.trim()
+    if (!limpio) return
+    setEnviando(true)
+    const res = await comentar(pubId, limpio)
+    if (!res.error) {
+      setTexto('')
+      await cargar()
+      onCambio && onCambio()
+    } else {
+      alert(res.error)
+    }
+    setEnviando(false)
+  }
+
+  const inputStyle = { flex: 1, minWidth: 0, background: 'rgba(12,14,18,0.7)', border: '1px solid rgba(255,255,255,.12)', borderRadius: 10, padding: '10px 12px', color: '#eef3f6', fontSize: 13.5, outline: 'none' }
+
+  return (
+    <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,.06)' }}>
+      {cargando ? (
+        <div style={{ fontSize: 12.5, color: C.tenue, textAlign: 'center', padding: '6px 0' }}>Cargando comentarios…</div>
+      ) : (
+        <>
+          {lista.length === 0 && <div style={{ fontSize: 12.5, color: C.tenue, textAlign: 'center', padding: '4px 0 10px' }}>Sé el primero en comentar.</div>}
+          {lista.map((c) => {
+            const perf = c.perfiles || {}
+            const nombre = perf.nombre ? `${perf.nombre}${perf.apellido ? ' ' + perf.apellido : ''}` : 'Usuario'
+            return (
+              <div key={c.id} style={{ display: 'flex', gap: 9, marginBottom: 10 }}>
+                <div style={{ width: 28, height: 28, borderRadius: '50%', background: perf.foto_url ? `url(${perf.foto_url}) center/cover` : T.avatar, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: T.avatarTexto, flexShrink: 0 }}>
+                  {!perf.foto_url && nombre.slice(0, 1).toUpperCase()}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: C.texto }}>{nombre} <span style={{ fontSize: 10.5, fontWeight: 400, color: C.tenue }}>· {haceCuanto(c.creado_en)}</span></div>
+                  <div style={{ fontSize: 13, color: '#c3ccd4', marginTop: 2, lineHeight: 1.4, wordBreak: 'break-word' }}>{c.texto}</div>
+                </div>
+              </div>
+            )
+          })}
+          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+            <input value={texto} onChange={(e) => setTexto(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') enviar() }} placeholder={haySesion ? 'Escribe un comentario…' : 'Inicia sesión para comentar'} maxLength={500} style={inputStyle} />
+            <button onClick={enviar} disabled={enviando} style={{ border: 'none', borderRadius: 10, padding: '0 16px', background: T.boton, color: '#1a1205', fontWeight: 800, fontSize: 13, cursor: 'pointer', flexShrink: 0 }}>{enviando ? '…' : 'Enviar'}</button>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+// ---- Ventana de DETALLE de una publicación ----
+function DetallePublicacion({ pub, T, C, ORO_TEXTO, haySesion, esMia, onCerrar, onPedirLogin, onReaccionar, miReaccion, onBorrar, onCambioComentarios }) {
+  const esEscritorio = typeof window !== 'undefined' && window.innerWidth >= 900
+  let datos = pub.datos || {}
+  if (typeof datos === 'string') { try { datos = JSON.parse(datos) } catch (e) { datos = {} } }
+  const esJuego = pub.tipo === 'juego_rapido' && datos.jugadores
+  const plantDetalle = plantillaPorId(datos.plantilla || PLANTILLA_DEFAULT)
+  const imgFondo = plantDetalle && plantDetalle.img
+  const jugA = (datos.jugadores || []).filter((j) => j.equipo === 0).sort((a, b) => (b.pts || 0) - (a.pts || 0))
+  const jugB = (datos.jugadores || []).filter((j) => j.equipo === 1).sort((a, b) => (b.pts || 0) - (a.pts || 0))
+  const ganoA = !datos.hayEmpate && (datos.totalA || 0) > (datos.totalB || 0)
+  const ganoB = !datos.hayEmpate && (datos.totalB || 0) > (datos.totalA || 0)
+
+  const TablaEquipo = ({ nombre, total, jugadores, gano }) => (
+    <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+        <span style={{ fontSize: 12.5, fontWeight: 800, color: gano ? T.acento : C.texto, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nombre}{gano ? ' 🏆' : ''}</span>
+        <span style={{ fontSize: 18, fontWeight: 800, color: gano ? '#fff' : C.tenue }}>{total}</span>
+      </div>
+      <div style={{ borderRadius: 10, overflow: 'hidden', border: '1px solid rgba(255,255,255,.07)' }}>
+        {jugadores.map((j, i) => (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 9px', background: i % 2 ? 'rgba(255,255,255,.02)' : 'transparent', borderBottom: i < jugadores.length - 1 ? '1px solid rgba(255,255,255,.05)' : 'none' }}>
+            <span style={{ fontSize: 12.5, color: C.texto, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 90 }}>{j.nombre}</span>
+            <span style={{ fontSize: 13, fontWeight: 800, color: T.acento }}>{j.pts || 0}</span>
+          </div>
+        ))}
+        {jugadores.length === 0 && <div style={{ fontSize: 11, color: C.tenue, padding: '7px 9px' }}>—</div>}
+      </div>
+    </div>
+  )
+
+  return (
+    <div onClick={onCerrar} style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(4,5,7,0.82)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', display: 'flex', alignItems: esEscritorio ? 'center' : 'flex-end', justifyContent: 'center', padding: esEscritorio ? 20 : 0 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 480, maxHeight: esEscritorio ? '88vh' : '92vh', display: 'flex', flexDirection: 'column', borderRadius: esEscritorio ? 20 : '20px 20px 0 0', padding: 1.5, background: T.borde }}>
+        <div style={{ borderRadius: esEscritorio ? 19 : '19px 19px 0 0', background: 'linear-gradient(180deg, #14161a, #0c0e12)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          {/* cabecera con imagen de fondo de la plantilla */}
+          <div style={{ position: 'relative', minHeight: imgFondo ? 175 : 'auto', padding: '16px 16px 14px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', background: imgFondo ? `linear-gradient(180deg, rgba(8,9,12,.35) 0%, rgba(8,9,12,.6) 55%, rgba(20,22,26,.96) 100%), url(${imgFondo}) center/cover` : 'transparent' }}>
+            {/* autor + cerrar (arriba) */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 9, position: imgFondo ? 'absolute' : 'static', top: 14, left: 16, right: 16, marginBottom: imgFondo ? 0 : 12 }}>
+              <div style={{ width: 36, height: 36, borderRadius: '50%', background: pub.autor_foto ? `url(${pub.autor_foto}) center/cover` : T.avatar, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: T.avatarTexto, flexShrink: 0, border: imgFondo ? '1.5px solid rgba(255,255,255,.35)' : 'none' }}>
+                {!pub.autor_foto && ((pub.autor_nombre || '?').slice(0, 1).toUpperCase())}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 700, color: imgFondo ? '#fff' : C.texto, textShadow: imgFondo ? '0 1px 4px rgba(0,0,0,.8)' : 'none' }}>{pub.autor_nombre || 'Usuario'}{pub.autor_apellido ? ` ${pub.autor_apellido}` : ''}</div>
+                <div style={{ fontSize: 11, color: imgFondo ? 'rgba(255,255,255,.8)' : C.tenue, textShadow: imgFondo ? '0 1px 4px rgba(0,0,0,.8)' : 'none' }}>{haceCuanto(pub.creado_en)}</div>
+              </div>
+              {esMia && <span onClick={onBorrar} title="Eliminar" style={{ fontSize: 17, color: imgFondo ? '#fff' : C.tenue, cursor: 'pointer', padding: '2px 6px' }}>🗑️</span>}
+              <span onClick={onCerrar} style={{ fontSize: 24, color: imgFondo ? '#fff' : C.tenue, cursor: 'pointer', lineHeight: 1, padding: '0 2px' }}>×</span>
+            </div>
+            {/* título (sobre la imagen) */}
+            <div style={{ position: 'relative', fontSize: 19, fontWeight: 800, color: '#f4f7f9', lineHeight: 1.2, textShadow: imgFondo ? '0 1px 6px rgba(0,0,0,.9)' : 'none' }}>{pub.titulo}</div>
+          </div>
+
+          <div style={{ overflowY: 'auto', padding: '14px 16px 20px' }}>
+
+            {esJuego ? (
+              <>
+                {/* marcador grande */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, padding: '14px 0', marginBottom: 8 }}>
+                  <div style={{ textAlign: 'center', flex: 1 }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 700, color: ganoA ? T.acento : C.tenue, marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{datos.nombreA}{ganoA ? ' 🏆' : ''}</div>
+                    <div style={{ fontSize: 44, fontWeight: 800, color: ganoA ? '#fff' : C.tenue, lineHeight: 1 }}>{datos.totalA}</div>
+                  </div>
+                  <div style={{ fontSize: 16, color: C.tenue }}>—</div>
+                  <div style={{ textAlign: 'center', flex: 1 }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 700, color: ganoB ? T.acento : C.tenue, marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{datos.nombreB}{ganoB ? ' 🏆' : ''}</div>
+                    <div style={{ fontSize: 44, fontWeight: 800, color: ganoB ? '#fff' : C.tenue, lineHeight: 1 }}>{datos.totalB}</div>
+                  </div>
+                </div>
+
+                {/* narración / crónica */}
+                {datos.narracion && (
+                  <div style={{ fontSize: 13.5, color: '#d4dbe1', lineHeight: 1.6, padding: '12px 14px', background: 'rgba(255,255,255,.03)', borderRadius: 12, borderLeft: `3px solid ${T.acento}`, marginBottom: 16 }}>
+                    {datos.narracion}
+                  </div>
+                )}
+
+                {/* tablas de jugadores */}
+                <div style={{ fontSize: 11, fontWeight: 700, color: C.tenue, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Jugadores · puntos</div>
+                <div style={{ display: 'flex', gap: 12, marginBottom: 18 }}>
+                  <TablaEquipo nombre={datos.nombreA} total={datos.totalA} jugadores={jugA} gano={ganoA} />
+                  <TablaEquipo nombre={datos.nombreB} total={datos.totalB} jugadores={jugB} gano={ganoB} />
+                </div>
+              </>
+            ) : (
+              pub.texto && <div style={{ fontSize: 14.5, color: '#d4dbe1', lineHeight: 1.6, marginBottom: 16 }}>{pub.texto}</div>
+            )}
+
+            {/* reacciones */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 20, padding: '12px 0', borderTop: '1px solid rgba(255,255,255,.07)', borderBottom: '1px solid rgba(255,255,255,.07)', marginBottom: 14 }}>
+              <div onClick={() => onReaccionar(pub.id, 'like')} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', color: miReaccion === 'like' ? T.acento : C.tenue, fontSize: 14, fontWeight: 700 }}>
+                <span style={{ fontSize: 17 }}>♥</span> {pub.likes || 0}
+              </div>
+              <div onClick={() => onReaccionar(pub.id, 'dislike')} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', color: miReaccion === 'dislike' ? '#e0563f' : C.tenue, fontSize: 14, fontWeight: 700 }}>
+                <span style={{ fontSize: 17 }}>👎</span> {pub.dislikes || 0}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: C.tenue, fontSize: 14, fontWeight: 700 }}>
+                <span style={{ fontSize: 17 }}>💬</span> {pub.num_comentarios || 0}
+              </div>
+            </div>
+
+            {/* comentarios */}
+            <Comentarios pubId={pub.id} haySesion={haySesion} T={T} C={C} onPedirLogin={onPedirLogin} onCambio={onCambioComentarios} />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ---- Selector de plantilla (fondo) + texto al publicar ----
+function SelectorPlantilla({ T, C, esEscritorio, usuarioPago, onCancelar, onConfirmar }) {
+  const [elegida, setElegida] = useState(PLANTILLA_DEFAULT)
+  const [texto, setTexto] = useState('')
+  const plantSel = PLANTILLAS.find((p) => p.id === elegida)
+
+  const elegir = (p) => {
+    if (puedeUsar(p, usuarioPago)) setElegida(p.id)
+    else alert('Esta plantilla es premium. Desbloquéala con cualquier forma de pago para usar las 15.')
+  }
+
+  return (
+    <div onClick={onCancelar} style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(4,5,7,0.85)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', display: 'flex', alignItems: esEscritorio ? 'center' : 'flex-end', justifyContent: 'center', padding: esEscritorio ? 20 : 0 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 480, maxHeight: '90vh', display: 'flex', flexDirection: 'column', borderRadius: esEscritorio ? 20 : '20px 20px 0 0', padding: 1.5, background: T.borde }}>
+        <div style={{ borderRadius: esEscritorio ? 19 : '19px 19px 0 0', background: 'linear-gradient(180deg, #14161a, #0c0e12)', padding: '18px 16px 20px', overflowY: 'auto' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+            <span style={{ fontSize: 17, fontWeight: 800, color: C.texto }}>Elige el fondo</span>
+            <span onClick={onCancelar} style={{ fontSize: 24, color: C.tenue, cursor: 'pointer', lineHeight: 1 }}>×</span>
+          </div>
+          <div style={{ fontSize: 12, color: C.tenue, marginBottom: 14 }}>Toca una plantilla para tu publicación.</div>
+
+          {/* vista previa */}
+          {plantSel && plantSel.img && (
+            <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', marginBottom: 14, height: 120, background: `linear-gradient(180deg, rgba(8,9,12,.25) 0%, rgba(8,9,12,.85) 100%), url(${plantSel.img}) center/cover`, display: 'flex', alignItems: 'flex-end', padding: 12 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', textShadow: '0 1px 5px rgba(0,0,0,.9)' }}>{texto.trim() ? texto : 'Vista previa del fondo'}</div>
+            </div>
+          )}
+
+          {/* grid de plantillas */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 16 }}>
+            {PLANTILLAS.map((p) => {
+              const disponible = puedeUsar(p, usuarioPago)
+              const seleccionada = elegida === p.id
+              return (
+                <div key={p.id} onClick={() => elegir(p)} style={{ position: 'relative', borderRadius: 10, overflow: 'hidden', aspectRatio: '3/4', cursor: 'pointer', border: seleccionada ? `2px solid ${T.acento}` : '2px solid transparent', background: p.img ? `url(${p.img}) center/cover` : 'linear-gradient(150deg,#23262c,#15171b)', opacity: disponible ? 1 : 0.85 }}>
+                  {!p.img && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: C.tenue, textAlign: 'center', padding: 4 }}>{p.nombre}</div>}
+                  {!disponible && (
+                    <div style={{ position: 'absolute', inset: 0, background: 'rgba(4,5,7,.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>🔒</div>
+                  )}
+                  {seleccionada && (
+                    <div style={{ position: 'absolute', bottom: 4, right: 4, width: 18, height: 18, borderRadius: '50%', background: T.acento, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#1a1205', fontWeight: 800 }}>✓</div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+
+          <div style={{ fontSize: 11, color: C.tenue, textAlign: 'center', marginBottom: 14 }}>🔒 Las premium se desbloquean todas con cualquier forma de pago.</div>
+
+          {/* texto opcional */}
+          <div style={{ fontSize: 11.5, fontWeight: 700, color: C.tenue, marginBottom: 6 }}>Agrega un comentario (opcional)</div>
+          <textarea
+            value={texto}
+            onChange={(e) => setTexto(e.target.value.slice(0, 200))}
+            placeholder="Escribe algo sobre el juego…"
+            rows={2}
+            style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(12,14,18,0.7)', border: '1px solid rgba(255,255,255,.12)', borderRadius: 10, padding: '10px 12px', color: '#eef3f6', fontSize: 13.5, outline: 'none', resize: 'none', marginBottom: 16, fontFamily: 'inherit' }}
+          />
+
+          {/* botones */}
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button onClick={onCancelar} style={{ flex: 1, borderRadius: 12, padding: 13, background: 'transparent', border: '1px solid rgba(255,255,255,.14)', color: C.tenue, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>Cancelar</button>
+            <button onClick={() => onConfirmar(elegida, texto.trim())} style={{ flex: 2, borderRadius: 12, padding: 13, background: T.boton, border: 'none', color: '#1a1205', fontWeight: 800, fontSize: 14, cursor: 'pointer' }}>↗ Publicar</button>
+          </div>
+        </div>
       </div>
     </div>
   )

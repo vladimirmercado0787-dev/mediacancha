@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import fondoCanchaMadera from '../assets/plantillas/plantilla_cancha_madera.png'
 
 export default function IntroMediaCancha({ onComplete }) {
   const [saliendo, setSaliendo] = useState(false)
@@ -21,18 +22,29 @@ export default function IntroMediaCancha({ onComplete }) {
       style={{
         position: 'fixed', inset: 0, zIndex: 9999, overflow: 'hidden',
         cursor: 'pointer',
-        background: 'radial-gradient(circle at 50% 45%, #18242f 0%, #0e151c 50%, #0a0e13 100%)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         opacity: saliendo ? 0 : 1, transition: 'opacity .7s ease',
       }}
     >
+      {/* Imagen de la cancha de madera de fondo */}
+      <div style={{
+        position: 'absolute', inset: 0, zIndex: 0,
+        backgroundImage: `url(${fondoCanchaMadera})`,
+        backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat',
+      }} />
+      {/* Capa oscura encima para que la animación resalte */}
+      <div style={{
+        position: 'absolute', inset: 0, zIndex: 0,
+        background: 'radial-gradient(circle at 50% 42%, rgba(10,14,19,.55) 0%, rgba(8,11,15,.72) 45%, rgba(6,8,11,.88) 100%)',
+      }} />
+
       <style>{`
         .mc-glow{position:absolute;top:45%;left:50%;width:120%;height:55%;transform:translate(-50%,-50%);
-          background:radial-gradient(ellipse at center, rgba(232,169,75,.15) 0%, transparent 60%);opacity:0;
-          animation:mcGlowIn 2.4s ease-out .3s forwards;}
+          background:radial-gradient(ellipse at center, rgba(232,169,75,.22) 0%, transparent 60%);opacity:0;
+          animation:mcGlowIn 2.4s ease-out .3s forwards;z-index:1;}
         @keyframes mcGlowIn{0%{opacity:0;}60%{opacity:1;}100%{opacity:.9;}}
 
-        .mc-stage{display:flex;flex-direction:column;align-items:center;}
+        .mc-stage{display:flex;flex-direction:column;align-items:center;position:relative;z-index:2;}
 
         .mc-ballbox{position:relative;
           width:clamp(200px, 30vh, 340px);
@@ -53,7 +65,7 @@ export default function IntroMediaCancha({ onComplete }) {
         @keyframes mcSparkRun{0%{opacity:0;left:0;}10%{opacity:1;}90%{opacity:1;left:100%;}100%{opacity:0;left:100%;}}
 
         .mc-ball{position:relative;width:100%;height:100%;z-index:2;}
-        .mc-ball svg{width:100%;height:100%;overflow:visible;filter:drop-shadow(0 0 14px rgba(232,169,75,.3));}
+        .mc-ball svg{width:100%;height:100%;overflow:visible;filter:drop-shadow(0 0 18px rgba(232,169,75,.45));}
         .mc-st{fill:none;stroke:url(#mcgrad);stroke-linecap:round;stroke-width:5.5;}
         .mc-ring{stroke-dasharray:491;stroke-dashoffset:491;animation:mcDraw 1.2s ease-out 1.05s forwards;}
         .mc-vseam{stroke-dasharray:120;stroke-dashoffset:120;animation:mcDraw .85s ease-out 1.65s forwards;}
@@ -65,11 +77,11 @@ export default function IntroMediaCancha({ onComplete }) {
           animation:mcRise 1.1s cubic-bezier(.2,.8,.3,1) 2.5s forwards;}
         @keyframes mcRise{to{opacity:1;transform:translateY(0);}}
         .mc-nm{font-size:clamp(2.4rem, 7vw, 5rem);font-weight:800;letter-spacing:.04em;line-height:.95;
-          display:flex;gap:.18em;justify-content:center;white-space:nowrap;}
+          display:flex;gap:.18em;justify-content:center;white-space:nowrap;text-shadow:0 2px 24px rgba(0,0,0,.7);}
         .mc-media{background:linear-gradient(180deg,#ffffff,#aeb7c2);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}
         .mc-cancha{background:linear-gradient(180deg,#f3cf63,#c8842e);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}
         .mc-tag{margin-top:clamp(12px, 2vh, 22px);font-size:clamp(.75rem, 1.4vw, 1.05rem);letter-spacing:.45em;
-          text-transform:uppercase;color:#8a99a5;opacity:0;animation:mcGlowIn 1s ease-out 3.4s forwards;}
+          text-transform:uppercase;color:#c3b89a;opacity:0;animation:mcGlowIn 1s ease-out 3.4s forwards;text-shadow:0 1px 12px rgba(0,0,0,.8);}
       `}</style>
 
       <div className="mc-glow"></div>

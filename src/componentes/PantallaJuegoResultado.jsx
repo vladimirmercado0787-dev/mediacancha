@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import fondoCancha from '../assets/fondo-cancha.png'
+import { publicarJuego } from '../techado'
 
 const TEMAS = {
   dorado: {
@@ -12,6 +14,16 @@ const TEMAS = {
 }
 
 export default function PantallaJuegoResultado({ resultado, onNuevo, onInicio, onRepetir, onSustituirPerdedor }) {
+  const [publicado, setPublicado] = useState(false)
+  const [publicando, setPublicando] = useState(false)
+  const publicar = async () => {
+    if (publicado || publicando) return
+    setPublicando(true)
+    const res = await publicarJuego(resultado)
+    if (!res.error) setPublicado(true)
+    else alert(res.error)
+    setPublicando(false)
+  }
   const tema = (typeof window !== 'undefined' && localStorage.getItem('mc_tema')) || 'dorado'
   const T = TEMAS[tema] || TEMAS.dorado
   const ORO = { background: T.texto, WebkitBackgroundClip: 'text', backgroundClip: 'text', WebkitTextFillColor: 'transparent' }
@@ -133,8 +145,16 @@ export default function PantallaJuegoResultado({ resultado, onNuevo, onInicio, o
         {placa(<>{tablaEquipo(0, resultado?.nombreA)}<div style={{ height: 16 }} />{tablaEquipo(1, resultado?.nombreB)}</>)}
 
         <div style={{ textAlign: 'center', fontSize: 12, color: C.tenue, marginBottom: 16, lineHeight: 1.5 }}>
-          📸 Haz una captura de pantalla si quieres guardar este resultado.<br />Los juegos rápidos no se guardan en la app.
+          📸 Haz una captura de pantalla si quieres guardar este resultado.<br />Los juegos rápidos se borran del historial a las 24 horas.
         </div>
+
+        {/* Publicar en el Techado (opcional) */}
+        <button
+          onClick={publicar}
+          disabled={publicado || publicando}
+          style={{ width: '100%', marginBottom: 12, borderRadius: 13, padding: 14, cursor: (publicado || publicando) ? 'default' : 'pointer', fontWeight: 800, fontSize: 14, border: `1.5px solid ${T.acento}`, background: publicado ? `${T.acento}1a` : 'transparent', color: T.acento }}>
+          {publicado ? '✓ Publicado en el Techado (24 h)' : (publicando ? 'Publicando…' : '↗ Publicar en el Techado')}
+        </button>
 
         {/* Botones de continuación */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
