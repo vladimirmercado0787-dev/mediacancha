@@ -170,13 +170,11 @@ const NAV_PRINCIPAL = [
   { id: 'torneos', txt: 'Torneos', icono: '🏆' },
   { id: 'rankings', txt: 'Rankings', icono: '★' },
   { id: 'mapa', txt: 'Mapa', icono: '🗺️' },
-  { id: 'historialDia', txt: 'Historial', icono: '🗓️' },
-]
-// Lo que queda en "Más ▾"
-const NAV_MAS = [
   { id: 'misTorneos', txt: 'Mis torneos', icono: '🏆' },
   { id: 'misLigas', txt: 'Mis ligas', icono: '🤝' },
 ]
+// Lo que queda en "Más ▾" (vacío: ya todo está en la barra)
+const NAV_MAS = []
 // Menú completo para el móvil (barra inferior + menú ☰)
 const NAV = [
   { id: 'inicio', txt: 'Inicio', icono: '⌂' },
@@ -185,7 +183,6 @@ const NAV = [
   { id: 'torneos', txt: 'Torneos', icono: '🏆' },
   { id: 'rankings', txt: 'Rankings', icono: '★' },
   { id: 'mapa', txt: 'Mapa del baloncesto', icono: '🗺️' },
-  { id: 'historialDia', txt: 'Historial de hoy', icono: '🗓️' },
   { id: 'configuracion', txt: 'Configuración', icono: '⚙️' },
 ]
 const ACCIONES_CREAR = [
@@ -490,7 +487,7 @@ export default function PantallaPublica({ onAccion, haySesion }) {
                 {haySesion && (
                   <>
                     <div style={{ height: 1, background: T.esClaro ? 'rgba(0,0,0,.08)' : 'rgba(255,255,255,.08)', margin: '6px 4px' }} />
-                    <button onClick={() => click('cerrarSesion')} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'transparent', border: 'none', color: C.tenue, fontSize: 13, fontWeight: 600, padding: '8px 11px', borderRadius: 8, cursor: 'pointer' }}>↩ Cerrar sesión</button>
+                    <button onClick={() => click('cerrarSesion')} style={{ display: 'block', width: '100%', textAlign: 'left', background: T.esClaro ? 'rgba(224,86,63,.08)' : 'rgba(224,86,63,.12)', border: '1px solid rgba(224,86,63,.3)', color: '#e0563f', fontSize: 13, fontWeight: 700, padding: '10px 11px', borderRadius: 9, cursor: 'pointer' }}>↩ Cerrar sesión</button>
                   </>
                 )}
               </div>
@@ -637,12 +634,14 @@ export default function PantallaPublica({ onAccion, haySesion }) {
         const esJuego = datos && datos.nombreA && datos.nombreB && (datos.totalA != null || (datos.jugadores && datos.jugadores.length))
         if (esJuego) {
           const fuenteJuego = datos.fuente || (p.tipo === 'torneo' ? 'torneo' : p.tipo === 'liga' ? 'liga' : 'rapido')
+          const esMio = miId && p.autor_id === miId
           const barraReacciones = (
             <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '6px 8px', borderTop: `1px solid ${T.esClaro ? '#eceef1' : 'rgba(255,255,255,.07)'}` }}>
               <button onClick={() => onReaccionar(p.id, 'like')} style={accionBtn(misReacc[p.id] === 'like' ? T.acento : (T.esClaro ? '#565c66' : '#aeb6c0'))}><span style={{ fontSize: 16 }}>{misReacc[p.id] === 'like' ? '❤️' : '🤍'}</span> {p.likes || 0}</button>
               <button onClick={() => onReaccionar(p.id, 'dislike')} style={accionBtn(misReacc[p.id] === 'dislike' ? '#e0563f' : (T.esClaro ? '#565c66' : '#aeb6c0'))}><span style={{ fontSize: 15 }}>👎</span> {p.dislikes || 0}</button>
               <button onClick={() => setPubAbierta(p)} style={accionBtn(T.esClaro ? '#565c66' : '#aeb6c0')}><span style={{ fontSize: 15 }}>💬</span> {p.num_comentarios || 0}</button>
               <button onClick={() => setPubAbierta(p)} style={accionBtn(T.esClaro ? '#565c66' : '#aeb6c0')}><span style={{ fontSize: 14 }}>↗</span> Compartir</button>
+              {esMio && <button onClick={() => onBorrarPublicacion(p.id)} title="Eliminar de la pantalla principal" style={accionBtn('#e0563f')}><span style={{ fontSize: 15 }}>🗑️</span></button>}
             </div>
           )
           return (
@@ -657,11 +656,6 @@ export default function PantallaPublica({ onAccion, haySesion }) {
                 temaForzado={tema}
                 pie={barraReacciones}
               />
-              {miId && p.autor_id === miId && (
-                <div style={{ textAlign: 'right', marginTop: 4 }}>
-                  <span onClick={() => onBorrarPublicacion(p.id)} style={{ fontSize: 11, color: T.tenue, cursor: 'pointer' }}>🗑️ Eliminar</span>
-                </div>
-              )}
             </div>
           )
         }
