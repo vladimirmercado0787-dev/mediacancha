@@ -945,11 +945,11 @@ export default function PantallaPublica({ onAccion, haySesion }) {
         {/* carnet con nav dorada (fijo arriba) */}
         {haySesion && miPerfil && (
           <div style={{ position: 'sticky', top: 0, zIndex: 15, padding: '14px 24px 0', background: T.headerBg, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)' }}>
-            <div style={{ maxWidth: 1280, margin: '0 auto' }}><BarraMiembro /></div>
+            <div style={{ maxWidth: 1700, margin: '0 auto' }}><BarraMiembro /></div>
           </div>
         )}
         {/* contenido: SOLO 2 columnas (Techado ancho + paneles) */}
-        <main style={{ flex: 1, position: 'relative', zIndex: 1, display: 'grid', gridTemplateColumns: esTablet ? '1fr 300px' : '248px 1fr 320px', gap: esTablet ? 16 : 18, alignItems: 'start', padding: esTablet ? '16px 16px 40px' : '18px 24px 50px', maxWidth: 1280, margin: '0 auto', width: '100%' }}>
+        <main style={{ flex: 1, position: 'relative', zIndex: 1, display: 'grid', gridTemplateColumns: esTablet ? '1fr 320px' : '290px 1fr 380px', gap: esTablet ? 18 : 22, alignItems: 'start', padding: esTablet ? '16px 18px 40px' : '20px 30px 50px', maxWidth: 1700, margin: '0 auto', width: '100%' }}>
           {/* COLUMNA IZQUIERDA (se oculta en tablet) */}
           {!esTablet && (
             <aside style={{ display: 'flex', flexDirection: 'column', gap: 16, position: 'sticky', top: haySesion ? 150 : 20, alignSelf: 'start' }}>

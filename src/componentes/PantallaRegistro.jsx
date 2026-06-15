@@ -3,7 +3,6 @@ import { supabase } from '../supabaseClient'
 import fondoCancha from '../assets/fondo-cancha.png'
 import { MUNICIPIOS_RD } from '../data/municipiosRD'
 
-// Provincias ordenadas alfabéticamente (sacadas del archivo real de RD)
 const PROVINCIAS = Object.keys(MUNICIPIOS_RD)
   .map((k) => ({ llave: k, nombre: MUNICIPIOS_RD[k].provincia }))
   .sort((a, b) => a.nombre.localeCompare(b.nombre))
@@ -15,16 +14,44 @@ function municipiosDe(llaveProvincia) {
     .sort((a, b) => a.localeCompare(b))
 }
 
+const SUP_OSCURA = {
+  esClaro: false, fondo: '#08090c', textoFuerte: '#f4f7f9', textoBody: '#eef3f6', tenue: '#9aa7b2',
+  vidrio: 'linear-gradient(150deg, rgba(24,26,30,0.88), rgba(12,14,18,0.92))',
+  veloGrad: 'linear-gradient(180deg, rgba(8,9,12,0.82) 0%, rgba(8,9,12,0.9) 100%)',
+  inputBg: 'rgba(12,14,18,0.7)', inputBorde: 'rgba(255,255,255,.12)', optionBg: '#14161a', lineaSuave: 'rgba(255,255,255,.08)',
+}
+const SUP_CLARA_BASE = {
+  esClaro: true, textoFuerte: '#2a2014', textoBody: '#3a2f20', tenue: '#7a6e58',
+  vidrio: 'linear-gradient(150deg, rgba(255,255,255,0.92), rgba(250,248,244,0.95))',
+  inputBg: 'rgba(0,0,0,.03)', inputBorde: 'rgba(0,0,0,.12)', optionBg: '#fff', lineaSuave: 'rgba(0,0,0,.08)',
+}
 const TEMAS = {
   dorado: {
-    acento: '#e8b65a', borde: 'linear-gradient(140deg,#f7d785,#b9802c 40%,#5e4318 70%,#caa050)',
+    ...SUP_OSCURA, nombre: 'Dorado', acento: '#e8b65a',
+    borde: 'linear-gradient(140deg,#f7d785,#b9802c 40%,#5e4318 70%,#caa050)',
     texto: 'linear-gradient(120deg,#fbe08a,#c8842e)', balon: ['#fbe08a', '#d18f33', '#9a6420'],
-    boton: 'linear-gradient(150deg, #f3cf63, #c8842e)', glow: 'rgba(190,135,55,0.20)', borde2: 'rgba(232,169,75,.35)',
+    boton: 'linear-gradient(150deg, #f3cf63, #c8842e)', glow: 'rgba(190,135,55,0.20)',
   },
   azul: {
-    acento: '#6fb0ec', borde: 'linear-gradient(140deg,#9fd4fb,#3b7fcf 40%,#1d3a63 70%,#6fb0ec)',
+    ...SUP_OSCURA, nombre: 'Azul', acento: '#6fb0ec',
+    borde: 'linear-gradient(140deg,#9fd4fb,#3b7fcf 40%,#1d3a63 70%,#6fb0ec)',
     texto: 'linear-gradient(120deg,#8fccfb,#2f6fc8)', balon: ['#9fd4fb', '#4f8fd0', '#1d4a80'],
-    boton: 'linear-gradient(150deg, #6fb0ec, #2f6fc8)', glow: 'rgba(55,120,190,0.22)', borde2: 'rgba(111,176,236,.35)',
+    boton: 'linear-gradient(150deg, #6fb0ec, #2f6fc8)', glow: 'rgba(55,120,190,0.22)',
+  },
+  claro: {
+    ...SUP_CLARA_BASE, nombre: 'Claro', acento: '#b07a26', fondo: '#e6dcc8',
+    borde: 'linear-gradient(140deg,#f0d79a,#c79a45 40%,#9a7530 70%,#e3c578)',
+    texto: 'linear-gradient(120deg,#c8902f,#9a6420)', balon: ['#e7c069', '#c8842e', '#9a6420'],
+    boton: 'linear-gradient(150deg, #e7c069, #b07a26)', glow: 'rgba(190,135,55,0.12)',
+    veloGrad: 'linear-gradient(180deg, rgba(248,243,233,0.82) 0%, rgba(244,238,226,0.9) 100%)',
+  },
+  larimar: {
+    ...SUP_CLARA_BASE, nombre: 'Larimar', acento: '#2a8fb8', fondo: '#d6e7e8',
+    borde: 'linear-gradient(140deg,#8fd4e8,#2a8fb8 45%,#1a6a8a 75%,#6ac0d8)',
+    texto: 'linear-gradient(120deg,#2a8fb8,#1a6a8a)', balon: ['#6ac0d8', '#2a8fb8', '#1a6a8a'],
+    boton: 'linear-gradient(150deg, #4aafc8, #2a8fb8)', glow: 'rgba(42,143,184,0.14)',
+    veloGrad: 'linear-gradient(180deg, rgba(232,244,245,0.82) 0%, rgba(224,240,242,0.9) 100%)',
+    textoFuerte: '#1c2624', textoBody: '#2c3a3a', tenue: '#5f7375',
   },
 }
 
@@ -51,11 +78,27 @@ function Balon({ size = 64, cols }) {
 }
 
 export default function PantallaRegistro({ onListo, onIrLogin, onVolver }) {
-  const tema = (typeof window !== 'undefined' && localStorage.getItem('mc_tema')) || 'dorado'
+  const [tema, setTema] = useState(() => {
+    const validos = ['dorado', 'azul', 'claro', 'larimar']
+    if (typeof window !== 'undefined') {
+      const g = localStorage.getItem('mc_tema')
+      return validos.includes(g) ? g : 'dorado'
+    }
+    return 'dorado'
+  })
   const T = TEMAS[tema] || TEMAS.dorado
   const ORO = { background: T.texto, WebkitBackgroundClip: 'text', backgroundClip: 'text', WebkitTextFillColor: 'transparent' }
+  const C = { texto: T.textoBody, tenue: T.tenue, font: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }
 
-  const [modo, setModo] = useState(null) // 'jugador' | 'fanatico'
+  const cambiarTema = () => {
+    const orden = ['dorado', 'azul', 'claro', 'larimar']
+    const i = orden.indexOf(tema)
+    const nuevo = orden[(i + 1) % orden.length]
+    setTema(nuevo)
+    try { localStorage.setItem('mc_tema', nuevo) } catch (e) {}
+  }
+
+  const [modo, setModo] = useState(null)
   const [f, setF] = useState({ nombre: '', apellido: '', correo: '', clave: '', clave2: '', sexo: '', fechaNac: '', provincia: '', municipio: '', pies: '', pulgadas: '', posiciones: [] })
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState('')
@@ -64,20 +107,17 @@ export default function PantallaRegistro({ onListo, onIrLogin, onVolver }) {
 
   const set = (k, v) => setF((p) => {
     const next = { ...p, [k]: v }
-    if (k === 'provincia') next.municipio = '' // al cambiar provincia, resetea municipio
+    if (k === 'provincia') next.municipio = ''
     return next
   })
   const muniLista = municipiosDe(f.provincia)
 
-  // Alterna una posición: si ya está la quita; si no, la agrega (máx 3). La primera = natural.
   const togglePosicion = (v) => setF((p) => {
     const ya = p.posiciones.includes(v)
     if (ya) return { ...p, posiciones: p.posiciones.filter((x) => x !== v) }
-    if (p.posiciones.length >= 3) return p // ya tiene 3, no agrega más
+    if (p.posiciones.length >= 3) return p
     return { ...p, posiciones: [...p.posiciones, v] }
   })
-
-  const C = { texto: '#eef3f6', tenue: '#9aa7b2', font: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }
 
   const registrar = async () => {
     setError('')
@@ -90,13 +130,11 @@ export default function PantallaRegistro({ onListo, onIrLogin, onVolver }) {
     if (!f.provincia) return setError('Selecciona tu provincia.')
     setCargando(true)
     try {
-      // 1) Crear la cuenta en Supabase Auth
       const { data, error: errAuth } = await supabase.auth.signUp({ email: f.correo.trim(), password: f.clave })
       if (errAuth) throw errAuth
       const userId = data.user?.id
       if (!userId) throw new Error('No se pudo crear la cuenta. Revisa el correo.')
 
-      // 2) Crear el perfil (el código único se genera solo en la BD)
       const nombreProvincia = MUNICIPIOS_RD[f.provincia]?.provincia || f.provincia
       const perfil = {
         id: userId, nombre: f.nombre.trim(), apellido: f.apellido.trim() || null,
@@ -120,44 +158,53 @@ export default function PantallaRegistro({ onListo, onIrLogin, onVolver }) {
   }
 
   const inputStyle = {
-    width: '100%', background: 'rgba(12,14,18,0.7)', border: '1px solid rgba(255,255,255,.12)',
-    borderRadius: 12, padding: '13px 14px', color: C.texto, fontSize: 15, outline: 'none', fontFamily: C.font,
+    width: '100%', background: T.inputBg, border: `1px solid ${T.inputBorde}`,
+    borderRadius: 12, padding: '13px 14px', color: T.textoFuerte, fontSize: 15, outline: 'none', fontFamily: C.font, boxSizing: 'border-box',
   }
   const label = { fontSize: 12, color: C.tenue, fontWeight: 600, marginBottom: 6, display: 'block' }
 
+  const BotonTema = () => (
+    <button onClick={cambiarTema} title={`Tema: ${T.nombre}`} style={{ position: 'fixed', top: 18, right: 18, zIndex: 5, display: 'flex', alignItems: 'center', gap: 7, background: T.esClaro ? 'rgba(255,255,255,.6)' : 'rgba(20,18,16,.7)', border: `1px solid ${T.acento}55`, color: T.acento, fontSize: 11.5, fontWeight: 700, padding: '7px 11px', borderRadius: 10, cursor: 'pointer', backdropFilter: 'blur(8px)' }}>
+      <span style={{ width: 12, height: 12, borderRadius: '50%', background: T.boton, display: 'inline-block' }} />{T.nombre}
+    </button>
+  )
+
   const placa = (children) => (
     <div style={{ position: 'relative', borderRadius: 20, padding: 1.5, background: T.borde, width: '100%', maxWidth: 440 }}>
-      <div style={{ borderRadius: 19, padding: 26, background: 'linear-gradient(150deg, rgba(24,26,30,0.88), rgba(12,14,18,0.92))', backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)' }}>{children}</div>
+      <div style={{ position: 'relative', borderRadius: 19, padding: 26, background: T.vidrio, backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)' }}>
+        <div style={{ position: 'absolute', inset: 8, borderRadius: 13, border: `1.5px dashed ${T.acento}33`, pointerEvents: 'none' }} />
+        <div style={{ position: 'relative' }}>{children}</div>
+      </div>
     </div>
   )
 
   const fondo = () => (<>
     <div style={{ position: 'fixed', inset: 0, zIndex: 0, backgroundImage: `url(${fondoCancha})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
-    <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: 'linear-gradient(180deg, rgba(8,9,12,0.82) 0%, rgba(8,9,12,0.9) 100%)' }} />
+    <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: T.veloGrad }} />
     <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: `radial-gradient(ellipse 60% 45% at 50% 40%, ${T.glow}, transparent 70%)` }} />
   </>)
 
-  const wrap = { minHeight: '100vh', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '28px 18px', fontFamily: C.font, background: '#08090c' }
+  const wrap = { minHeight: '100vh', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '28px 18px', fontFamily: C.font, background: T.fondo }
 
   // PASO 1: elegir modo
   if (!modo) {
     return (
       <div style={wrap}>
-        {fondo()}
+        {fondo()}<BotonTema />
         <div style={{ position: 'relative', zIndex: 1, width: '100%', maxWidth: 440, textAlign: 'center' }}>
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}><Balon size={64} cols={T.balon} /></div>
-          <h1 style={{ fontSize: 26, fontWeight: 800, color: C.texto, margin: '0 0 8px' }}>Crea tu cuenta</h1>
+          <h1 style={{ fontSize: 26, fontWeight: 800, color: T.textoFuerte, margin: '0 0 8px' }}>Crea tu cuenta</h1>
           <p style={{ fontSize: 15, color: C.tenue, margin: '0 0 26px' }}>¿Cómo quieres usar Media Cancha?</p>
 
           <button onClick={() => setModo('jugador')} style={{ width: '100%', marginBottom: 14, position: 'relative', borderRadius: 18, padding: 1.5, background: T.borde, border: 'none', cursor: 'pointer' }}>
-            <div style={{ borderRadius: 17, padding: '20px 22px', background: 'linear-gradient(150deg, rgba(24,26,30,0.9), rgba(12,14,18,0.92))', display: 'flex', alignItems: 'center', gap: 16, textAlign: 'left' }}>
+            <div style={{ borderRadius: 17, padding: '20px 22px', background: T.vidrio, display: 'flex', alignItems: 'center', gap: 16, textAlign: 'left' }}>
               <div style={{ fontSize: 34 }}>🏀</div>
               <div><div style={{ fontSize: 18, fontWeight: 800, ...ORO }}>Soy Jugador</div><div style={{ fontSize: 13, color: C.tenue, marginTop: 3 }}>Quiero mis estadísticas y que me descubran</div></div>
             </div>
           </button>
 
           <button onClick={() => setModo('fanatico')} style={{ width: '100%', position: 'relative', borderRadius: 18, padding: 1.5, background: T.borde, border: 'none', cursor: 'pointer' }}>
-            <div style={{ borderRadius: 17, padding: '20px 22px', background: 'linear-gradient(150deg, rgba(24,26,30,0.9), rgba(12,14,18,0.92))', display: 'flex', alignItems: 'center', gap: 16, textAlign: 'left' }}>
+            <div style={{ borderRadius: 17, padding: '20px 22px', background: T.vidrio, display: 'flex', alignItems: 'center', gap: 16, textAlign: 'left' }}>
               <div style={{ fontSize: 34 }}>📣</div>
               <div><div style={{ fontSize: 18, fontWeight: 800, ...ORO }}>Soy Fanático</div><div style={{ fontSize: 13, color: C.tenue, marginTop: 3 }}>Quiero seguir torneos y a mi equipo</div></div>
             </div>
@@ -189,11 +236,11 @@ export default function PantallaRegistro({ onListo, onIrLogin, onVolver }) {
   // PASO 2: formulario
   return (
     <div style={wrap}>
-      {fondo()}
+      {fondo()}<BotonTema />
       <div style={{ position: 'relative', zIndex: 1, width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
           <Balon size={40} cols={T.balon} />
-          <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: 1, color: C.texto }}>MEDIA <span style={ORO}>CANCHA</span></div>
+          <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: 1, color: T.textoFuerte }}>MEDIA <span style={ORO}>CANCHA</span></div>
         </div>
 
         {placa(
@@ -201,7 +248,7 @@ export default function PantallaRegistro({ onListo, onIrLogin, onVolver }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18 }}>
             <span style={{ fontSize: 22 }}>{modo === 'jugador' ? '🏀' : '📣'}</span>
             <div>
-              <div style={{ fontSize: 19, fontWeight: 800, color: C.texto }}>Registro de {modo === 'jugador' ? 'jugador' : 'fanático'}</div>
+              <div style={{ fontSize: 19, fontWeight: 800, color: T.textoFuerte }}>Registro de {modo === 'jugador' ? 'jugador' : 'fanático'}</div>
               <span onClick={() => setModo(null)} style={{ fontSize: 12, color: T.acento, cursor: 'pointer', fontWeight: 600 }}>← Cambiar</span>
             </div>
           </div>
@@ -222,17 +269,17 @@ export default function PantallaRegistro({ onListo, onIrLogin, onVolver }) {
           <div style={{ marginBottom: 14 }}>
             <label style={label}>Repite la clave *</label>
             <input style={{ ...inputStyle, ...(f.clave2 && f.clave !== f.clave2 ? { border: '1px solid rgba(226,75,74,.5)' } : f.clave2 && f.clave === f.clave2 ? { border: '1px solid rgba(47,191,113,.5)' } : {}) }} type={verClave ? 'text' : 'password'} value={f.clave2} onChange={(e) => set('clave2', e.target.value)} placeholder="••••••" />
-            {f.clave2 && f.clave !== f.clave2 && <div style={{ fontSize: 11.5, color: '#f09595', marginTop: 5 }}>Las claves no coinciden todavía.</div>}
-            {f.clave2 && f.clave === f.clave2 && <div style={{ fontSize: 11.5, color: '#7bd6a3', marginTop: 5 }}>✓ Las claves coinciden.</div>}
+            {f.clave2 && f.clave !== f.clave2 && <div style={{ fontSize: 11.5, color: '#e0563f', marginTop: 5 }}>Las claves no coinciden todavía.</div>}
+            {f.clave2 && f.clave === f.clave2 && <div style={{ fontSize: 11.5, color: '#5bbd85', marginTop: 5 }}>✓ Las claves coinciden.</div>}
           </div>
 
           <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
             <div style={{ flex: 1 }}>
               <label style={label}>Sexo *</label>
               <select style={inputStyle} value={f.sexo} onChange={(e) => set('sexo', e.target.value)}>
-                <option value="" style={{ background: '#14161a' }}>Selecciona...</option>
-                <option value="hombre" style={{ background: '#14161a' }}>Hombre</option>
-                <option value="mujer" style={{ background: '#14161a' }}>Mujer</option>
+                <option value="" style={{ background: T.optionBg }}>Selecciona...</option>
+                <option value="hombre" style={{ background: T.optionBg }}>Hombre</option>
+                <option value="mujer" style={{ background: T.optionBg }}>Mujer</option>
               </select>
             </div>
             <div style={{ flex: 1 }}>
@@ -245,21 +292,21 @@ export default function PantallaRegistro({ onListo, onIrLogin, onVolver }) {
             <div style={{ flex: 1 }}>
               <label style={label}>Provincia *</label>
               <select style={inputStyle} value={f.provincia} onChange={(e) => set('provincia', e.target.value)}>
-                <option value="" style={{ background: '#14161a' }}>Selecciona...</option>
-                {PROVINCIAS.map((p) => <option key={p.llave} value={p.llave} style={{ background: '#14161a' }}>{p.nombre}</option>)}
+                <option value="" style={{ background: T.optionBg }}>Selecciona...</option>
+                {PROVINCIAS.map((p) => <option key={p.llave} value={p.llave} style={{ background: T.optionBg }}>{p.nombre}</option>)}
               </select>
             </div>
             <div style={{ flex: 1 }}>
               <label style={label}>Municipio</label>
               <select style={inputStyle} value={f.municipio} onChange={(e) => set('municipio', e.target.value)} disabled={!f.provincia}>
-                <option value="" style={{ background: '#14161a' }}>{f.provincia ? 'Selecciona...' : 'Elige provincia'}</option>
-                {muniLista.map((m) => <option key={m} value={m} style={{ background: '#14161a' }}>{m}</option>)}
+                <option value="" style={{ background: T.optionBg }}>{f.provincia ? 'Selecciona...' : 'Elige provincia'}</option>
+                {muniLista.map((m) => <option key={m} value={m} style={{ background: T.optionBg }}>{m}</option>)}
               </select>
             </div>
           </div>
 
           {modo === 'jugador' && (
-            <div style={{ borderTop: '1px solid rgba(255,255,255,.08)', paddingTop: 16, marginBottom: 6 }}>
+            <div style={{ borderTop: `1px solid ${T.lineaSuave}`, paddingTop: 16, marginBottom: 6 }}>
               <div style={{ fontSize: 12, color: T.acento, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>Datos de atleta</div>
               <div style={{ fontSize: 12, color: C.tenue, marginBottom: 14 }}>Opcional, pero ayuda a que te descubran. La estatura es clave en básquet.</div>
               <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
@@ -281,9 +328,9 @@ export default function PantallaRegistro({ onListo, onIrLogin, onVolver }) {
                       <button key={p.v} type="button" onClick={() => togglePosicion(p.v)} disabled={lleno}
                         style={{
                           position: 'relative', borderRadius: 11, padding: activa ? 1.5 : 0, background: activa ? T.borde : 'transparent',
-                          border: activa ? 'none' : '1px solid rgba(255,255,255,.14)', cursor: lleno ? 'not-allowed' : 'pointer', opacity: lleno ? 0.4 : 1,
+                          border: activa ? 'none' : `1px solid ${T.inputBorde}`, cursor: lleno ? 'not-allowed' : 'pointer', opacity: lleno ? 0.4 : 1,
                         }}>
-                        <div style={{ borderRadius: 10, padding: '9px 14px', background: activa ? 'rgba(12,14,18,0.9)' : 'transparent', color: activa ? T.acento : C.tenue, fontSize: 13.5, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 7 }}>
+                        <div style={{ borderRadius: 10, padding: '9px 14px', background: activa ? (T.esClaro ? 'rgba(255,255,255,.85)' : 'rgba(12,14,18,0.9)') : 'transparent', color: activa ? T.acento : C.tenue, fontSize: 13.5, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 7 }}>
                           {activa && <span style={{ width: 18, height: 18, borderRadius: '50%', background: T.boton, color: '#1a1205', fontSize: 11, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{idx + 1}</span>}
                           <b style={{ fontSize: 14.5 }}>{p.sigla}</b>
                           <span style={{ fontSize: 11.5, fontWeight: 600, opacity: 0.8 }}>{p.t}</span>
@@ -302,7 +349,7 @@ export default function PantallaRegistro({ onListo, onIrLogin, onVolver }) {
             </div>
           )}
 
-          {error && <div style={{ marginTop: 14, padding: '10px 13px', borderRadius: 10, background: 'rgba(226,75,74,.14)', border: '1px solid rgba(226,75,74,.3)', color: '#f09595', fontSize: 13 }}>{error}</div>}
+          {error && <div style={{ marginTop: 14, padding: '10px 13px', borderRadius: 10, background: 'rgba(226,75,74,.14)', border: '1px solid rgba(226,75,74,.3)', color: '#e0563f', fontSize: 13 }}>{error}</div>}
 
           <button onClick={registrar} disabled={cargando} style={{ width: '100%', marginTop: 18, border: 'none', borderRadius: 13, padding: 15, background: T.boton, color: '#1a1205', fontWeight: 800, fontSize: 16, cursor: cargando ? 'wait' : 'pointer', opacity: cargando ? 0.7 : 1 }}>
             {cargando ? 'Creando cuenta...' : 'Crear mi cuenta'}

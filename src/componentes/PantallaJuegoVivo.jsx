@@ -2,18 +2,13 @@ import { useState, useEffect, useRef } from 'react'
 import fondoJuego from '../assets/fondo-juego.png'
 
 const TEMAS = {
-  dorado: { acento: '#e8b65a', borde: 'linear-gradient(140deg,#f7d785,#b9802c 40%,#5e4318 70%,#caa050)', texto: 'linear-gradient(120deg,#fbe08a,#c8842e)', boton: 'linear-gradient(150deg, #f3cf63, #c8842e)', glow: 'rgba(190,135,55,0.20)' },
-  azul: { acento: '#6fb0ec', borde: 'linear-gradient(140deg,#9fd4fb,#3b7fcf 40%,#1d3a63 70%,#6fb0ec)', texto: 'linear-gradient(120deg,#8fccfb,#2f6fc8)', boton: 'linear-gradient(150deg, #6fb0ec, #2f6fc8)', glow: 'rgba(55,120,190,0.22)' },
+  dorado: { nombre: 'Dorado', acento: '#e8b65a', borde: 'linear-gradient(140deg,#f7d785,#b9802c 40%,#5e4318 70%,#caa050)', texto: 'linear-gradient(120deg,#fbe08a,#c8842e)', boton: 'linear-gradient(150deg, #f3cf63, #c8842e)', glow: 'rgba(190,135,55,0.20)', balon: ['#fbe08a', '#d18f33', '#9a6420'], eqA: { acento: '#e8b65a', fuerte: '#c8842e', suave: 'rgba(232,169,75,.10)', borde: 'rgba(232,169,75,.45)', solido: 'linear-gradient(150deg,#f3cf63,#c8842e)', textoBoton: '#1a1205' }, eqB: { acento: '#6fb0ec', fuerte: '#3b7fcf', suave: 'rgba(111,176,236,.10)', borde: 'rgba(111,176,236,.45)', solido: 'linear-gradient(150deg,#6fb0ec,#2f6fc8)', textoBoton: '#04121f' }, esClaro: false, fondo: '#08090c', texto: '#eef3f6', tenue: '#9aa7b2', vidrio: 'linear-gradient(150deg, rgba(24,26,30,0.88), rgba(12,14,18,0.92))', vidrioAlt: 'linear-gradient(150deg, rgba(30,33,38,0.9), rgba(16,18,22,0.93))', bordeTenue: 'rgba(255,255,255,.12)', pieBg: 'linear-gradient(150deg, rgba(24,26,30,0.88), rgba(12,14,18,0.92))', botonNeutro: 'rgba(255,255,255,.04)' },
+  azul: { nombre: 'Azul', acento: '#6fb0ec', borde: 'linear-gradient(140deg,#9fd4fb,#3b7fcf 40%,#1d3a63 70%,#6fb0ec)', texto: 'linear-gradient(120deg,#8fccfb,#2f6fc8)', boton: 'linear-gradient(150deg, #6fb0ec, #2f6fc8)', glow: 'rgba(55,120,190,0.22)', balon: ['#9fd4fb', '#4f8fd0', '#1d4a80'], eqA: { acento: '#6fb0ec', fuerte: '#3b7fcf', suave: 'rgba(111,176,236,.10)', borde: 'rgba(111,176,236,.45)', solido: 'linear-gradient(150deg,#6fb0ec,#2f6fc8)', textoBoton: '#04121f' }, eqB: { acento: '#e8b65a', fuerte: '#c8842e', suave: 'rgba(232,169,75,.10)', borde: 'rgba(232,169,75,.45)', solido: 'linear-gradient(150deg,#f3cf63,#c8842e)', textoBoton: '#1a1205' }, esClaro: false, fondo: '#08090c', texto: '#eef3f6', tenue: '#9aa7b2', vidrio: 'linear-gradient(150deg, rgba(24,26,30,0.88), rgba(12,14,18,0.92))', vidrioAlt: 'linear-gradient(150deg, rgba(30,33,38,0.9), rgba(16,18,22,0.93))', bordeTenue: 'rgba(255,255,255,.12)', pieBg: 'linear-gradient(150deg, rgba(24,26,30,0.88), rgba(12,14,18,0.92))', botonNeutro: 'rgba(255,255,255,.04)' },
+  claro: { nombre: 'Claro', acento: '#b07a26', borde: 'linear-gradient(140deg,#f0d79a,#c79a45 40%,#9a7530 70%,#e3c578)', texto: 'linear-gradient(120deg,#c8902f,#9a6420)', boton: 'linear-gradient(150deg, #e7c069, #b07a26)', glow: 'rgba(190,135,55,0.12)', balon: ['#e7c069', '#c8842e', '#9a6420'], eqA: { acento: '#c8902f', fuerte: '#9a6420', suave: 'rgba(200,144,47,.12)', borde: 'rgba(200,144,47,.45)', solido: 'linear-gradient(150deg,#e7c069,#b07a26)', textoBoton: '#1a1205' }, eqB: { acento: '#2a8fb8', fuerte: '#1a6a8a', suave: 'rgba(42,143,184,.12)', borde: 'rgba(42,143,184,.45)', solido: 'linear-gradient(150deg,#4aafc8,#2a8fb8)', textoBoton: '#04121f' }, esClaro: true, fondo: '#e6dcc8', texto: '#2c2418', tenue: '#7a6e58', vidrio: 'linear-gradient(150deg, rgba(255,255,255,0.92), rgba(250,246,238,0.95))', vidrioAlt: 'linear-gradient(150deg, rgba(255,255,255,0.96), rgba(248,243,233,0.97))', bordeTenue: 'rgba(0,0,0,.12)', pieBg: 'linear-gradient(150deg, rgba(248,243,233,0.95), rgba(242,235,222,0.96))', botonNeutro: 'rgba(0,0,0,.04)' },
+  larimar: { nombre: 'Larimar', acento: '#2a8fb8', borde: 'linear-gradient(140deg,#8fd4e8,#2a8fb8 45%,#1a6a8a 75%,#6ac0d8)', texto: 'linear-gradient(120deg,#2a8fb8,#1a6a8a)', boton: 'linear-gradient(150deg, #4aafc8, #2a8fb8)', glow: 'rgba(42,143,184,0.14)', balon: ['#6ac0d8', '#2a8fb8', '#1a6a8a'], eqA: { acento: '#2a8fb8', fuerte: '#1a6a8a', suave: 'rgba(42,143,184,.12)', borde: 'rgba(42,143,184,.45)', solido: 'linear-gradient(150deg,#4aafc8,#2a8fb8)', textoBoton: '#04121f' }, eqB: { acento: '#c8902f', fuerte: '#9a6420', suave: 'rgba(200,144,47,.12)', borde: 'rgba(200,144,47,.45)', solido: 'linear-gradient(150deg,#e7c069,#b07a26)', textoBoton: '#1a1205' }, esClaro: true, fondo: '#d6e7e8', texto: '#1c2a2c', tenue: '#5f7375', vidrio: 'linear-gradient(150deg, rgba(255,255,255,0.92), rgba(244,250,251,0.95))', vidrioAlt: 'linear-gradient(150deg, rgba(255,255,255,0.96), rgba(236,246,247,0.97))', bordeTenue: 'rgba(0,0,0,.12)', pieBg: 'linear-gradient(150deg, rgba(236,246,247,0.95), rgba(224,240,242,0.96))', botonNeutro: 'rgba(0,0,0,.04)' },
 }
 
-// Colores de equipo armonizados con el tema de la app (A dorado, B azul)
-const EQ = [
-  { acento: '#e8b65a', fuerte: '#c8842e', suave: 'rgba(232,169,75,.10)', borde: 'rgba(232,169,75,.45)', solido: 'linear-gradient(150deg,#f3cf63,#c8842e)', textoBoton: '#1a1205' },
-  { acento: '#6fb0ec', fuerte: '#3b7fcf', suave: 'rgba(111,176,236,.10)', borde: 'rgba(111,176,236,.45)', solido: 'linear-gradient(150deg,#6fb0ec,#2f6fc8)', textoBoton: '#04121f' },
-]
-
 const VERDE = '#2fbf71', ROJO = '#e0563f', TENUE = '#9aa7b2', TEXTO = '#eef3f6'
-// placa de cristal (igual que login/perfil/config)
 const VIDRIO = 'linear-gradient(150deg, rgba(24,26,30,0.88), rgba(12,14,18,0.92))'
 const VIDRIO_CLARO = 'linear-gradient(150deg, rgba(30,33,38,0.9), rgba(16,18,22,0.93))'
 const BORDE_TENUE = 'rgba(255,255,255,.12)'
@@ -29,10 +24,25 @@ const ACCIONES_OTRAS = {
 }
 
 export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
-  const tema = (typeof window !== 'undefined' && localStorage.getItem('mc_tema')) || 'dorado'
+  const [tema, setTema] = useState(() => {
+    const validos = ['dorado', 'azul', 'claro', 'larimar']
+    if (typeof window !== 'undefined') {
+      const g = localStorage.getItem('mc_tema')
+      return validos.includes(g) ? g : 'dorado'
+    }
+    return 'dorado'
+  })
   const T = TEMAS[tema] || TEMAS.dorado
+  const EQ = [T.eqA, T.eqB]
   const ORO = { background: T.texto, WebkitBackgroundClip: 'text', backgroundClip: 'text', WebkitTextFillColor: 'transparent' }
   const font = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+  const cambiarTema = () => {
+    const orden = ['dorado', 'azul', 'claro', 'larimar']
+    const i = orden.indexOf(tema)
+    const nuevo = orden[(i + 1) % orden.length]
+    setTema(nuevo)
+    try { localStorage.setItem('mc_tema', nuevo) } catch (e) {}
+  }
 
   const statsActivas = config?.statsActivas || ['pts']
   const accionesOtras = ['reb', 'ast'].filter((s) => statsActivas.includes(s)).map((s) => ACCIONES_OTRAS[s])
@@ -42,7 +52,7 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
   const [historial, setHistorial] = useState([])
   const [modo, setModo] = useState(config?.modoAnotacion || 'jugada')
   const [seleccion, setSeleccion] = useState(null)
-  const [hojaPrev, setHojaPrev] = useState(null) // recuerda el contenido mientras la hoja baja
+  const [hojaPrev, setHojaPrev] = useState(null)
   const [toast, setToast] = useState('')
   const toastRef = useRef(null)
 
@@ -69,7 +79,6 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
           if (s <= 1) {
             clearInterval(intervalo.current)
             setCorriendo(false)
-            // ¿Es el último cuarto? -> fin del juego. Si no -> fin del cuarto.
             if (cuartoActual >= totalCuartos) setAvisoFin('reloj')
             else setAvisoFin('cuarto')
             return 0
@@ -81,7 +90,6 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
     return () => clearInterval(intervalo.current)
   }, [corriendo, esPorReloj, cuartoActual, totalCuartos])
 
-  // Pasar al siguiente cuarto
   const siguienteCuarto = () => {
     setCuartoActual((c) => c + 1)
     setSegs((config.minutos || 10) * 60)
@@ -107,7 +115,6 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
 
   const mostrarToast = (txt) => { setToast(txt); clearTimeout(toastRef.current); toastRef.current = setTimeout(() => setToast(''), 1500) }
 
-  // vibración háptica (da feeling de cancha) - patrones según la acción
   const vibrar = (patron) => { try { if (navigator.vibrate) navigator.vibrate(patron) } catch (e) {} }
 
   const registrar = (accion, jug) => {
@@ -120,7 +127,6 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
     }))
     setHistorial((prev) => [...prev, { id: 'h' + Date.now() + Math.random().toString(36).slice(2, 6), jugId: jug.id, etiquetaJug: jug.etiqueta, equipo: jug.equipo, accionId: accion.id, etiquetaAccion: accion.et || accion.etiqueta, sub: accion.sub, suma }])
     mostrarToast(`${accion.sub} · ${jug.etiqueta}`)
-    // vibración: punto = toque medio (35ms), otra acción = toque suave (20ms)
     vibrar((suma.pts && suma.pts > 0) ? 35 : 20)
     setSeleccion(null)
   }
@@ -160,40 +166,36 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
     setCambioEquipo(null); setJugASustituir(null); setNuevoNombre(''); setNuevoNumero('')
   }
 
-  // ---- cabecera de cada lado ----
   const ladoHead = (eq) => (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, flexShrink: 0 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 800, color: EQ[eq].acento, textTransform: 'uppercase', letterSpacing: 0.3 }}>
         <span style={{ width: 9, height: 9, borderRadius: '50%', background: EQ[eq].fuerte }} />
         {eq === 0 ? config?.nombreA : config?.nombreB} · {modo === 'jugada' ? '¿qué pasó?' : '¿quién?'}
       </div>
-      <button onClick={() => setCambioEquipo(eq)} style={{ fontSize: 11, fontWeight: 700, padding: '6px 12px', borderRadius: 18, background: 'rgba(255,255,255,.04)', border: `1px solid ${EQ[eq].borde}`, color: EQ[eq].acento, cursor: 'pointer', flexShrink: 0 }}>⇄ Cambio</button>
+      <button onClick={() => setCambioEquipo(eq)} style={{ fontSize: 11, fontWeight: 700, padding: '6px 12px', borderRadius: 18, background: T.botonNeutro, border: `1px solid ${EQ[eq].borde}`, color: EQ[eq].acento, cursor: 'pointer', flexShrink: 0 }}>⇄ Cambio</button>
     </div>
   )
 
-  // boton de accion (modo jugada) - estilo cristal
   const botonAccion = (a, eq) => (
     <button key={a.id} onClick={() => tocarAccion(a, eq)} style={{
-      border: `1.5px solid ${BORDE_TENUE}`, borderRadius: 13, cursor: 'pointer', background: VIDRIO,
+      border: `1.5px solid ${T.bordeTenue}`, borderRadius: 13, cursor: 'pointer', background: T.vidrio,
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3, minHeight: 0, padding: '4px 2px',
     }}>
       <span style={{ fontSize: 21, fontWeight: 800, lineHeight: 1, color: a.pos ? VERDE : EQ[eq].acento }}>{a.ico}</span>
-      <span style={{ fontSize: 10.5, fontWeight: 600, color: TENUE }}>{a.et}</span>
+      <span style={{ fontSize: 10.5, fontWeight: 600, color: T.tenue }}>{a.et}</span>
     </button>
   )
 
-  // jugador en cancha (modo jugador) - rectangulo vertical ALTO que llena el espacio
   const jugadorEnCancha = (j) => (
     <button key={j.id} onClick={() => tocarJugador(j)} style={{
-      border: `1.5px solid ${EQ[j.equipo].borde}`, borderRadius: 16, cursor: 'pointer', background: VIDRIO,
+      border: `1.5px solid ${EQ[j.equipo].borde}`, borderRadius: 16, cursor: 'pointer', background: T.vidrio,
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 2px', minHeight: 0, height: '100%',
     }}>
       <span style={{ fontSize: 34, fontWeight: 800, lineHeight: 1, color: EQ[j.equipo].acento }}>{j.numero || (j.nombre || '?').slice(0, 1).toUpperCase()}</span>
-      <span style={{ fontSize: 11, color: TENUE, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', padding: '0 2px' }}>{j.nombre || ('#' + j.numero)}</span>
+      <span style={{ fontSize: 11, color: T.tenue, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', padding: '0 2px' }}>{j.nombre || ('#' + j.numero)}</span>
     </button>
   )
 
-  // RECTANGULO VERTICAL para la hoja (jugador "parado", fila de 5 como el diseño)
   const jugadorVertical = (j, onClick) => (
     <button key={j.id} onClick={() => onClick(j)} style={{
       border: `1.5px solid ${EQ[j.equipo].borde}`, borderRadius: 14, cursor: 'pointer', background: VIDRIO_CLARO,
@@ -205,44 +207,79 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
   )
 
   return (
-    <div style={{ fontFamily: font, background: '#08090c', color: TEXTO, maxWidth: 480, margin: '0 auto', display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', position: 'relative' }}>
-      {/* fondo de cancha como el resto de la app */}
-      <div style={{ position: 'absolute', inset: 0, zIndex: 0, backgroundImage: `url(${fondoJuego})`, backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.5 }} />
-      <div style={{ position: 'absolute', inset: 0, zIndex: 0, background: 'linear-gradient(180deg, rgba(8,9,12,0.86), rgba(8,9,12,0.93))' }} />
+    <div style={{ fontFamily: font, background: T.fondo, color: T.texto, maxWidth: 480, margin: '0 auto', display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', position: 'relative' }}>
+      <div style={{ position: 'absolute', inset: 0, zIndex: 0, backgroundImage: `url(${fondoJuego})`, backgroundSize: 'cover', backgroundPosition: 'center', opacity: T.esClaro ? 0.18 : 0.5 }} />
+      <div style={{ position: 'absolute', inset: 0, zIndex: 0, background: T.esClaro ? 'linear-gradient(180deg, rgba(235,228,212,0.82), rgba(228,220,200,0.9))' : 'linear-gradient(180deg, rgba(8,9,12,0.86), rgba(8,9,12,0.93))' }} />
 
+      <style>{`
+        @keyframes mcRelojLate { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+      `}</style>
       <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
 
-        {/* MARCADOR */}
-        <div style={{ borderBottom: `1px solid ${BORDE_TENUE}`, padding: '12px 16px 11px', flexShrink: 0, background: VIDRIO, backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 9 }}>
+        <div style={{ borderBottom: `1px solid ${BORDE_TENUE}`, padding: '10px 14px 14px', flexShrink: 0, background: 'linear-gradient(180deg, rgba(14,12,9,0.97), rgba(9,10,13,0.97))', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
             <span onClick={() => onVolver && onVolver()} style={{ fontSize: 12, color: TENUE, cursor: 'pointer' }}>← Salir</span>
             <span style={{ fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', fontWeight: 700, ...ORO }}>{config?.nombreJuego || 'Juego rápido'}</span>
-            <span onClick={() => setVerPizarra(true)} style={{ fontSize: 11, fontWeight: 800, color: T.acento, cursor: 'pointer' }}>📋 {historial.length}</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ flex: 1, textAlign: 'center' }}>
-              <div style={{ fontSize: 12, fontWeight: 800, color: EQ[0].acento, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{config?.nombreA}</div>
-              <div style={{ fontSize: 38, fontWeight: 800, lineHeight: 1, color: '#fff' }}>{totalEquipo(0)}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span onClick={cambiarTema} title={`Tema: ${T.nombre}`} style={{ width: 16, height: 16, borderRadius: '50%', background: T.boton, cursor: 'pointer', display: 'inline-block', border: '1px solid rgba(255,255,255,.25)' }} />
+              <span onClick={() => setVerPizarra(true)} style={{ fontSize: 11, fontWeight: 800, color: T.acento, cursor: 'pointer' }}>📋 {historial.length}</span>
             </div>
-            <div style={{ flexShrink: 0, padding: '0 12px', textAlign: 'center' }}>
+          </div>
+
+          {/* TABLERO estilo marcador real: equipo A | RELOJ central | equipo B */}
+          <div style={{ display: 'flex', alignItems: 'stretch', gap: 8 }}>
+            {/* equipo A */}
+            <div style={{ flex: 1, textAlign: 'center', background: `linear-gradient(160deg, ${EQ[0].suave}, transparent)`, border: `1px solid ${EQ[0].borde}`, borderRadius: 14, padding: '8px 4px 9px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: EQ[0].acento, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 2 }}>{config?.nombreA}</div>
+              <div style={{ fontSize: 52, fontWeight: 800, lineHeight: 0.95, color: '#fff', fontFamily: 'ui-monospace, monospace', textShadow: `0 0 18px ${EQ[0].borde}` }}>{totalEquipo(0)}</div>
+            </div>
+
+            {/* RELOJ / META central - el tablero LED */}
+            <div style={{ flexShrink: 0, width: 132, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
               {esPorReloj ? (
                 <>
-                  {totalCuartos > 1 && <div style={{ fontSize: 9, fontWeight: 800, color: TENUE, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 1 }}>{cuartoActual}º de {totalCuartos}</div>}
-                  <div style={{ fontSize: 18, fontWeight: 800, fontFamily: 'monospace', ...ORO }}>{segs === 0 ? (cuartoActual >= totalCuartos ? 'FINAL' : 'FIN Q' + cuartoActual) : fmt(segs)}</div>
-                  <button onClick={() => setCorriendo(!corriendo)} disabled={segs === 0} style={{ marginTop: 3, fontSize: 9, fontWeight: 800, padding: '4px 10px', borderRadius: 7, border: 'none', background: corriendo ? 'rgba(224,86,63,.18)' : 'rgba(47,191,113,.18)', color: corriendo ? ROJO : VERDE, cursor: 'pointer', textTransform: 'uppercase' }}>{corriendo ? '⏸ Pausa' : (segs === (config.minutos || 10) * 60 ? '▶ Iniciar' : '▶ Seguir')}</button>
+                  {totalCuartos > 1 && (
+                    <div style={{ fontSize: 9.5, fontWeight: 800, color: T.acento, textTransform: 'uppercase', letterSpacing: 1, background: 'rgba(234,182,79,.12)', border: `1px solid ${T.acento}44`, borderRadius: 20, padding: '2px 10px' }}>Cuarto {cuartoActual}/{totalCuartos}</div>
+                  )}
+                  {/* pantalla LED del reloj */}
+                  <div style={{
+                    width: '100%', borderRadius: 12, padding: '10px 6px 9px', textAlign: 'center',
+                    background: 'linear-gradient(180deg, #05070a, #0a0d11)',
+                    border: `1.5px solid ${segs === 0 ? ROJO : (corriendo ? VERDE : T.acento)}`,
+                    boxShadow: corriendo ? `0 0 22px ${VERDE}55, inset 0 0 14px rgba(47,191,113,.12)` : (segs === 0 ? `0 0 20px ${ROJO}55` : `inset 0 0 14px rgba(0,0,0,.6)`),
+                  }}>
+                    <div style={{
+                      fontSize: 34, fontWeight: 800, lineHeight: 1, fontFamily: 'ui-monospace, "SF Mono", monospace', letterSpacing: 1,
+                      color: segs === 0 ? ROJO : (corriendo ? '#4fe08a' : T.acento),
+                      textShadow: segs === 0 ? `0 0 12px ${ROJO}` : (corriendo ? '0 0 14px rgba(79,224,138,.8)' : `0 0 10px ${T.acento}aa`),
+                      animation: corriendo ? 'mcRelojLate 1s steps(2) infinite' : 'none',
+                    }}>{segs === 0 ? (cuartoActual >= totalCuartos ? 'FINAL' : '0:00') : fmt(segs)}</div>
+                  </div>
+                  {/* botón grande iniciar/pausar */}
+                  <button onClick={() => setCorriendo(!corriendo)} disabled={segs === 0} style={{
+                    width: '100%', fontSize: 13, fontWeight: 800, padding: '9px 6px', borderRadius: 10, border: 'none', cursor: segs === 0 ? 'default' : 'pointer',
+                    background: segs === 0 ? 'rgba(255,255,255,.06)' : (corriendo ? 'linear-gradient(150deg,#e0563f,#b23a28)' : 'linear-gradient(150deg,#2fbf71,#1f9156)'),
+                    color: segs === 0 ? TENUE : '#fff', textTransform: 'uppercase', letterSpacing: 0.5,
+                    boxShadow: segs === 0 ? 'none' : '0 4px 14px rgba(0,0,0,.4)',
+                  }}>{corriendo ? '⏸ Pausar' : (segs === 0 ? 'Fin' : (segs === (config.minutos || 10) * 60 ? '▶ Iniciar' : '▶ Seguir'))}</button>
                 </>
               ) : (
-                <div style={{ fontSize: 10, color: TENUE, textTransform: 'uppercase' }}>juega a<div style={{ fontSize: 20, fontWeight: 800, ...ORO }}>{metaPuntos}</div></div>
+                <div style={{ width: '100%', borderRadius: 12, padding: '14px 6px', textAlign: 'center', background: 'linear-gradient(180deg, #05070a, #0a0d11)', border: `1.5px solid ${T.acento}` }}>
+                  <div style={{ fontSize: 9.5, color: TENUE, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 2 }}>Juega a</div>
+                  <div style={{ fontSize: 38, fontWeight: 800, lineHeight: 1, fontFamily: 'ui-monospace, monospace', color: T.acento, textShadow: `0 0 12px ${T.acento}aa` }}>{metaPuntos}</div>
+                  {config?.porDif2 && <div style={{ fontSize: 8.5, color: TENUE, marginTop: 3 }}>dif. 2</div>}
+                </div>
               )}
             </div>
-            <div style={{ flex: 1, textAlign: 'center' }}>
-              <div style={{ fontSize: 12, fontWeight: 800, color: EQ[1].acento, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{config?.nombreB}</div>
-              <div style={{ fontSize: 38, fontWeight: 800, lineHeight: 1, color: '#fff' }}>{totalEquipo(1)}</div>
+
+            {/* equipo B */}
+            <div style={{ flex: 1, textAlign: 'center', background: `linear-gradient(200deg, ${EQ[1].suave}, transparent)`, border: `1px solid ${EQ[1].borde}`, borderRadius: 14, padding: '8px 4px 9px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: EQ[1].acento, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 2 }}>{config?.nombreB}</div>
+              <div style={{ fontSize: 52, fontWeight: 800, lineHeight: 0.95, color: '#fff', fontFamily: 'ui-monospace, monospace', textShadow: `0 0 18px ${EQ[1].borde}` }}>{totalEquipo(1)}</div>
             </div>
           </div>
         </div>
 
-        {/* CANCHA - dos mitades */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           {[0, 1].map((eq) => (
             <div key={eq} style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '10px 12px', minHeight: 0, background: eq === 0 ? `linear-gradient(180deg, ${EQ[0].suave}, transparent)` : `linear-gradient(0deg, ${EQ[1].suave}, transparent)`, borderTop: eq === 1 ? `1px solid ${BORDE_TENUE}` : 'none' }}>
@@ -260,15 +297,14 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
           ))}
         </div>
 
-        {/* PIE */}
-        <div style={{ flexShrink: 0, padding: '10px 12px', background: VIDRIO, borderTop: `1px solid ${BORDE_TENUE}`, backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
+        <div style={{ flexShrink: 0, padding: '10px 12px', background: T.pieBg, borderTop: `1px solid ${T.bordeTenue}`, backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
           {historial.length > 0 && (() => {
             const u = historial[historial.length - 1]
             return (
               <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 9 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 9.5, color: TENUE, textTransform: 'uppercase', letterSpacing: 0.5 }}>Última jugada</div>
-                  <div style={{ fontSize: 13.5, color: TEXTO, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}><b style={{ color: EQ[u.equipo].acento }}>{u.etiquetaJug}</b> · {u.sub}</div>
+                  <div style={{ fontSize: 9.5, color: T.tenue, textTransform: 'uppercase', letterSpacing: 0.5 }}>Última jugada</div>
+                  <div style={{ fontSize: 13.5, color: T.texto, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}><b style={{ color: EQ[u.equipo].acento }}>{u.etiquetaJug}</b> · {u.sub}</div>
                 </div>
                 <button onClick={() => setSustituyendo(u)} style={{ fontSize: 11, fontWeight: 700, padding: '7px 11px', borderRadius: 9, border: `1px solid ${T.acento}`, background: 'transparent', color: T.acento, cursor: 'pointer' }}>Corregir</button>
                 <button onClick={() => deshacer(u)} style={{ fontSize: 11, fontWeight: 700, padding: '7px 11px', borderRadius: 9, border: `1px solid ${ROJO}`, background: 'transparent', color: ROJO, cursor: 'pointer' }}>Deshacer</button>
@@ -276,30 +312,26 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
             )
           })()}
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => { setModo(modo === 'jugada' ? 'jugador' : 'jugada'); setSeleccion(null) }} style={{ flex: 1, border: `1px solid ${BORDE_TENUE}`, borderRadius: 11, padding: 11, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', background: 'rgba(255,255,255,.04)', color: TENUE }}>Modo: {modo === 'jugada' ? 'Por Jugada' : 'Por Jugador'} ⇄</button>
-            <button onClick={() => setConfirmarFin(true)} style={{ flex: 1, border: `1px solid ${BORDE_TENUE}`, borderRadius: 11, padding: 11, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', background: 'rgba(255,255,255,.04)', color: TENUE }}>Terminar juego</button>
+            <button onClick={() => { setModo(modo === 'jugada' ? 'jugador' : 'jugada'); setSeleccion(null) }} style={{ flex: 1, border: `1px solid ${T.bordeTenue}`, borderRadius: 11, padding: 11, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', background: T.botonNeutro, color: T.tenue }}>Modo: {modo === 'jugada' ? 'Por Jugada' : 'Por Jugador'} ⇄</button>
+            <button onClick={() => setConfirmarFin(true)} style={{ flex: 1, border: `1px solid ${T.bordeTenue}`, borderRadius: 11, padding: 11, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', background: T.botonNeutro, color: T.tenue }}>Terminar juego</button>
           </div>
         </div>
       </div>
 
-      {/* TOAST */}
       {toast && (
         <div style={{ position: 'absolute', left: '50%', bottom: 118, transform: 'translateX(-50%)', background: VERDE, color: '#062012', fontWeight: 800, fontSize: 13, padding: '10px 18px', borderRadius: 24, zIndex: 30, whiteSpace: 'nowrap', boxShadow: '0 8px 24px rgba(0,0,0,.4)' }}>✓ {toast}</div>
       )}
 
-      {/* HOJA QUE SUBE - con animación de deslizar (siempre montada) */}
       {(() => {
         const abierta = !!seleccion
-        const hoja = seleccion || hojaPrev // mientras baja, sigue mostrando lo anterior
+        const hoja = seleccion || hojaPrev
         const eqColor = hoja ? EQ[hoja.equipo] : EQ[0]
         return (
           <>
-            {/* fondo oscuro */}
             <div onClick={() => setSeleccion(null)} style={{
               position: 'absolute', inset: 0, background: 'rgba(4,5,7,.74)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', zIndex: 20,
               opacity: abierta ? 1 : 0, pointerEvents: abierta ? 'auto' : 'none', transition: 'opacity .22s ease',
             }} />
-            {/* la hoja */}
             <div style={{
               position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 21, borderRadius: '24px 24px 0 0', padding: 2,
               background: eqColor.solido, maxWidth: 480, margin: '0 auto', boxShadow: '0 -12px 40px rgba(0,0,0,.55)',

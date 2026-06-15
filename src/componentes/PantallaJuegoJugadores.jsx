@@ -1,33 +1,73 @@
 import { useState } from 'react'
 import fondoJuego from '../assets/fondo-juego.png'
 
+const SUP_OSCURA = {
+  esClaro: false, fondo: '#08090c', textoFuerte: '#f4f7f9', textoBody: '#eef3f6', tenue: '#9aa7b2',
+  vidrio: 'linear-gradient(150deg, rgba(24,26,30,0.86), rgba(12,14,18,0.92))',
+  veloGrad: 'linear-gradient(180deg, rgba(8,9,12,0.84) 0%, rgba(8,9,12,0.92) 100%)',
+  inputBg: 'rgba(12,14,18,0.7)', inputBorde: 'rgba(255,255,255,.12)', inputWash: 'rgba(255,255,255,.05)',
+}
+const SUP_CLARA_BASE = {
+  esClaro: true, textoFuerte: '#2a2014', textoBody: '#3a2f20', tenue: '#7a6e58',
+  vidrio: 'linear-gradient(150deg, rgba(255,255,255,0.92), rgba(250,248,244,0.95))',
+  inputBg: 'rgba(0,0,0,.03)', inputBorde: 'rgba(0,0,0,.12)', inputWash: 'rgba(0,0,0,.04)',
+}
 const TEMAS = {
   dorado: {
-    acento: '#e8b65a', borde: 'linear-gradient(140deg,#f7d785,#b9802c 40%,#5e4318 70%,#caa050)',
+    ...SUP_OSCURA, nombre: 'Dorado', acento: '#e8b65a',
+    borde: 'linear-gradient(140deg,#f7d785,#b9802c 40%,#5e4318 70%,#caa050)',
     texto: 'linear-gradient(120deg,#fbe08a,#c8842e)', boton: 'linear-gradient(150deg, #f3cf63, #c8842e)', glow: 'rgba(190,135,55,0.20)',
   },
   azul: {
-    acento: '#6fb0ec', borde: 'linear-gradient(140deg,#9fd4fb,#3b7fcf 40%,#1d3a63 70%,#6fb0ec)',
+    ...SUP_OSCURA, nombre: 'Azul', acento: '#6fb0ec',
+    borde: 'linear-gradient(140deg,#9fd4fb,#3b7fcf 40%,#1d3a63 70%,#6fb0ec)',
     texto: 'linear-gradient(120deg,#8fccfb,#2f6fc8)', boton: 'linear-gradient(150deg, #6fb0ec, #2f6fc8)', glow: 'rgba(55,120,190,0.22)',
+  },
+  claro: {
+    ...SUP_CLARA_BASE, nombre: 'Claro', acento: '#b07a26', fondo: '#e6dcc8',
+    borde: 'linear-gradient(140deg,#f0d79a,#c79a45 40%,#9a7530 70%,#e3c578)',
+    texto: 'linear-gradient(120deg,#c8902f,#9a6420)', boton: 'linear-gradient(150deg, #e7c069, #b07a26)', glow: 'rgba(190,135,55,0.12)',
+    veloGrad: 'linear-gradient(180deg, rgba(248,243,233,0.84) 0%, rgba(244,238,226,0.92) 100%)',
+  },
+  larimar: {
+    ...SUP_CLARA_BASE, nombre: 'Larimar', acento: '#2a8fb8', fondo: '#d6e7e8',
+    borde: 'linear-gradient(140deg,#8fd4e8,#2a8fb8 45%,#1a6a8a 75%,#6ac0d8)',
+    texto: 'linear-gradient(120deg,#2a8fb8,#1a6a8a)', boton: 'linear-gradient(150deg, #4aafc8, #2a8fb8)', glow: 'rgba(42,143,184,0.14)',
+    veloGrad: 'linear-gradient(180deg, rgba(232,244,245,0.84) 0%, rgba(224,240,242,0.92) 100%)',
+    textoFuerte: '#1c2624', textoBody: '#2c3a3a', tenue: '#5f7375',
   },
 }
 
 export default function PantallaJuegoJugadores({ config, onListo, onVolver }) {
-  const tema = (typeof window !== 'undefined' && localStorage.getItem('mc_tema')) || 'dorado'
+  const [tema, setTema] = useState(() => {
+    const validos = ['dorado', 'azul', 'claro', 'larimar']
+    if (typeof window !== 'undefined') {
+      const g = localStorage.getItem('mc_tema')
+      return validos.includes(g) ? g : 'dorado'
+    }
+    return 'dorado'
+  })
   const T = TEMAS[tema] || TEMAS.dorado
   const ORO = { background: T.texto, WebkitBackgroundClip: 'text', backgroundClip: 'text', WebkitTextFillColor: 'transparent' }
-  const C = { texto: '#eef3f6', tenue: '#9aa7b2', font: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }
+  const C = { texto: T.textoBody, tenue: T.tenue, font: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }
+
+  const cambiarTema = () => {
+    const orden = ['dorado', 'azul', 'claro', 'larimar']
+    const i = orden.indexOf(tema)
+    const nuevo = orden[(i + 1) % orden.length]
+    setTema(nuevo)
+    try { localStorage.setItem('mc_tema', nuevo) } catch (e) {}
+  }
 
   const n = config?.jugadoresPorLado || 5
   const vacios = (eq) => Array.from({ length: n }, (_, i) => ({ nombre: '', numero: '', equipo: eq }))
 
-  // Si viene de "sustituir el perdedor", un equipo está fijo (el ganador)
-  const equipoFijo = config?.equipoFijo // 0, 1, o undefined
+  const equipoFijo = config?.equipoFijo
   const fijosComoInputs = (config?.jugadoresFijos || []).map((j) => ({ nombre: j.nombre || '', numero: j.numero || '', equipo: j.equipo }))
 
   const initNombre = (eq, def) => {
     if (equipoFijo === eq) return config?.nombreEquipoFijo || def
-    return '' // vacío para que el usuario escriba directo (el placeholder muestra Equipo A/B)
+    return ''
   }
   const initJug = (eq) => {
     if (equipoFijo === eq) return fijosComoInputs.length ? fijosComoInputs : vacios(eq)
@@ -50,7 +90,6 @@ export default function PantallaJuegoJugadores({ config, onListo, onVolver }) {
   const empezar = () => {
     setError('')
     const todos = [...jugA, ...jugB]
-    // Cada jugador necesita al menos nombre O número
     const incompleto = todos.find((j) => !j.nombre.trim() && !j.numero.trim())
     if (incompleto) {
       setError('Cada jugador necesita al menos un nombre o un número.')
@@ -64,26 +103,25 @@ export default function PantallaJuegoJugadores({ config, onListo, onVolver }) {
       etiqueta: j.nombre.trim() || ('#' + j.numero.trim()),
       pts: 0, reb: 0, ast: 0, rob: 0,
     }))
-    // Limpiar campos de "sustituir perdedor" para que no afecten el próximo juego
     const { equipoFijo: _ef, nombreEquipoFijo: _nef, jugadoresFijos: _jf, ...configLimpia } = config || {}
     onListo && onListo({ ...configLimpia, nombreA: nombreA.trim() || 'Equipo A', nombreB: nombreB.trim() || 'Equipo B', jugadores })
   }
 
   const inputBase = {
-    background: 'rgba(12,14,18,0.7)', border: '1px solid rgba(255,255,255,.12)',
-    borderRadius: 10, padding: '11px 12px', color: C.texto, fontSize: 15, outline: 'none', fontFamily: C.font, boxSizing: 'border-box',
+    background: T.inputBg, border: `1px solid ${T.inputBorde}`,
+    borderRadius: 10, padding: '11px 12px', color: T.textoFuerte, fontSize: 15, outline: 'none', fontFamily: C.font, boxSizing: 'border-box',
   }
 
   const bloqueEquipo = (equipo, nombreEq, setNombreEq, lista, esFijo) => (
     <div style={{ position: 'relative', borderRadius: 18, padding: 1.5, background: T.borde, marginBottom: 14, opacity: esFijo ? 0.82 : 1 }}>
-      <div style={{ borderRadius: 17, padding: 16, background: 'linear-gradient(150deg, rgba(24,26,30,0.86), rgba(12,14,18,0.92))', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}>
+      <div style={{ borderRadius: 17, padding: 16, background: T.vidrio, backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}>
         {esFijo && <div style={{ fontSize: 10, fontWeight: 800, color: T.acento, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>🏆 Ganador · se queda</div>}
         <div style={{ fontSize: 10.5, fontWeight: 700, color: C.tenue, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 5 }}>✏️ Nombre del equipo (tócalo para cambiarlo)</div>
         <input
           value={nombreEq}
           onChange={(e) => setNombreEq(e.target.value)}
           placeholder={equipo === 0 ? 'Equipo A' : 'Equipo B'}
-          style={{ ...inputBase, width: '100%', fontWeight: 800, fontSize: 17, marginBottom: 14, color: equipo === 0 ? C.texto : T.acento, background: 'rgba(255,255,255,.05)', border: `1px solid ${T.acento}55`, borderRadius: 10, padding: '11px 12px' }}
+          style={{ ...inputBase, width: '100%', fontWeight: 800, fontSize: 17, marginBottom: 14, color: equipo === 0 ? T.textoFuerte : T.acento, background: T.inputWash, border: `1px solid ${T.acento}55`, borderRadius: 10, padding: '11px 12px' }}
         />
         {lista.map((j, idx) => (
           <div key={idx} style={{ display: 'flex', gap: 8, marginBottom: 9, alignItems: 'center' }}>
@@ -108,10 +146,15 @@ export default function PantallaJuegoJugadores({ config, onListo, onVolver }) {
   )
 
   return (
-    <div style={{ minHeight: '100vh', position: 'relative', fontFamily: C.font, background: '#08090c', color: C.texto }}>
+    <div style={{ minHeight: '100vh', position: 'relative', fontFamily: C.font, background: T.fondo, color: C.texto }}>
       <div style={{ position: 'fixed', inset: 0, zIndex: 0, backgroundImage: `url(${fondoJuego})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
-      <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: 'linear-gradient(180deg, rgba(8,9,12,0.84) 0%, rgba(8,9,12,0.92) 100%)' }} />
+      <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: T.veloGrad }} />
       <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: `radial-gradient(ellipse 60% 40% at 50% 15%, ${T.glow}, transparent 70%)` }} />
+
+      {/* selector de tema flotante */}
+      <button onClick={cambiarTema} title={`Tema: ${T.nombre}`} style={{ position: 'fixed', top: 16, right: 16, zIndex: 5, display: 'flex', alignItems: 'center', gap: 7, background: T.esClaro ? 'rgba(255,255,255,.6)' : 'rgba(20,18,16,.7)', border: `1px solid ${T.acento}55`, color: T.acento, fontSize: 11.5, fontWeight: 700, padding: '7px 11px', borderRadius: 10, cursor: 'pointer', backdropFilter: 'blur(8px)' }}>
+        <span style={{ width: 12, height: 12, borderRadius: '50%', background: T.boton, display: 'inline-block' }} />{T.nombre}
+      </button>
 
       <div style={{ position: 'relative', zIndex: 1, maxWidth: 560, margin: '0 auto', padding: '20px 16px 40px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
@@ -119,7 +162,7 @@ export default function PantallaJuegoJugadores({ config, onListo, onVolver }) {
           <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1, textTransform: 'uppercase', ...ORO }}>{config?.formato || ''} · {config?.nombreJuego || 'Juego rápido'}</span>
         </div>
 
-        <h1 style={{ fontSize: 24, fontWeight: 800, margin: '0 0 4px' }}>{equipoFijo !== undefined ? 'Sustituir el perdedor' : '¿Quiénes juegan?'}</h1>
+        <h1 style={{ fontSize: 24, fontWeight: 800, margin: '0 0 4px', color: T.textoFuerte }}>{equipoFijo !== undefined ? 'Sustituir el perdedor' : '¿Quiénes juegan?'}</h1>
         {equipoFijo !== undefined ? (
           <p style={{ fontSize: 13.5, color: C.tenue, margin: '0 0 22px' }}>🏆 <b style={{ color: T.acento }}>{config?.nombreEquipoFijo}</b> se queda (ganó). Pon el equipo retador que entra.</p>
         ) : (
@@ -129,7 +172,7 @@ export default function PantallaJuegoJugadores({ config, onListo, onVolver }) {
         {bloqueEquipo(0, nombreA, setNombreA, jugA, equipoFijo === 0)}
         {bloqueEquipo(1, nombreB, setNombreB, jugB, equipoFijo === 1)}
 
-        {error && <div style={{ padding: '11px 14px', borderRadius: 11, background: 'rgba(226,75,74,.14)', border: '1px solid rgba(226,75,74,.3)', color: '#f09595', fontSize: 13, marginBottom: 14 }}>{error}</div>}
+        {error && <div style={{ padding: '11px 14px', borderRadius: 11, background: 'rgba(226,75,74,.14)', border: '1px solid rgba(226,75,74,.3)', color: '#e0563f', fontSize: 13, marginBottom: 14 }}>{error}</div>}
 
         <button onClick={empezar} style={{ width: '100%', border: 'none', borderRadius: 14, padding: 17, background: T.boton, color: '#1a1205', fontWeight: 800, fontSize: 17, cursor: 'pointer' }}>
           Empezar el juego →

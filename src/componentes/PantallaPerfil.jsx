@@ -1,52 +1,138 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
 import fondoCancha from '../assets/fondo-cancha.png'
+import fondoTarjetaMiembro from '../assets/fondo-tarjeta-miembro.png'
+import texturaCuero from '../assets/textura-cuero.png'
+import barraMiembroClara from '../assets/barra-miembro-clara.png'
+import barraMiembroLarimar from '../assets/barra-miembro-larimar.png'
+import texturaCueroClara from '../assets/textura-cuero-clara.png'
+import texturaCueroLarimar from '../assets/textura-cuero-larimar.png'
 
+const SUP_OSCURA = {
+  esClaro: false, fondo: '#08090c', textoFuerte: '#f4f7f9', textoBody: '#eef3f6', tenue: '#9aa7b2', subTexto: '#c3ccd4',
+  vidrio: 'linear-gradient(150deg, rgba(24,26,30,0.82), rgba(12,14,18,0.86))',
+  scrimCarnet: 'linear-gradient(90deg, rgba(6,7,9,0.92) 0%, rgba(6,7,9,0.7) 45%, rgba(6,7,9,0.15) 75%, transparent 100%)',
+  headerBg: 'rgba(8,9,12,0.92)',
+  veloGrad: 'linear-gradient(90deg, rgba(8,9,12,0.92) 0%, rgba(8,9,12,0.66) 45%, rgba(8,9,12,0.55) 100%)',
+  navDorada: 'linear-gradient(180deg,#eab64f,#c8842e 55%,#9c6518)',
+  tarjetaBg: 'rgba(20,22,26,.72)', tarjetaBorde: 'rgba(255,255,255,.08)', tarjetaSombra: 'none', lineaSuave: 'rgba(255,255,255,.07)',
+  texturaImg: texturaCuero, barraImg: fondoTarjetaMiembro,
+}
 const TEMAS = {
   dorado: {
-    acento: '#e8b65a', borde: 'linear-gradient(140deg,#f7d785,#b9802c 40%,#5e4318 70%,#caa050)',
+    ...SUP_OSCURA, nombre: 'Dorado', acento: '#e8b65a',
+    borde: 'linear-gradient(140deg,#f7d785,#b9802c 40%,#5e4318 70%,#caa050)',
     texto: 'linear-gradient(120deg,#fbe08a,#c8842e)', balon: ['#fbe08a', '#d18f33', '#9a6420'],
+    avatar: 'linear-gradient(150deg, #e0b057, #9a6420)', avatarTexto: '#241a07',
     boton: 'linear-gradient(150deg, #f3cf63, #c8842e)', glow: 'rgba(190,135,55,0.20)',
-    avatar: 'linear-gradient(150deg, #e0b057, #9a6420)', avatarTexto: '#241a07', borde2: 'rgba(232,169,75,.35)',
+    navActivoBg: 'rgba(232,169,75,.15)', navActivoBorde: 'rgba(232,169,75,.35)',
   },
   azul: {
-    acento: '#6fb0ec', borde: 'linear-gradient(140deg,#9fd4fb,#3b7fcf 40%,#1d3a63 70%,#6fb0ec)',
+    ...SUP_OSCURA, nombre: 'Azul', acento: '#6fb0ec',
+    borde: 'linear-gradient(140deg,#9fd4fb,#3b7fcf 40%,#1d3a63 70%,#6fb0ec)',
     texto: 'linear-gradient(120deg,#8fccfb,#2f6fc8)', balon: ['#9fd4fb', '#4f8fd0', '#1d4a80'],
+    avatar: 'linear-gradient(150deg, #5aa0e0, #1d4a80)', avatarTexto: '#08151f',
     boton: 'linear-gradient(150deg, #6fb0ec, #2f6fc8)', glow: 'rgba(55,120,190,0.22)',
-    avatar: 'linear-gradient(150deg, #5aa0e0, #1d4a80)', avatarTexto: '#08151f', borde2: 'rgba(111,176,236,.35)',
+    navActivoBg: 'rgba(111,176,236,.15)', navActivoBorde: 'rgba(111,176,236,.35)',
+  },
+  claro: {
+    esClaro: true, nombre: 'Claro', acento: '#b07a26',
+    borde: 'linear-gradient(140deg,#f0d79a,#c79a45 40%,#9a7530 70%,#e3c578)',
+    texto: 'linear-gradient(120deg,#c8902f,#9a6420)', balon: ['#e7c069', '#c8842e', '#9a6420'],
+    avatar: 'linear-gradient(150deg, #e7c069, #a9741f)', avatarTexto: '#3a2806',
+    boton: 'linear-gradient(150deg, #e7c069, #b07a26)', glow: 'rgba(190,135,55,0.10)',
+    navActivoBg: 'rgba(176,122,38,.16)', navActivoBorde: 'rgba(176,122,38,.35)',
+    fondo: '#e6dcc8', textoFuerte: '#2a2014', textoBody: '#3a2f20', tenue: '#7a6e58', subTexto: '#5b5040',
+    vidrio: 'linear-gradient(150deg, rgba(255,255,255,0.60), rgba(255,255,255,0.46))',
+    scrimCarnet: 'linear-gradient(100deg, rgba(250,245,235,0.86) 0%, rgba(250,245,235,0.52) 45%, rgba(250,245,235,0.12) 75%, transparent 100%)',
+    headerBg: 'rgba(248,243,233,0.92)',
+    veloGrad: 'linear-gradient(90deg, rgba(248,243,233,0.86) 0%, rgba(248,243,233,0.66) 45%, rgba(248,243,233,0.55) 100%)',
+    navDorada: 'linear-gradient(180deg,#eab64f,#c8842e 55%,#9c6518)',
+    tarjetaBg: '#fff', tarjetaBorde: '#e0e3e8', tarjetaSombra: '0 8px 24px rgba(20,24,30,.06)', lineaSuave: '#eceef1',
+    texturaImg: texturaCueroClara, barraImg: barraMiembroClara,
+  },
+  larimar: {
+    esClaro: true, nombre: 'Larimar', acento: '#b07a26',
+    borde: 'linear-gradient(140deg,#f0d79a,#c79a45 40%,#9a7530 70%,#e3c578)',
+    texto: 'linear-gradient(120deg,#c8902f,#9a6420)', balon: ['#e7c069', '#c8842e', '#9a6420'],
+    avatar: 'linear-gradient(150deg, #e7c069, #a9741f)', avatarTexto: '#3a2806',
+    boton: 'linear-gradient(150deg, #e7c069, #b07a26)', glow: 'rgba(60,150,170,0.12)',
+    navActivoBg: 'rgba(176,122,38,.16)', navActivoBorde: 'rgba(176,122,38,.35)',
+    fondo: '#d6e7e8', textoFuerte: '#1c2624', textoBody: '#2c3a3a', tenue: '#5f7375', subTexto: '#48595a',
+    vidrio: 'linear-gradient(150deg, rgba(255,255,255,0.58), rgba(255,255,255,0.44))',
+    scrimCarnet: 'linear-gradient(100deg, rgba(236,246,247,0.86) 0%, rgba(236,246,247,0.52) 45%, rgba(236,246,247,0.12) 75%, transparent 100%)',
+    headerBg: 'rgba(232,244,245,0.92)',
+    veloGrad: 'linear-gradient(90deg, rgba(232,244,245,0.86) 0%, rgba(232,244,245,0.66) 45%, rgba(232,244,245,0.55) 100%)',
+    navDorada: 'linear-gradient(180deg,#6ac0d8,#2a8fb8 55%,#1a6a8a)',
+    tarjetaBg: '#fff', tarjetaBorde: '#cfe0e2', tarjetaSombra: '0 8px 24px rgba(20,30,32,.06)', lineaSuave: '#e2edee',
+    texturaImg: texturaCueroLarimar, barraImg: barraMiembroLarimar,
   },
 }
 
-const POS_NOMBRE = { PG: 'Base', SG: 'Escolta', SF: 'Alero', PF: 'Ala-pívot', C: 'Pívot' }
+function IconoTechado({ size = 22, cols }) {
+  const gid = 'gtp' + size
+  return (
+    <svg viewBox="0 0 100 100" width={size} height={size} style={{ display: 'block' }}>
+      <defs><linearGradient id={gid} gradientUnits="userSpaceOnUse" x1="50" y1="15" x2="50" y2="85"><stop offset="0%" stopColor={cols[0]} /><stop offset="100%" stopColor={cols[2]} /></linearGradient></defs>
+      <g fill="none" stroke={`url(#${gid})`} strokeWidth="6" strokeLinecap="round" strokeLinejoin="round"><path d="M16 47 L50 23 L84 47" /><path d="M26 45 V78 M74 45 V78" /><line x1="20" y1="78" x2="80" y2="78" /></g>
+    </svg>
+  )
+}
 
 function edadDe(fecha) {
   if (!fecha) return null
-  const hoy = new Date()
-  const n = new Date(fecha)
+  const hoy = new Date(); const n = new Date(fecha)
   let e = hoy.getFullYear() - n.getFullYear()
   const m = hoy.getMonth() - n.getMonth()
   if (m < 0 || (m === 0 && hoy.getDate() < n.getDate())) e--
   return e
 }
 
-export default function PantallaPerfil({ onSalir, onVolver }) {
-  const tema = (typeof window !== 'undefined' && localStorage.getItem('mc_tema')) || 'dorado'
+const NAV_PRINCIPAL = [
+  { id: 'inicio', txt: 'Inicio', icono: '⌂' },
+  { id: 'perfil', txt: 'Mi Perfil', icono: '◉' },
+  { id: 'techado', txt: 'El Techado', icono: 'techado' },
+  { id: 'torneos', txt: 'Torneos', icono: '🏆' },
+  { id: 'rankings', txt: 'Rankings', icono: '★' },
+  { id: 'mapa', txt: 'Mapa', icono: '🗺️' },
+]
+
+export default function PantallaPerfil({ onSalir, onVolver, onAccion }) {
+  const [tema, setTema] = useState(() => {
+    const validos = ['dorado', 'azul', 'claro', 'larimar']
+    if (typeof window !== 'undefined') {
+      const g = localStorage.getItem('mc_tema')
+      return validos.includes(g) ? g : 'dorado'
+    }
+    return 'dorado'
+  })
   const T = TEMAS[tema] || TEMAS.dorado
   const ORO = { background: T.texto, WebkitBackgroundClip: 'text', backgroundClip: 'text', WebkitTextFillColor: 'transparent' }
+  const C = { texto: T.textoBody, tenue: T.tenue, font: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }
 
   const [perfil, setPerfil] = useState(null)
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState('')
   const [copiado, setCopiado] = useState(false)
   const [esEscritorio, setEsEscritorio] = useState(typeof window !== 'undefined' ? window.innerWidth >= 900 : false)
+  const [esTablet, setEsTablet] = useState(typeof window !== 'undefined' ? window.innerWidth >= 900 && window.innerWidth < 1180 : false)
 
   useEffect(() => {
-    const onResize = () => setEsEscritorio(window.innerWidth >= 900)
+    const onResize = () => {
+      setEsEscritorio(window.innerWidth >= 900)
+      setEsTablet(window.innerWidth >= 900 && window.innerWidth < 1180)
+    }
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [])
 
-  const C = { texto: '#eef3f6', tenue: '#9aa7b2', font: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }
+  const cambiarTema = () => {
+    const orden = ['dorado', 'azul', 'claro', 'larimar']
+    const i = orden.indexOf(tema)
+    const nuevo = orden[(i + 1) % orden.length]
+    setTema(nuevo)
+    try { localStorage.setItem('mc_tema', nuevo) } catch (e) {}
+  }
 
   useEffect(() => {
     const cargar = async () => {
@@ -78,30 +164,50 @@ export default function PantallaPerfil({ onSalir, onVolver }) {
     onSalir && onSalir()
   }
 
-  const fondo = () => (<>
+  const irA = (id) => {
+    if (id === 'perfil') return
+    if (id === 'cerrarSesion') { salir(); return }
+    if (id === 'inicio') { onVolver && onVolver(); return }
+    onAccion ? onAccion(id) : (onVolver && onVolver())
+  }
+
+  const Velo = () => (<>
     <div style={{ position: 'fixed', inset: 0, zIndex: 0, backgroundImage: `url(${fondoCancha})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
-    <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: 'linear-gradient(180deg, rgba(8,9,12,0.86) 0%, rgba(8,9,12,0.93) 100%)' }} />
-    <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: `radial-gradient(ellipse 60% 40% at 50% 25%, ${T.glow}, transparent 70%)` }} />
+    <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: T.veloGrad }} />
+    <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: `radial-gradient(ellipse 60% 40% at 50% 20%, ${T.glow}, transparent 70%)` }} />
   </>)
 
-  const placa = (children, pad = 18) => (
-    <div style={{ position: 'relative', borderRadius: 18, padding: 1.5, background: T.borde, marginBottom: 14 }}>
-      <div style={{ borderRadius: 17, padding: pad, background: 'linear-gradient(150deg, rgba(24,26,30,0.85), rgba(12,14,18,0.9))', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}>{children}</div>
+  // Tarjeta blanca/oscura con cabecera + regla dorada
+  const Tarjeta = ({ titulo, children, pad = 16 }) => (
+    <div style={{ background: T.tarjetaBg, border: `1px solid ${T.tarjetaBorde}`, borderRadius: 16, boxShadow: T.tarjetaSombra, overflow: 'hidden' }}>
+      {titulo && (
+        <div style={{ padding: '13px 16px 0', display: 'flex', alignItems: 'center', gap: 9 }}>
+          <h3 style={{ fontSize: 12, letterSpacing: 0.6, textTransform: 'uppercase', fontWeight: 800, margin: 0, color: T.acento }}>{titulo}</h3>
+          <span style={{ width: 22, height: 3, borderRadius: 3, background: T.boton }} />
+        </div>
+      )}
+      <div style={{ padding: pad }}>{children}</div>
     </div>
   )
 
-  const wrap = { minHeight: '100vh', position: 'relative', fontFamily: C.font, background: '#08090c', color: C.texto }
+  const BotonTema = () => (
+    <button onClick={cambiarTema} title={`Tema: ${T.nombre}`} style={{ display: 'flex', alignItems: 'center', gap: 7, background: T.esClaro ? 'rgba(255,255,255,.6)' : 'rgba(20,18,16,.7)', border: `1px solid ${T.navActivoBorde}`, color: T.acento, fontSize: 11.5, fontWeight: 700, padding: '7px 11px', borderRadius: 10, cursor: 'pointer', backdropFilter: 'blur(8px)' }}>
+      <span style={{ width: 12, height: 12, borderRadius: '50%', background: T.boton, display: 'inline-block' }} />{T.nombre}
+    </button>
+  )
+
+  const wrap = { minHeight: '100vh', position: 'relative', fontFamily: C.font, background: T.fondo, color: C.texto }
 
   if (cargando) {
-    return (<div style={{ ...wrap, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{fondo()}<div style={{ position: 'relative', zIndex: 1, color: C.tenue }}>Cargando tu perfil...</div></div>)
+    return (<div style={{ ...wrap, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Velo /><div style={{ position: 'relative', zIndex: 1, color: C.tenue }}>Cargando tu perfil...</div></div>)
   }
 
   if (error || !perfil) {
     return (
       <div style={{ ...wrap, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-        {fondo()}
+        <Velo />
         <div style={{ position: 'relative', zIndex: 1, textAlign: 'center', maxWidth: 360 }}>
-          <div style={{ fontSize: 16, color: C.texto, marginBottom: 8 }}>No pudimos abrir tu perfil</div>
+          <div style={{ fontSize: 16, color: T.textoFuerte, marginBottom: 8 }}>No pudimos abrir tu perfil</div>
           <div style={{ fontSize: 13, color: C.tenue, marginBottom: 18 }}>{error || 'Inicia sesión para ver tu perfil.'}</div>
           <button onClick={() => onVolver && onVolver()} style={{ border: 'none', borderRadius: 12, padding: '12px 22px', background: T.boton, color: '#1a1205', fontWeight: 800, fontSize: 14, cursor: 'pointer' }}>Volver al inicio</button>
         </div>
@@ -115,130 +221,170 @@ export default function PantallaPerfil({ onSalir, onVolver }) {
   const iniciales = `${(perfil.nombre || '?')[0] || ''}${(perfil.apellido || '')[0] || ''}`.toUpperCase()
   const posiciones = perfil.posiciones || []
   const ubicacion = [perfil.municipio, perfil.provincia].filter(Boolean).join(', ')
+  const posicion = posiciones[0] || null
+
+  // CARNET credencial (igual identidad que la pantalla principal)
+  const Carnet = () => (
+    <div style={{ position: 'relative', borderRadius: 16, border: T.esClaro ? '1px solid #34291a' : `1px solid ${T.navActivoBorde}`, backgroundImage: `url(${T.barraImg})`, backgroundSize: 'cover', backgroundPosition: 'center right', boxShadow: T.esClaro ? '0 12px 34px rgba(18,14,8,.22)' : '0 12px 34px rgba(0,0,0,.4)' }}>
+      <div style={{ position: 'absolute', inset: 0, borderRadius: 16, background: T.scrimCarnet }} />
+      <div style={{ position: 'absolute', inset: 9, borderRadius: 9, border: `1.5px dashed ${T.esClaro ? 'rgba(234,182,79,.45)' : 'rgba(234,182,79,.32)'}`, pointerEvents: 'none', zIndex: 1 }} />
+      <div style={{ position: 'relative', zIndex: 2, padding: '15px 18px 13px', display: 'flex', alignItems: 'center', gap: 14 }}>
+        <div style={{ width: 62, height: 62, borderRadius: '50%', background: perfil.foto_url ? `url(${perfil.foto_url}) center/cover` : T.avatar, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 23, fontWeight: 800, color: T.avatarTexto, flexShrink: 0, boxShadow: `0 0 0 2px ${T.esClaro ? '#15110b' : '#0c0e12'}, 0 0 0 4px ${T.acento}` }}>{!perfil.foto_url && iniciales}</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 20, fontWeight: 800, color: '#fff', lineHeight: 1.05, textShadow: '0 1px 6px rgba(0,0,0,.7)', letterSpacing: 0.3, textTransform: 'uppercase' }}>{nombreCompleto}</div>
+          <div style={{ fontSize: 11.5, color: '#cdb98e', marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+            {posicion && <span>{posicion}</span>}
+            {posicion && ubicacion && <span style={{ width: 3, height: 3, borderRadius: '50%', background: '#7d6b49' }} />}
+            {ubicacion && <span>{ubicacion}</span>}
+            {edad != null && <span style={{ width: 3, height: 3, borderRadius: '50%', background: '#7d6b49' }} />}
+            {edad != null && <span>{edad} años</span>}
+            <span onClick={copiarMC} style={{ fontSize: 10, fontWeight: 700, color: '#1c160d', background: T.boton, padding: '2px 8px', borderRadius: 6, fontFamily: 'monospace', letterSpacing: 1, cursor: 'pointer' }}>{copiado ? '✓ copiado' : (perfil.codigo_unico || 'MC------')}</span>
+          </div>
+        </div>
+        <div style={{ flexShrink: 0, textAlign: 'right' }}>
+          <div style={{ fontSize: 17, fontWeight: 800, lineHeight: 0.95, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+            <span style={{ color: '#dfe2e6' }}>MEDIA</span><br /><span style={ORO}>CANCHA</span>
+          </div>
+          <span style={{ display: 'inline-block', marginTop: 5, fontSize: 8.5, letterSpacing: 1.5, color: '#1c160d', background: T.boton, padding: '2px 8px', borderRadius: 12, fontWeight: 800, textTransform: 'uppercase' }}>{esJugador ? 'Jugador' : 'Fanático'}</span>
+        </div>
+        <div style={{ flexShrink: 0 }}><BotonTema /></div>
+      </div>
+      {esJugador && (
+        <div style={{ position: 'relative', zIndex: 2, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1, background: 'rgba(234,182,79,.16)', borderTop: '1px solid rgba(234,182,79,.18)' }}>
+          {[['—', 'PTS'], ['—', 'REB'], ['—', 'AST'], ['—', 'ROB']].map(([v, l]) => (
+            <div key={l} style={{ background: T.esClaro ? 'rgba(21,17,11,.9)' : 'rgba(12,14,18,.85)', padding: '8px 6px', textAlign: 'center' }}>
+              <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', lineHeight: 1 }}>{v}</div>
+              <div style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 1, color: T.acento, marginTop: 3, textTransform: 'uppercase' }}>{l}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      <div style={{ position: 'relative', zIndex: 2, display: 'flex', alignItems: 'center', gap: 2, padding: '5px 8px', background: T.navDorada, borderRadius: '0 0 16px 16px', flexWrap: 'wrap', boxShadow: '0 8px 22px rgba(156,101,24,.18)' }}>
+        {NAV_PRINCIPAL.map((n) => {
+          const activo = n.id === 'perfil'
+          return (
+            <button key={n.id} onClick={() => irA(n.id)} style={{ display: 'flex', alignItems: 'center', gap: 6, background: activo ? 'linear-gradient(180deg,#1f1810,#120d07)' : 'transparent', color: activo ? T.acento : '#3a2a10', fontSize: 12, fontWeight: 700, padding: '8px 13px', borderRadius: 9, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: 0.4, whiteSpace: 'nowrap', border: 'none' }}>
+              <span style={{ fontSize: 14, display: 'inline-flex' }}>{n.icono === 'techado' ? <IconoTechado size={14} cols={activo ? T.balon : ['#3a2a10', '#3a2a10', '#3a2a10']} /> : n.icono}</span>{n.txt}
+            </button>
+          )
+        })}
+        <button onClick={salir} style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'transparent', border: 'none', color: '#3a2a10', fontSize: 12, fontWeight: 700, padding: '8px 13px', borderRadius: 9, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: 0.4, marginLeft: 'auto' }}>↩ Salir</button>
+      </div>
+    </div>
+  )
 
   const Stat = ({ valor, etiqueta }) => (
     <div style={{ flex: 1, textAlign: 'center', padding: '6px 0' }}>
-      <div style={{ fontSize: 22, fontWeight: 800, color: C.texto }}>{valor}</div>
+      <div style={{ fontSize: 22, fontWeight: 800, color: T.textoFuerte }}>{valor}</div>
       <div style={{ fontSize: 10.5, color: C.tenue, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 2 }}>{etiqueta}</div>
     </div>
   )
+  const cajaStat = T.esClaro ? 'rgba(0,0,0,.03)' : 'rgba(255,255,255,.04)'
 
-  const bCabecera = placa(
-    <div style={{ textAlign: 'center' }}>
-      <div style={{ width: 88, height: 88, borderRadius: '50%', background: T.avatar, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32, fontWeight: 800, color: T.avatarTexto, margin: '0 auto 14px' }}>{iniciales}</div>
-      <div style={{ fontSize: 23, fontWeight: 800, color: C.texto }}>{nombreCompleto}</div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
-        <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.5, padding: '4px 11px', borderRadius: 9, textTransform: 'uppercase', color: T.avatarTexto, background: T.boton }}>{esJugador ? '🏀 Jugador' : '📣 Fanático'}</span>
-        {ubicacion && <span style={{ fontSize: 12.5, color: C.tenue }}>📍 {ubicacion}</span>}
-        {edad != null && <span style={{ fontSize: 12.5, color: C.tenue }}>· {edad} años</span>}
-      </div>
-    </div>
-  )
-
-  const bMcid = placa(
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-      <div>
-        <div style={{ fontSize: 11, color: C.tenue, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4 }}>Tu MC-ID</div>
-        <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: 3, fontFamily: 'monospace', ...ORO }}>{perfil.codigo_unico || '--------'}</div>
-        <div style={{ fontSize: 11.5, color: C.tenue, marginTop: 4 }}>Tu identificación en Media Cancha. Compártela para que te agreguen a ligas y torneos.</div>
-      </div>
-      <button onClick={copiarMC} style={{ flexShrink: 0, border: 'none', borderRadius: 11, padding: '11px 16px', background: copiado ? 'rgba(47,191,113,.18)' : T.boton, color: copiado ? '#7bd6a3' : '#1a1205', fontWeight: 800, fontSize: 13, cursor: 'pointer', minWidth: 86 }}>{copiado ? '✓ Copiado' : 'Copiar'}</button>
-    </div>
-  )
-
-  const bAtleta = esJugador && placa(
-    <>
-      <div style={{ fontSize: 11, color: T.acento, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 14 }}>Datos de atleta</div>
+  const bAtleta = esJugador && (
+    <Tarjeta titulo="Datos de atleta">
       <div style={{ display: 'flex', gap: 10 }}>
-        <div style={{ flex: 1, textAlign: 'center', background: 'rgba(255,255,255,.04)', borderRadius: 12, padding: '12px 6px' }}>
-          <div style={{ fontSize: 20, fontWeight: 800, color: C.texto }}>{perfil.estatura_pies ? `${perfil.estatura_pies}'${perfil.estatura_pulgadas || 0}"` : '—'}</div>
+        <div style={{ flex: 1, textAlign: 'center', background: cajaStat, borderRadius: 12, padding: '12px 6px' }}>
+          <div style={{ fontSize: 20, fontWeight: 800, color: T.textoFuerte }}>{perfil.estatura_pies ? `${perfil.estatura_pies}'${perfil.estatura_pulgadas || 0}"` : '—'}</div>
           <div style={{ fontSize: 10, color: C.tenue, textTransform: 'uppercase', marginTop: 3 }}>Estatura</div>
         </div>
-        <div style={{ flex: 2, textAlign: 'center', background: 'rgba(255,255,255,.04)', borderRadius: 12, padding: '12px 6px' }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: C.texto, display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ flex: 2, textAlign: 'center', background: cajaStat, borderRadius: 12, padding: '12px 6px' }}>
+          <div style={{ fontSize: 15, fontWeight: 800, color: T.textoFuerte, display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap', alignItems: 'center' }}>
             {posiciones.length ? posiciones.map((p, i) => (
-              <span key={p} style={{ color: i === 0 ? T.acento : C.texto }}>{p}{i === 0 && <span style={{ fontSize: 9, color: C.tenue }}> (nat.)</span>}</span>
+              <span key={p} style={{ color: i === 0 ? T.acento : T.textoFuerte }}>{p}{i === 0 && <span style={{ fontSize: 9, color: C.tenue }}> (nat.)</span>}</span>
             )) : '—'}
           </div>
           <div style={{ fontSize: 10, color: C.tenue, textTransform: 'uppercase', marginTop: 3 }}>Posiciones</div>
         </div>
       </div>
-    </>
+    </Tarjeta>
   )
 
-  const bRating = esJugador && placa(
-    <>
-      <div style={{ fontSize: 11, color: T.acento, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 14 }}>Rating y rankings</div>
-      <div style={{ display: 'flex' }}>
-        <Stat valor="—" etiqueta="Rating" /><Stat valor="—" etiqueta="Rank nacional" /><Stat valor="—" etiqueta="Nivel" />
-      </div>
+  const bRating = esJugador && (
+    <Tarjeta titulo="Rating y rankings">
+      <div style={{ display: 'flex' }}><Stat valor="—" etiqueta="Rating" /><Stat valor="—" etiqueta="Rank nacional" /><Stat valor="—" etiqueta="Nivel" /></div>
       <div style={{ fontSize: 12, color: C.tenue, textAlign: 'center', marginTop: 12, lineHeight: 1.5 }}>Tu rating aparecerá cuando juegues tu primer torneo. Mientras más juegues, más sólido tu número.</div>
-    </>
+    </Tarjeta>
   )
 
-  const bPromedios = esJugador && placa(
-    <>
-      <div style={{ fontSize: 11, color: T.acento, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 14 }}>Promedios de carrera</div>
-      <div style={{ display: 'flex' }}>
-        <Stat valor="0.0" etiqueta="PTS" /><Stat valor="0.0" etiqueta="REB" /><Stat valor="0.0" etiqueta="AST" /><Stat valor="0.0" etiqueta="ROB" />
-      </div>
+  const bPromedios = esJugador && (
+    <Tarjeta titulo="Promedios de carrera">
+      <div style={{ display: 'flex' }}><Stat valor="0.0" etiqueta="PTS" /><Stat valor="0.0" etiqueta="REB" /><Stat valor="0.0" etiqueta="AST" /><Stat valor="0.0" etiqueta="ROB" /></div>
       <div style={{ fontSize: 12, color: C.tenue, textAlign: 'center', marginTop: 12 }}>0 torneos · 0 partidos jugados</div>
-    </>
+    </Tarjeta>
   )
 
-  const bTrofeos = esJugador && placa(
-    <>
-      <div style={{ fontSize: 11, color: T.acento, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>Vitrina de trofeos</div>
+  const bTrofeos = esJugador && (
+    <Tarjeta titulo="Vitrina de trofeos">
       <div style={{ fontSize: 13, color: C.tenue, textAlign: 'center', padding: '14px 0' }}>🏆 Aquí irán tus campeonatos, MVPs y liderazgos.</div>
-    </>
+    </Tarjeta>
   )
 
-  const bTorneos = placa(
-    <>
-      <div style={{ fontSize: 11, color: T.acento, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>{esJugador ? 'Mis torneos y ligas' : 'Lo que sigo'}</div>
+  const bTorneos = (
+    <Tarjeta titulo={esJugador ? 'Mis torneos y ligas' : 'Lo que sigo'}>
       <div style={{ fontSize: 13, color: C.tenue, textAlign: 'center', padding: '14px 0', lineHeight: 1.5 }}>
         {esJugador ? 'Todavía no estás en ningún torneo o liga. Cuando te inscriban con tu MC-ID, aparecerán aquí.' : 'Sigue torneos, equipos y jugadores para verlos aquí.'}
       </div>
-    </>
+    </Tarjeta>
   )
 
-  const bCuenta = placa(
-    <>
-      <div style={{ fontSize: 11, color: T.acento, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>Cuenta</div>
-      <div style={{ fontSize: 13, color: C.tenue, display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}><span>Correo</span><span style={{ color: C.texto }}>{perfil.correo}</span></div>
+  const bMcid = (
+    <Tarjeta titulo="Tu MC-ID">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: 3, fontFamily: 'monospace', ...ORO }}>{perfil.codigo_unico || '--------'}</div>
+          <div style={{ fontSize: 11.5, color: C.tenue, marginTop: 4 }}>Tu identificación en Media Cancha. Compártela para que te agreguen a ligas y torneos.</div>
+        </div>
+        <button onClick={copiarMC} style={{ flexShrink: 0, border: 'none', borderRadius: 11, padding: '11px 16px', background: copiado ? 'rgba(47,191,113,.18)' : T.boton, color: copiado ? '#7bd6a3' : '#1a1205', fontWeight: 800, fontSize: 13, cursor: 'pointer', minWidth: 86 }}>{copiado ? '✓ Copiado' : 'Copiar'}</button>
+      </div>
+    </Tarjeta>
+  )
+
+  const bCuenta = (
+    <Tarjeta titulo="Cuenta">
+      <div style={{ fontSize: 13, color: C.tenue, display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}><span>Correo</span><span style={{ color: T.textoFuerte }}>{perfil.correo}</span></div>
       <div style={{ fontSize: 13, color: C.tenue, display: 'flex', justifyContent: 'space-between' }}><span>Plan</span><span style={{ color: T.acento, fontWeight: 700 }}>Gratis</span></div>
-    </>
-  , 16)
-
-  const barra = (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
-      <span onClick={() => onVolver && onVolver()} style={{ color: C.tenue, fontSize: 14, cursor: 'pointer' }}>← Inicio</span>
-      <button onClick={salir} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,.14)', borderRadius: 10, padding: '7px 14px', color: C.tenue, fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>Cerrar sesión</button>
-    </div>
+    </Tarjeta>
   )
 
+  // ===== ESCRITORIO: carnet arriba + 3 columnas =====
   if (esEscritorio) {
     return (
       <div style={wrap}>
-        {fondo()}
-        <div style={{ position: 'relative', zIndex: 1, maxWidth: 980, margin: '0 auto', padding: '22px 24px 60px' }}>
-          {barra}
-          {bCabecera}
-          {bMcid}
-          <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
-            <div style={{ flex: 1, minWidth: 0 }}>{bAtleta}{bPromedios}{bTorneos}</div>
-            <div style={{ flex: 1, minWidth: 0 }}>{bRating}{bTrofeos}{bCuenta}</div>
+        <Velo />
+        <div style={{ position: 'sticky', top: 0, zIndex: 15, padding: '14px 24px 0', background: T.headerBg, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)' }}>
+          <div style={{ maxWidth: 1280, margin: '0 auto' }}><Carnet /></div>
+        </div>
+        <div style={{ position: 'relative', zIndex: 1, maxWidth: 1280, margin: '0 auto', width: '100%', display: 'grid', gridTemplateColumns: esTablet ? '1fr 1fr' : '300px 1fr 300px', gap: 16, alignItems: 'start', padding: '18px 24px 50px' }}>
+          {/* izquierda */}
+          {!esTablet && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {bMcid}{bAtleta}{bCuenta}
+            </div>
+          )}
+          {/* centro */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
+            {esTablet && bMcid}
+            {bRating}{bPromedios}
+            {esTablet && bAtleta}
+          </div>
+          {/* derecha */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {bTrofeos}{bTorneos}
+            {esTablet && bCuenta}
           </div>
         </div>
       </div>
     )
   }
 
+  // ===== MÓVIL =====
   return (
     <div style={wrap}>
-      {fondo()}
-      <div style={{ position: 'relative', zIndex: 1, maxWidth: 560, margin: '0 auto', padding: '20px 16px 60px' }}>
-        {barra}{bCabecera}{bMcid}{bAtleta}{bRating}{bPromedios}{bTrofeos}{bTorneos}{bCuenta}
+      <Velo />
+      <div style={{ position: 'relative', zIndex: 1, maxWidth: 560, margin: '0 auto', padding: '14px 16px 60px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <Carnet />
+        {bMcid}{bAtleta}{bRating}{bPromedios}{bTrofeos}{bTorneos}{bCuenta}
       </div>
     </div>
   )
