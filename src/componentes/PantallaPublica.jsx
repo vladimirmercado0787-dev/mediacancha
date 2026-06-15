@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import fondoCancha from '../assets/fondo-cancha.png'
 import fondoTarjetaMiembro from '../assets/fondo-tarjeta-miembro.png'
 import texturaCuero from '../assets/textura-cuero.png'
+import bannerBienvenida from '../assets/banner-bienvenida.png'
 import { leerHistorialDia, haceCuanto as haceCuantoLocal, publicarEnTechado, quitarDelTechado } from '../historialDia'
 import { leerTechado, misReacciones, reaccionar, leerComentarios, comentar, borrarComentario, haceCuanto, borrarPublicacion, miUsuarioId, miPerfilCompleto } from '../techado'
 import { plantillaPorId, PLANTILLA_DEFAULT, PLANTILLAS, puedeUsar } from '../plantillas'
@@ -85,22 +86,29 @@ const RANKING = [
 
 const NAV = [
   { id: 'inicio', txt: 'Inicio', icono: '⌂' },
-  { id: 'torneos', txt: 'Torneos', icono: '🏆' },
-  { id: 'techado', txt: 'El Techado', icono: 'techado' },
-  { id: 'historialDia', txt: 'Historial de hoy', icono: '🗓️' },
-  { id: 'rankings', txt: 'Rankings', icono: '★' },
   { id: 'perfil', txt: 'Mi Perfil', icono: '◉' },
+  { id: 'techado', txt: 'El Techado', icono: 'techado' },
+  { id: 'torneos', txt: 'Torneos', icono: '🏆' },
+  { id: 'rankings', txt: 'Rankings', icono: '★' },
+  { id: 'mapa', txt: 'Mapa del baloncesto', icono: '🗺️' },
+  { id: 'historialDia', txt: 'Historial de hoy', icono: '🗓️' },
+  { id: 'configuracion', txt: 'Configuración', icono: '⚙️' },
 ]
-const ACCIONES = [
+const ACCIONES_CREAR = [
   { id: 'juego', txt: '⚡ Armar juego rápido' },
   { id: 'crearTorneo', txt: '🏆 Crear torneo' },
   { id: 'crearLiga', txt: '🤝 Crear liga' },
+]
+const ACCIONES_MIAS = [
+  { id: 'misTorneos', txt: '🏆 Mis torneos' },
+  { id: 'misLigas', txt: '🤝 Mis ligas' },
 ]
 
 const VIDRIO = 'linear-gradient(150deg, rgba(24,26,30,0.82), rgba(12,14,18,0.86))'
 
 export default function PantallaPublica({ onAccion, haySesion }) {
-  const [esEscritorio, setEsEscritorio] = useState(typeof window !== 'undefined' ? window.innerWidth >= 900 : false)
+  const [esEscritorio, setEsEscritorio] = useState(typeof window !== 'undefined' ? window.innerWidth >= 768 : false)
+  const [esTablet, setEsTablet] = useState(typeof window !== 'undefined' ? window.innerWidth >= 768 && window.innerWidth < 1100 : false)
   const [menuAbierto, setMenuAbierto] = useState(false)
   const [likes, setLikes] = useState({})
   const [tema, setTema] = useState(() => {
@@ -246,7 +254,10 @@ export default function PantallaPublica({ onAccion, haySesion }) {
   const ORO_TEXTO = { background: T.texto, WebkitBackgroundClip: 'text', backgroundClip: 'text', WebkitTextFillColor: 'transparent' }
 
   useEffect(() => {
-    const onResize = () => setEsEscritorio(window.innerWidth >= 900)
+    const onResize = () => {
+      setEsEscritorio(window.innerWidth >= 768)
+      setEsTablet(window.innerWidth >= 768 && window.innerWidth < 1100)
+    }
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [])
@@ -567,14 +578,18 @@ export default function PantallaPublica({ onAccion, haySesion }) {
   )
 
   const Bienvenida = ({ grande }) => (
-    <div style={{ marginBottom: grande ? 24 : 8 }}>
-      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 9, marginBottom: 10 }}>
-        <span style={{ width: 26, height: 2, background: T.boton, display: 'block' }} />
-        <span style={{ fontSize: 10.5, letterSpacing: 3, color: T.acento, fontWeight: 700, textTransform: 'uppercase' }}>Del barrio a la Superior</span>
+    <div style={{ marginBottom: grande ? 20 : 8, position: 'relative', borderRadius: 18, overflow: 'hidden', border: '1px solid rgba(200,132,46,0.3)', backgroundImage: `url(${bannerBienvenida})`, backgroundSize: 'cover', backgroundPosition: 'center' }}>
+      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg, rgba(8,9,12,0.55) 0%, rgba(8,9,12,0.35) 40%, rgba(8,9,12,0.45) 100%)' }} />
+      <div style={{ position: 'relative', padding: grande ? '34px 38px' : '24px 22px', textAlign: 'center' }}>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 9, marginBottom: 12 }}>
+          <span style={{ width: 26, height: 2, background: T.boton, display: 'block' }} />
+          <span style={{ fontSize: 10.5, letterSpacing: 3, color: T.acento, fontWeight: 700, textTransform: 'uppercase', textShadow: '0 2px 8px rgba(0,0,0,.8)' }}>Del barrio a la Superior</span>
+          <span style={{ width: 26, height: 2, background: T.boton, display: 'block' }} />
+        </div>
+        <div style={{ fontSize: grande ? 42 : 28, fontWeight: 800, lineHeight: 1.05, letterSpacing: '-0.5px', color: '#f7f9fb', textShadow: '0 2px 16px rgba(0,0,0,.9)' }}>Todo el baloncesto.</div>
+        <div style={{ fontSize: grande ? 42 : 28, fontWeight: 800, lineHeight: 1.05, letterSpacing: '-0.5px', ...ORO_TEXTO, textShadow: '0 2px 16px rgba(0,0,0,.7)' }}>Un solo lugar.</div>
+        <div style={{ fontSize: grande ? 15 : 13.5, color: '#e3e7ea', marginTop: 14, lineHeight: 1.5, maxWidth: 540, marginLeft: 'auto', marginRight: 'auto', textShadow: '0 2px 10px rgba(0,0,0,.9)' }}>Sigue torneos en vivo, mira las estadísticas y descubre los mejores jugadores de cada zona.</div>
       </div>
-      <div style={{ fontSize: grande ? 40 : 30, fontWeight: 800, lineHeight: 1.05, letterSpacing: '-0.5px', color: '#f4f7f9', textShadow: '0 2px 20px rgba(0,0,0,.6)' }}>Todo el baloncesto.</div>
-      <div style={{ fontSize: grande ? 40 : 30, fontWeight: 800, lineHeight: 1.05, letterSpacing: '-0.5px', ...ORO_TEXTO }}>Un solo lugar.</div>
-      <div style={{ fontSize: grande ? 15 : 14, color: '#c3ccd4', marginTop: 14, lineHeight: 1.5, maxWidth: 560, textShadow: '0 1px 12px rgba(0,0,0,.7)' }}>Sigue torneos en vivo, mira las estadísticas y descubre los mejores jugadores de cada zona.</div>
     </div>
   )
 
@@ -638,14 +653,35 @@ export default function PantallaPublica({ onAccion, haySesion }) {
     return (
       <div style={{ minHeight: '100vh', color: C.texto, fontFamily: C.font, position: 'relative', display: 'flex', flexDirection: 'column', background: '#08090c' }}>
         <Velo />
-        {!haySesion && <BotonTema flotante />}
+        {!haySesion && (
+          <div style={{ position: 'sticky', top: 0, zIndex: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 24px', background: 'rgba(8,9,12,0.92)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', borderBottom: '1px solid rgba(200,132,46,0.18)' }}>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              <svg viewBox="0 0 100 100" style={{ width: 30, height: 30 }}>
+                <circle cx="50" cy="50" r="44" fill="none" stroke={T.acento} strokeWidth="4" />
+                <line x1="50" y1="6" x2="50" y2="94" stroke={T.acento} strokeWidth="4" />
+                <line x1="6" y1="50" x2="94" y2="50" stroke={T.acento} strokeWidth="4" />
+                <path d="M18 24 Q50 50 18 76" fill="none" stroke={T.acento} strokeWidth="4" />
+                <path d="M82 24 Q50 50 82 76" fill="none" stroke={T.acento} strokeWidth="4" />
+              </svg>
+              <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
+                <span style={{ fontSize: 16, fontWeight: 800, color: '#f4f7f9', letterSpacing: 0.5 }}>MEDIA</span>
+                <span style={{ fontSize: 16, fontWeight: 800, color: T.acento, letterSpacing: 0.5 }}>CANCHA</span>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              <BotonTema />
+              <button onClick={() => click('entrar')} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,.18)', borderRadius: 11, padding: '9px 18px', color: '#e3e7ea', fontWeight: 700, fontSize: 13.5, cursor: 'pointer' }}>Iniciar sesión</button>
+              <button onClick={() => click('registro')} style={{ border: 'none', borderRadius: 11, padding: '9px 20px', background: T.boton, color: '#1a1205', fontWeight: 800, fontSize: 13.5, cursor: 'pointer' }}>Crear cuenta gratis</button>
+            </div>
+          </div>
+        )}
         {haySesion && miPerfil && (
           <div style={{ position: 'sticky', top: 0, zIndex: 10, padding: '16px 24px 12px', background: 'rgba(8,9,12,0.92)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)' }}>
             <BarraMiembro />
           </div>
         )}
         <div style={{ display: 'flex', flex: 1, position: 'relative' }}>
-        <aside style={{ width: 240, flexShrink: 0, borderRight: '1px solid rgba(200,132,46,0.2)', padding: '20px 16px', position: 'sticky', top: 200, alignSelf: 'flex-start', height: 'calc(100vh - 200px)', overflowY: 'auto', zIndex: 2, backgroundImage: `linear-gradient(180deg, rgba(8,9,12,0.7), rgba(8,9,12,0.78)), url(${texturaCuero})`, backgroundSize: 'cover', backgroundPosition: 'center' }}>
+        <aside style={{ width: esTablet ? 190 : 240, flexShrink: 0, borderRight: '1px solid rgba(200,132,46,0.2)', padding: esTablet ? '18px 11px' : '20px 16px', position: 'sticky', top: haySesion ? 200 : 20, alignSelf: 'flex-start', height: haySesion ? 'calc(100vh - 200px)' : 'calc(100vh - 40px)', overflowY: 'auto', zIndex: 2, backgroundImage: `linear-gradient(180deg, rgba(8,9,12,0.7), rgba(8,9,12,0.78)), url(${texturaCuero})`, backgroundSize: 'cover', backgroundPosition: 'center' }}>
           {NAV.map((n) => {
             const resaltado = navHover === n.id
             return (
@@ -655,23 +691,24 @@ export default function PantallaPublica({ onAccion, haySesion }) {
             )
           })}
           <div style={{ height: 1, background: 'rgba(255,255,255,.08)', margin: '14px 6px' }} />
-          {ACCIONES.map((a) => (
+          <div style={{ fontSize: 10, fontWeight: 800, color: '#6f7d89', letterSpacing: 1, textTransform: 'uppercase', padding: '0 12px', marginBottom: 8 }}>Crear</div>
+          {ACCIONES_CREAR.map((a) => (
             <button key={a.id} onClick={() => click(a.id)} onMouseEnter={() => setNavHover(a.id)} onMouseLeave={() => setNavHover(null)} style={{ display: 'block', width: '100%', textAlign: 'left', background: navHover === a.id ? T.navActivoBg : 'transparent', border: navHover === a.id ? `1px solid ${T.navActivoBorde}` : '1px solid transparent', color: navHover === a.id ? T.acento : '#d3dae0', fontSize: 14, fontWeight: 600, padding: '10px 12px', borderRadius: 9, cursor: 'pointer', transition: 'all .18s ease' }}>{a.txt}</button>
           ))}
-          <div style={{ marginTop: 24, paddingTop: 4 }}>
-            {haySesion ? (
+          <div style={{ fontSize: 10, fontWeight: 800, color: '#6f7d89', letterSpacing: 1, textTransform: 'uppercase', padding: '0 12px', margin: '16px 0 8px' }}>Lo mío</div>
+          {ACCIONES_MIAS.map((a) => (
+            <button key={a.id} onClick={() => click(a.id)} onMouseEnter={() => setNavHover(a.id)} onMouseLeave={() => setNavHover(null)} style={{ display: 'block', width: '100%', textAlign: 'left', background: navHover === a.id ? T.navActivoBg : 'transparent', border: navHover === a.id ? `1px solid ${T.navActivoBorde}` : '1px solid transparent', color: navHover === a.id ? T.acento : '#d3dae0', fontSize: 14, fontWeight: 600, padding: '10px 12px', borderRadius: 9, cursor: 'pointer', transition: 'all .18s ease' }}>{a.txt}</button>
+          ))}
+          {haySesion && (
+            <div style={{ marginTop: 24, paddingTop: 4 }}>
               <button onClick={() => click('cerrarSesion')} style={{ width: '100%', background: 'transparent', border: '1px solid rgba(255,255,255,.14)', borderRadius: 12, padding: 12, color: C.tenue, fontWeight: 700, fontSize: 13.5, cursor: 'pointer' }}>↩ Cerrar sesión</button>
-            ) : (
-              <>
-                <button onClick={() => click('registro')} style={{ width: '100%', border: 'none', borderRadius: 12, padding: 12, background: T.boton, color: '#1a1205', fontWeight: 800, fontSize: 14, cursor: 'pointer' }}>Crear cuenta gratis</button>
-                <button onClick={() => click('entrar')} style={{ width: '100%', marginTop: 8, background: 'transparent', border: '1px solid rgba(255,255,255,.12)', borderRadius: 12, padding: 10, color: C.tenue, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Iniciar sesión</button>
-              </>
-            )}
-          </div>
+            </div>
+          )}
         </aside>
-        <main style={{ flex: 1, position: 'relative', zIndex: 1, display: 'flex', padding: '20px 26px', gap: 24, alignItems: 'flex-start' }}>
-          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', height: 'calc(100vh - 235px)', borderRadius: 16, padding: '16px 16px 6px', backgroundImage: `linear-gradient(180deg, rgba(8,9,12,0.72), rgba(8,9,12,0.8)), url(${texturaCuero})`, backgroundSize: 'cover', backgroundPosition: 'center', border: '1px solid rgba(200,132,46,0.2)' }}>
-            {!haySesion && <Bienvenida grande />}
+        <main style={{ flex: 1, position: 'relative', zIndex: 1, display: 'flex', padding: esTablet ? '16px 16px' : '20px 26px', gap: esTablet ? 16 : 24, alignItems: 'flex-start' }}>
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', height: haySesion ? 'calc(100vh - 235px)' : 'calc(100vh - 90px)', borderRadius: 16, padding: '16px 16px 6px', backgroundImage: `linear-gradient(180deg, rgba(8,9,12,0.72), rgba(8,9,12,0.8)), url(${texturaCuero})`, backgroundSize: 'cover', backgroundPosition: 'center', border: '1px solid rgba(200,132,46,0.2)' }}>
+            {/* banner fijo arriba (visitante) */}
+            {!haySesion && <div style={{ flexShrink: 0 }}><Bienvenida grande /></div>}
             {/* parte fija: En Vivo */}
             <div style={{ flexShrink: 0 }}>
               <div style={{ marginBottom: 12 }}><EnVivo /></div>
@@ -684,7 +721,7 @@ export default function PantallaPublica({ onAccion, haySesion }) {
               <ListaTechado />
             </div>
           </div>
-          <div style={{ width: 360, flexShrink: 0, position: 'sticky', top: 200, alignSelf: 'flex-start', borderRadius: 16, padding: '16px 14px', backgroundImage: `linear-gradient(180deg, rgba(8,9,12,0.7), rgba(8,9,12,0.78)), url(${texturaCuero})`, backgroundSize: 'cover', backgroundPosition: 'center', border: '1px solid rgba(200,132,46,0.2)', maxHeight: 'calc(100vh - 220px)', overflowY: 'auto' }}>
+          <div style={{ width: esTablet ? 280 : 360, flexShrink: 0, position: 'sticky', top: haySesion ? 200 : 20, alignSelf: 'flex-start', borderRadius: 16, padding: esTablet ? '14px 11px' : '16px 14px', backgroundImage: `linear-gradient(180deg, rgba(8,9,12,0.7), rgba(8,9,12,0.78)), url(${texturaCuero})`, backgroundSize: 'cover', backgroundPosition: 'center', border: '1px solid rgba(200,132,46,0.2)', maxHeight: haySesion ? 'calc(100vh - 220px)' : 'calc(100vh - 40px)', overflowY: 'auto' }}>
             <div style={{ marginBottom: 18 }}><SecHead titulo="Torneos populares" accion={{ txt: 'Ver todos →', fn: () => click('torneos') }} /><ListaTorneos /></div>
             <SecHead titulo="Ranking nacional" accion={{ txt: 'Ver todo →', fn: () => click('rankings') }} />
             <ListaRanking n={5} />
@@ -709,7 +746,7 @@ export default function PantallaPublica({ onAccion, haySesion }) {
           </div>
           {menuAbierto && (
             <div style={{ position: 'absolute', top: 60, right: 2, zIndex: 30, width: 230, background: 'rgba(20,18,16,.95)', border: `1px solid ${T.navActivoBorde}`, borderRadius: 14, padding: 8, boxShadow: '0 10px 30px rgba(0,0,0,.6)', backdropFilter: 'blur(12px)' }}>
-              {[...ACCIONES, ...(haySesion ? [{ id: 'cerrarSesion', txt: '↩ Cerrar sesión' }] : [{ id: 'registro', txt: '✦ Crear mi cuenta gratis' }, { id: 'entrar', txt: '→ Iniciar sesión' }])].map((a) => (
+              {[...ACCIONES_CREAR, ...ACCIONES_MIAS, ...(haySesion ? [{ id: 'cerrarSesion', txt: '↩ Cerrar sesión' }] : [{ id: 'registro', txt: '✦ Crear mi cuenta gratis' }, { id: 'entrar', txt: '→ Iniciar sesión' }])].map((a) => (
                 <button key={a.id} onClick={() => click(a.id)} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'transparent', border: 'none', color: C.texto, fontSize: 14, fontWeight: 600, padding: '12px', borderRadius: 9, cursor: 'pointer' }}>{a.txt}</button>
               ))}
             </div>
