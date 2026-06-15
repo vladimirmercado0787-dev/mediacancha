@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
 import fondoCancha from '../assets/fondo-cancha.png'
+import fondoTarjetaMiembro from '../assets/fondo-tarjeta-miembro.png'
+import texturaCuero from '../assets/textura-cuero.png'
 import { leerHistorialDia, haceCuanto as haceCuantoLocal, publicarEnTechado, quitarDelTechado } from '../historialDia'
-import { leerTechado, misReacciones, reaccionar, leerComentarios, comentar, borrarComentario, haceCuanto, borrarPublicacion, miUsuarioId } from '../techado'
+import { leerTechado, misReacciones, reaccionar, leerComentarios, comentar, borrarComentario, haceCuanto, borrarPublicacion, miUsuarioId, miPerfilCompleto } from '../techado'
 import { plantillaPorId, PLANTILLA_DEFAULT, PLANTILLAS, puedeUsar } from '../plantillas'
 
 const TEMAS = {
@@ -85,6 +87,7 @@ const NAV = [
   { id: 'inicio', txt: 'Inicio', icono: '⌂' },
   { id: 'torneos', txt: 'Torneos', icono: '🏆' },
   { id: 'techado', txt: 'El Techado', icono: 'techado' },
+  { id: 'historialDia', txt: 'Historial de hoy', icono: '🗓️' },
   { id: 'rankings', txt: 'Rankings', icono: '★' },
   { id: 'perfil', txt: 'Mi Perfil', icono: '◉' },
 ]
@@ -111,6 +114,9 @@ export default function PantallaPublica({ onAccion, haySesion }) {
   const [comentariosAbiertos, setComentariosAbiertos] = useState(null) // id de publicación con comentarios abiertos
   const [verHistorialDia, setVerHistorialDia] = useState(false) // ventana del historial del día
   const [miId, setMiId] = useState(null) // id del usuario actual (para mostrar botón eliminar)
+  const [miPerfil, setMiPerfil] = useState(null) // perfil del miembro logueado (para la barra superior)
+  const [copiadoMC, setCopiadoMC] = useState(false)
+  const [navHover, setNavHover] = useState(null)
   const [pubAbierta, setPubAbierta] = useState(null) // publicación abierta en ventana de detalle
   const [juegoAPublicar, setJuegoAPublicar] = useState(null) // juego del historial esperando elegir plantilla
 
@@ -136,6 +142,7 @@ export default function PantallaPublica({ onAccion, haySesion }) {
     setJuegosDia(leerHistorialDia())
     recargarTechado()
     miUsuarioId().then((id) => setMiId(id))
+    if (haySesion) miPerfilCompleto().then((p) => setMiPerfil(p))
   }, [])
 
   // Bloquear el scroll del fondo cuando hay una ventana (modal) abierta
@@ -250,7 +257,94 @@ export default function PantallaPublica({ onAccion, haySesion }) {
     try { localStorage.setItem('mc_tema', nuevo) } catch (e) {}
   }
 
-  const click = (id) => { setMenuAbierto(false); onAccion && onAccion(id) }
+  const click = (id) => {
+    setMenuAbierto(false)
+    if (id === 'historialDia') { setVerHistorialDia(true); return }
+    onAccion && onAccion(id)
+  }
+
+  const copiarMiMC = () => {
+    if (!miPerfil?.codigo_unico) return
+    navigator.clipboard?.writeText(miPerfil.codigo_unico)
+    setCopiadoMC(true)
+    setTimeout(() => setCopiadoMC(false), 1600)
+  }
+
+  const edadDe = (fecha) => {
+    if (!fecha) return null
+    const n = new Date(fecha), h = new Date()
+    let e = h.getFullYear() - n.getFullYear()
+    const m = h.getMonth() - n.getMonth()
+    if (m < 0 || (m === 0 && h.getDate() < n.getDate())) e--
+    return e >= 0 && e < 120 ? e : null
+  }
+
+  // Barra superior de miembro (cuero + balón dorado + datos del usuario)
+  const BarraMiembro = () => {
+    if (!haySesion || !miPerfil) return null
+    const p = miPerfil
+    const esJugador = p.modo === 'jugador'
+    const nombre = `${p.nombre || ''} ${p.apellido || ''}`.trim() || 'Miembro'
+    const iniciales = `${(p.nombre || '?')[0] || ''}${(p.apellido || '')[0] || ''}`.toUpperCase()
+    const edad = edadDe(p.fecha_nacimiento)
+    const ubicacion = [p.municipio, p.provincia].filter(Boolean).join(', ')
+    const posicion = (p.posiciones && p.posiciones[0]) || null
+    return (
+      <div onClick={() => click('perfil')} style={{ position: 'relative', borderRadius: 16, overflow: 'hidden', cursor: 'pointer', marginBottom: 16, border: '1px solid rgba(200,132,46,0.35)', backgroundImage: `url(${fondoTarjetaMiembro})`, backgroundSize: 'cover', backgroundPosition: 'center right' }}>
+        {/* capa para oscurecer el lado izquierdo y que el texto resalte */}
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg, rgba(6,7,9,0.92) 0%, rgba(6,7,9,0.7) 45%, rgba(6,7,9,0.15) 75%, transparent 100%)' }} />
+        <div style={{ position: 'relative', padding: '16px 18px' }}>
+          {/* fila: logo MEDIA CANCHA + rol */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 13 }}>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              <svg viewBox="0 0 100 100" style={{ width: 30, height: 30, flexShrink: 0 }}>
+                <circle cx="50" cy="50" r="44" fill="none" stroke={T.acento} strokeWidth="4" />
+                <line x1="50" y1="6" x2="50" y2="94" stroke={T.acento} strokeWidth="4" />
+                <line x1="6" y1="50" x2="94" y2="50" stroke={T.acento} strokeWidth="4" />
+                <path d="M18 24 Q50 50 18 76" fill="none" stroke={T.acento} strokeWidth="4" />
+                <path d="M82 24 Q50 50 82 76" fill="none" stroke={T.acento} strokeWidth="4" />
+              </svg>
+              <div>
+                <div style={{ display: 'flex', gap: 5, alignItems: 'center', lineHeight: 1 }}>
+                  <span style={{ fontSize: 16, fontWeight: 800, color: '#f4f7f9', letterSpacing: 0.5 }}>MEDIA</span>
+                  <span style={{ fontSize: 16, fontWeight: 800, color: T.acento, letterSpacing: 0.5 }}>CANCHA</span>
+                </div>
+                <div style={{ fontSize: 8.5, color: '#9aa7b2', letterSpacing: 2, textTransform: 'uppercase', marginTop: 3 }}>Estadísticas de baloncesto</div>
+              </div>
+            </div>
+            <span style={{ fontSize: 9, fontWeight: 800, color: T.acento, border: `1px solid ${T.acento}`, padding: '3px 10px', borderRadius: 20, textTransform: 'uppercase', letterSpacing: 0.5, flexShrink: 0 }}>{esJugador ? 'Jugador' : 'Fanático'}</span>
+          </div>
+          {/* fila: foto + nombre + MC ID */}
+          <div style={{ display: 'flex', gap: 15, alignItems: 'center' }}>
+            <div style={{ width: 74, height: 74, borderRadius: 14, background: p.foto_url ? `url(${p.foto_url}) center/cover` : T.avatar, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 27, fontWeight: 800, color: T.avatarTexto, flexShrink: 0, border: '1.5px solid rgba(255,255,255,.2)' }}>
+              {!p.foto_url && iniciales}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 21, fontWeight: 800, color: '#f4f7f9', lineHeight: 1.1, textShadow: '0 1px 6px rgba(0,0,0,.8)' }}>{nombre}</div>
+              {(posicion || ubicacion) && <div style={{ fontSize: 12.5, color: '#c3ccd4', marginTop: 3, textShadow: '0 1px 4px rgba(0,0,0,.8)' }}>{[posicion, ubicacion].filter(Boolean).join(' · ')}</div>}
+              <div onClick={(e) => { e.stopPropagation(); copiarMiMC() }} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, marginTop: 7, background: copiadoMC ? 'rgba(47,191,113,.18)' : 'rgba(232,182,90,0.14)', border: `0.5px solid ${copiadoMC ? 'rgba(47,191,113,.5)' : 'rgba(232,182,90,0.4)'}`, borderRadius: 7, padding: '4px 11px', cursor: 'pointer' }}>
+                <span style={{ fontSize: 9, color: '#9aa7b2', letterSpacing: 0.5 }}>MC ID</span>
+                <span style={{ fontSize: 13.5, fontWeight: 700, fontFamily: 'monospace', letterSpacing: 1.5, color: T.acento }}>{p.codigo_unico || '--------'}</span>
+                <span style={{ fontSize: 13, color: copiadoMC ? '#7bd6a3' : T.acento }}>{copiadoMC ? '✓' : '⧉'}</span>
+              </div>
+            </div>
+          </div>
+          {/* estadísticas (solo jugador) */}
+          {esJugador && (
+            <div style={{ display: 'flex', marginTop: 14, paddingTop: 13, borderTop: '0.5px solid rgba(255,255,255,.1)' }}>
+              {[['—', 'PTS'], ['—', 'REB'], ['—', 'AST'], ['—', 'ROB']].map(([v, l]) => (
+                <div key={l} style={{ flex: 1, textAlign: 'center' }}>
+                  <div style={{ fontSize: 23, fontWeight: 800, color: l === 'PTS' ? T.acento : '#f4f7f9', lineHeight: 1 }}>{v}</div>
+                  <div style={{ fontSize: 9.5, color: '#9aa7b2', marginTop: 4, letterSpacing: 0.5 }}>{l}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        {haySesion && <div style={{ position: 'absolute', bottom: 12, right: 14, zIndex: 5 }} onClick={(e) => e.stopPropagation()}><BotonTema /></div>}
+      </div>
+    )
+  }
   const toggleLike = (key, base) => setLikes((p) => ({ ...p, [key]: p[key] ? undefined : base + 1 }))
   const verLikes = (key, base) => (likes[key] != null ? likes[key] : base)
 
@@ -542,40 +636,62 @@ export default function PantallaPublica({ onAccion, haySesion }) {
 
   if (esEscritorio) {
     return (
-      <div style={{ minHeight: '100vh', color: C.texto, fontFamily: C.font, position: 'relative', display: 'flex', background: '#08090c' }}>
+      <div style={{ minHeight: '100vh', color: C.texto, fontFamily: C.font, position: 'relative', display: 'flex', flexDirection: 'column', background: '#08090c' }}>
         <Velo />
-        <BotonTema flotante />
-        <aside style={{ width: 240, flexShrink: 0, borderRight: '1px solid rgba(255,255,255,.08)', padding: '22px 16px', position: 'sticky', top: 0, height: '100vh', zIndex: 2, background: 'rgba(10,13,18,.55)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)' }}>
-          <div style={{ marginBottom: 26, paddingLeft: 6 }}><Logo /></div>
-          {NAV.map((n) => (
-            <button key={n.id} onClick={() => click(n.id)} style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left', background: n.id === 'inicio' ? T.navActivoBg : 'transparent', border: n.id === 'inicio' ? `1px solid ${T.navActivoBorde}` : '1px solid transparent', color: n.id === 'inicio' ? T.acento : '#d3dae0', fontSize: 14.5, fontWeight: 600, padding: '11px 12px', borderRadius: 11, cursor: 'pointer', marginBottom: 4 }}>
-              <span style={{ fontSize: 17, width: 22, display: 'inline-flex', justifyContent: 'center' }}>{n.icono === 'techado' ? <IconoTechado size={18} cols={T.balon} /> : n.icono}</span>{n.txt}
-            </button>
-          ))}
+        {!haySesion && <BotonTema flotante />}
+        {haySesion && miPerfil && (
+          <div style={{ position: 'sticky', top: 0, zIndex: 10, padding: '16px 24px 12px', background: 'rgba(8,9,12,0.92)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)' }}>
+            <BarraMiembro />
+          </div>
+        )}
+        <div style={{ display: 'flex', flex: 1, position: 'relative' }}>
+        <aside style={{ width: 240, flexShrink: 0, borderRight: '1px solid rgba(200,132,46,0.2)', padding: '20px 16px', position: 'sticky', top: 200, alignSelf: 'flex-start', height: 'calc(100vh - 200px)', overflowY: 'auto', zIndex: 2, backgroundImage: `linear-gradient(180deg, rgba(8,9,12,0.7), rgba(8,9,12,0.78)), url(${texturaCuero})`, backgroundSize: 'cover', backgroundPosition: 'center' }}>
+          {NAV.map((n) => {
+            const resaltado = navHover === n.id
+            return (
+              <button key={n.id} onClick={() => click(n.id)} onMouseEnter={() => setNavHover(n.id)} onMouseLeave={() => setNavHover(null)} style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left', background: resaltado ? T.navActivoBg : 'transparent', border: resaltado ? `1px solid ${T.navActivoBorde}` : '1px solid transparent', color: resaltado ? T.acento : '#d3dae0', fontSize: 14.5, fontWeight: 600, padding: '11px 12px', borderRadius: 11, cursor: 'pointer', marginBottom: 4, transition: 'all .18s ease' }}>
+                <span style={{ fontSize: 17, width: 22, display: 'inline-flex', justifyContent: 'center', color: T.acento }}>{n.icono === 'techado' ? <IconoTechado size={18} cols={T.balon} /> : n.icono}</span>{n.txt}
+              </button>
+            )
+          })}
           <div style={{ height: 1, background: 'rgba(255,255,255,.08)', margin: '14px 6px' }} />
           {ACCIONES.map((a) => (
-            <button key={a.id} onClick={() => click(a.id)} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'transparent', border: 'none', color: '#d3dae0', fontSize: 14, fontWeight: 600, padding: '10px 12px', borderRadius: 9, cursor: 'pointer' }}>{a.txt}</button>
+            <button key={a.id} onClick={() => click(a.id)} onMouseEnter={() => setNavHover(a.id)} onMouseLeave={() => setNavHover(null)} style={{ display: 'block', width: '100%', textAlign: 'left', background: navHover === a.id ? T.navActivoBg : 'transparent', border: navHover === a.id ? `1px solid ${T.navActivoBorde}` : '1px solid transparent', color: navHover === a.id ? T.acento : '#d3dae0', fontSize: 14, fontWeight: 600, padding: '10px 12px', borderRadius: 9, cursor: 'pointer', transition: 'all .18s ease' }}>{a.txt}</button>
           ))}
-          <div style={{ position: 'absolute', bottom: 18, left: 16, right: 16 }}>
-            <button onClick={() => click('registro')} style={{ width: '100%', border: 'none', borderRadius: 12, padding: 12, background: T.boton, color: '#1a1205', fontWeight: 800, fontSize: 14, cursor: 'pointer' }}>Crear cuenta gratis</button>
-            <button onClick={() => click('entrar')} style={{ width: '100%', marginTop: 8, background: 'transparent', border: '1px solid rgba(255,255,255,.12)', borderRadius: 12, padding: 10, color: C.tenue, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Iniciar sesión</button>
+          <div style={{ marginTop: 24, paddingTop: 4 }}>
+            {haySesion ? (
+              <button onClick={() => click('cerrarSesion')} style={{ width: '100%', background: 'transparent', border: '1px solid rgba(255,255,255,.14)', borderRadius: 12, padding: 12, color: C.tenue, fontWeight: 700, fontSize: 13.5, cursor: 'pointer' }}>↩ Cerrar sesión</button>
+            ) : (
+              <>
+                <button onClick={() => click('registro')} style={{ width: '100%', border: 'none', borderRadius: 12, padding: 12, background: T.boton, color: '#1a1205', fontWeight: 800, fontSize: 14, cursor: 'pointer' }}>Crear cuenta gratis</button>
+                <button onClick={() => click('entrar')} style={{ width: '100%', marginTop: 8, background: 'transparent', border: '1px solid rgba(255,255,255,.12)', borderRadius: 12, padding: 10, color: C.tenue, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Iniciar sesión</button>
+              </>
+            )}
           </div>
         </aside>
-        <main style={{ flex: 1, position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'center', padding: '26px 28px', gap: 26, alignItems: 'flex-start', maxWidth: 1180, margin: '0 auto' }}>
-          <div style={{ flex: 1, maxWidth: 600 }}>
-            <Bienvenida grande />
-            <div style={{ marginBottom: 24 }}><EnVivo /></div>
-            {BotonHistorial()}
-            <SecHead titulo="El Techado" icono="techado" accion={{ txt: 'Ver todo →', fn: () => click('techado') }} />
-            <ListaTechado />
+        <main style={{ flex: 1, position: 'relative', zIndex: 1, display: 'flex', padding: '20px 26px', gap: 24, alignItems: 'flex-start' }}>
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', height: 'calc(100vh - 235px)', borderRadius: 16, padding: '16px 16px 6px', backgroundImage: `linear-gradient(180deg, rgba(8,9,12,0.72), rgba(8,9,12,0.8)), url(${texturaCuero})`, backgroundSize: 'cover', backgroundPosition: 'center', border: '1px solid rgba(200,132,46,0.2)' }}>
+            {!haySesion && <Bienvenida grande />}
+            {/* parte fija: En Vivo */}
+            <div style={{ flexShrink: 0 }}>
+              <div style={{ marginBottom: 12 }}><EnVivo /></div>
+              <div style={{ marginBottom: 4 }}>
+                <SecHead titulo="El Techado" icono="techado" accion={{ txt: 'Ver todo →', fn: () => click('techado') }} />
+              </div>
+            </div>
+            {/* parte que scrollea: solo las publicaciones del Techado */}
+            <div style={{ flex: 1, overflowY: 'auto', paddingRight: 4 }}>
+              <ListaTechado />
+            </div>
           </div>
-          <div style={{ width: 320, flexShrink: 0 }}>
-            <div style={{ marginBottom: 24 }}><SecHead titulo="Torneos populares" accion={{ txt: 'Ver todos →', fn: () => click('torneos') }} /><ListaTorneos /></div>
+          <div style={{ width: 360, flexShrink: 0, position: 'sticky', top: 200, alignSelf: 'flex-start', borderRadius: 16, padding: '16px 14px', backgroundImage: `linear-gradient(180deg, rgba(8,9,12,0.7), rgba(8,9,12,0.78)), url(${texturaCuero})`, backgroundSize: 'cover', backgroundPosition: 'center', border: '1px solid rgba(200,132,46,0.2)', maxHeight: 'calc(100vh - 220px)', overflowY: 'auto' }}>
+            <div style={{ marginBottom: 18 }}><SecHead titulo="Torneos populares" accion={{ txt: 'Ver todos →', fn: () => click('torneos') }} /><ListaTorneos /></div>
             <SecHead titulo="Ranking nacional" accion={{ txt: 'Ver todo →', fn: () => click('rankings') }} />
             <ListaRanking n={5} />
             <button onClick={() => click('rankings')} style={{ width: '100%', marginTop: 10, background: T.navActivoBg, border: `1px solid ${T.navActivoBorde}`, borderRadius: 12, padding: 11, color: T.acento, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Ver ranking completo →</button>
           </div>
         </main>
+        </div>
         {Modales()}
       </div>
     )
@@ -593,19 +709,19 @@ export default function PantallaPublica({ onAccion, haySesion }) {
           </div>
           {menuAbierto && (
             <div style={{ position: 'absolute', top: 60, right: 2, zIndex: 30, width: 230, background: 'rgba(20,18,16,.95)', border: `1px solid ${T.navActivoBorde}`, borderRadius: 14, padding: 8, boxShadow: '0 10px 30px rgba(0,0,0,.6)', backdropFilter: 'blur(12px)' }}>
-              {[...ACCIONES, { id: 'registro', txt: '✦ Crear mi cuenta gratis' }, { id: 'entrar', txt: '→ Iniciar sesión' }].map((a) => (
+              {[...ACCIONES, ...(haySesion ? [{ id: 'cerrarSesion', txt: '↩ Cerrar sesión' }] : [{ id: 'registro', txt: '✦ Crear mi cuenta gratis' }, { id: 'entrar', txt: '→ Iniciar sesión' }])].map((a) => (
                 <button key={a.id} onClick={() => click(a.id)} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'transparent', border: 'none', color: C.texto, fontSize: 14, fontWeight: 600, padding: '12px', borderRadius: 9, cursor: 'pointer' }}>{a.txt}</button>
               ))}
             </div>
           )}
         </div>
-        <div style={{ marginTop: 14 }}><Bienvenida /></div>
+        <div style={{ marginTop: 14 }}><BarraMiembro />{!haySesion && <Bienvenida />}</div>
         <div style={{ marginTop: 22 }}><EnVivo /></div>
         <div style={{ marginTop: 22 }}>{BotonHistorial()}</div>
         <div style={{ marginTop: 22 }}><SecHead titulo="Torneos populares" /><ListaTorneos /></div>
         <div style={{ marginTop: 22 }}><SecHead titulo="El Techado" icono="techado" accion={{ txt: 'Ver todo →', fn: () => click('techado') }} /><ListaTechado /></div>
         <div style={{ marginTop: 22 }}><SecHead titulo="Ranking nacional" accion={{ txt: 'Ver todo →', fn: () => click('rankings') }} /><ListaRanking n={5} /></div>
-        <CtaRegistro />
+        {!haySesion && <CtaRegistro />}
       </div>
       <div style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: 480, display: 'flex', background: 'rgba(8,9,12,.92)', backdropFilter: 'blur(12px)', borderTop: `1px solid ${T.navActivoBorde}`, padding: '9px 0 calc(9px + env(safe-area-inset-bottom))', zIndex: 40 }}>
         {NAV.map((n) => (

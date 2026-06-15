@@ -109,6 +109,16 @@ export async function miUsuarioId() {
   return data?.user?.id || null
 }
 
+// Trae el perfil completo del miembro logueado (para la barra superior)
+export async function miPerfilCompleto() {
+  const { data: sesion } = await supabase.auth.getUser()
+  const user = sesion?.user
+  if (!user) return null
+  const { data, error } = await supabase.from('perfiles').select('*').eq('id', user.id).single()
+  if (error) return null
+  return data
+}
+
 // ---------- LEER ----------
 
 // Lee las publicaciones vigentes (no expiradas), más recientes primero

@@ -113,6 +113,8 @@ function App() {
         } else if (id === 'entrar') {
           setDestinoTrasLogin('perfil')
           setVista('login')
+        } else if (id === 'cerrarSesion') {
+          supabase.auth.signOut()
         } else if (id === 'juego') {
           setDestinoTrasLogin('juegoConfig')
           setVista(sesion ? 'juegoConfig' : 'login')
