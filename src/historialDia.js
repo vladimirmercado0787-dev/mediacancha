@@ -146,3 +146,15 @@ export function juegosComoNoticias() {
 export function limpiarHistorialDia() {
   try { localStorage.removeItem(CLAVE) } catch (e) {}
 }
+
+// Borra UN juego específico del historial (por su id)
+export function borrarJuegoDelDia(id) {
+  try {
+    const lista = leerHistorialDia()
+    const nueva = lista.filter((j) => j.id !== id)
+    localStorage.setItem(CLAVE, JSON.stringify(nueva))
+    return true
+  } catch (e) {
+    return false
+  }
+}

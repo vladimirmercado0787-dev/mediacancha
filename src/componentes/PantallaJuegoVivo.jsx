@@ -20,7 +20,7 @@ const ACCIONES_PUNTO = [
 ]
 const ACCIONES_OTRAS = {
   reb: { id: 'reb', ico: '⊕', et: 'Rebote', pts: 0, sub: 'Rebote', suma: { reb: 1 } },
-  ast: { id: 'ast', ico: '↗', et: 'Asistencia', pts: 0, sub: 'Asist.', suma: { ast: 1 } },
+  ast: { id: 'ast', ico: '↗', et: 'Asistencia', pts: 0, sub: 'Asist.', suma: { ast: 1 }, encadena: true },
 }
 
 export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
@@ -55,6 +55,9 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
   const [hojaPrev, setHojaPrev] = useState(null)
   const [toast, setToast] = useState('')
   const toastRef = useRef(null)
+
+  // Estado para la asistencia encadenada: guarda al asistente mientras se elige anotador y puntos
+  const [asistPaso, setAsistPaso] = useState(null) // { asistente, equipo, fase: 'anotador' | 'puntos', anotador }
 
   const [verPizarra, setVerPizarra] = useState(false)
   const [sustituyendo, setSustituyendo] = useState(null)
@@ -118,6 +121,13 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
   const vibrar = (patron) => { try { if (navigator.vibrate) navigator.vibrate(patron) } catch (e) {} }
 
   const registrar = (accion, jug) => {
+    // Si la acción es asistencia, NO cerrar: encadenar con la canasta
+    if (accion.encadena) {
+      vibrar(20)
+      setSeleccion(null)
+      setAsistPaso({ asistente: jug, equipo: jug.equipo, fase: 'anotador', anotador: null })
+      return
+    }
     const suma = accion.suma || (accion.pts ? { pts: accion.pts } : {})
     setJugadores((prev) => prev.map((j) => {
       if (j.id !== jug.id) return j
@@ -129,6 +139,25 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
     mostrarToast(`${accion.sub} · ${jug.etiqueta}`)
     vibrar((suma.pts && suma.pts > 0) ? 35 : 20)
     setSeleccion(null)
+  }
+
+  // Completa la asistencia encadenada: suma ast al asistente + pts al anotador, conectados
+  const completarAsistencia = (anotador, pts) => {
+    const asistente = asistPaso.asistente
+    setJugadores((prev) => prev.map((j) => {
+      let nuevo = { ...j }
+      if (j.id === asistente.id) nuevo.ast = (nuevo.ast || 0) + 1
+      if (j.id === anotador.id) nuevo.pts = (nuevo.pts || 0) + pts
+      return nuevo
+    }))
+    const idBase = 'h' + Date.now() + Math.random().toString(36).slice(2, 6)
+    setHistorial((prev) => [...prev,
+      { id: idBase + 'a', jugId: anotador.id, etiquetaJug: anotador.etiqueta, equipo: anotador.equipo, accionId: pts === 3 ? 'p3' : 'p2', etiquetaAccion: pts === 3 ? 'Triple' : '2 Puntos', sub: pts === 3 ? 'Triple' : 'Doble', suma: { pts }, asistDe: asistente.etiqueta },
+      { id: idBase + 'b', jugId: asistente.id, etiquetaJug: asistente.etiqueta, equipo: asistente.equipo, accionId: 'ast', etiquetaAccion: 'Asistencia', sub: 'Asist.', suma: { ast: 1 }, asistA: anotador.etiqueta },
+    ])
+    mostrarToast(`${pts} pts ${anotador.etiqueta} · Asist. ${asistente.etiqueta}`)
+    vibrar(35)
+    setAsistPaso(null)
   }
 
   const tocarAccion = (accion, equipo) => { vibrar(12); setSeleccion({ tipo: 'accion', equipo, accion }) }
@@ -304,7 +333,7 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
               <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 9 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 9.5, color: T.tenue, textTransform: 'uppercase', letterSpacing: 0.5 }}>Última jugada</div>
-                  <div style={{ fontSize: 13.5, color: T.texto, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}><b style={{ color: EQ[u.equipo].acento }}>{u.etiquetaJug}</b> · {u.sub}</div>
+                  <div style={{ fontSize: 13.5, color: T.texto, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}><b style={{ color: EQ[u.equipo].acento }}>{u.etiquetaJug}</b> · {u.sub}{u.asistDe ? ` (asist. ${u.asistDe})` : ''}{u.asistA ? ` → ${u.asistA}` : ''}</div>
                 </div>
                 <button onClick={() => setSustituyendo(u)} style={{ fontSize: 11, fontWeight: 700, padding: '7px 11px', borderRadius: 9, border: `1px solid ${T.acento}`, background: 'transparent', color: T.acento, cursor: 'pointer' }}>Corregir</button>
                 <button onClick={() => deshacer(u)} style={{ fontSize: 11, fontWeight: 700, padding: '7px 11px', borderRadius: 9, border: `1px solid ${ROJO}`, background: 'transparent', color: ROJO, cursor: 'pointer' }}>Deshacer</button>
@@ -346,7 +375,7 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
                       <div style={{ fontSize: 25, fontWeight: 800, color: eqColor.acento }}>{hoja.accion.et}</div>
                       <div style={{ fontSize: 13, color: TENUE, marginTop: 3 }}>{hoja.equipo === 0 ? config?.nombreA : config?.nombreB}</div>
                     </div>
-                    <div style={{ fontSize: 12, letterSpacing: 1, textTransform: 'uppercase', color: TENUE, textAlign: 'center', marginBottom: 16, fontWeight: 700 }}>¿Quién lo hizo?</div>
+                    <div style={{ fontSize: 12, letterSpacing: 1, textTransform: 'uppercase', color: TENUE, textAlign: 'center', marginBottom: 16, fontWeight: 700 }}>{hoja.accion.encadena ? '¿Quién dio la asistencia?' : '¿Quién lo hizo?'}</div>
                     <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(jugadoresEq(hoja.equipo).length, 5)}, 1fr)`, gap: 8 }}>
                       {jugadoresEq(hoja.equipo).map((j) => jugadorVertical(j, elegirJugadorEnHoja))}
                     </div>
@@ -368,6 +397,55 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
                     </div>
                   </>
                 ) : null}
+              </div>
+            </div>
+          </>
+        )
+      })()}
+
+      {/* HOJA DE ASISTENCIA ENCADENADA: paso 2 (anotador) y paso 3 (puntos) */}
+      {asistPaso && (() => {
+        const eqColor = EQ[asistPaso.equipo]
+        return (
+          <>
+            <div onClick={() => setAsistPaso(null)} style={{ position: 'absolute', inset: 0, background: 'rgba(4,5,7,.78)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', zIndex: 22 }} />
+            <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 23, borderRadius: '24px 24px 0 0', padding: 2, background: eqColor.solido, maxWidth: 480, margin: '0 auto', boxShadow: '0 -12px 40px rgba(0,0,0,.55)' }}>
+              <div style={{ borderRadius: '22px 22px 0 0', background: 'linear-gradient(180deg, rgba(22,24,28,0.98), rgba(12,14,18,0.99))', padding: '16px 16px 30px', minHeight: '44vh' }}>
+                <div style={{ width: 44, height: 5, borderRadius: 3, background: 'rgba(255,255,255,.18)', margin: '0 auto 18px' }} />
+                {asistPaso.fase === 'anotador' ? (
+                  <>
+                    <div style={{ textAlign: 'center', marginBottom: 6 }}>
+                      <div style={{ fontSize: 13, color: '#7adfa6', fontWeight: 700 }}>↗ Asistencia de {asistPaso.asistente.etiqueta}</div>
+                    </div>
+                    <div style={{ fontSize: 25, fontWeight: 800, color: eqColor.acento, textAlign: 'center', marginBottom: 4 }}>¿Quién anotó?</div>
+                    <div style={{ fontSize: 12, color: TENUE, textAlign: 'center', marginBottom: 18 }}>Elige al jugador que recibió el pase y metió la canasta</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(jugadoresEq(asistPaso.equipo).filter((j) => j.id !== asistPaso.asistente.id).length || 1, 5)}, 1fr)`, gap: 8 }}>
+                      {jugadoresEq(asistPaso.equipo).filter((j) => j.id !== asistPaso.asistente.id).map((j) => (
+                        <button key={j.id} onClick={() => setAsistPaso({ ...asistPaso, fase: 'puntos', anotador: j })} style={{ border: `1.5px solid ${eqColor.borde}`, borderRadius: 14, cursor: 'pointer', background: VIDRIO_CLARO, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '16px 4px', minHeight: 96 }}>
+                          <span style={{ fontSize: 30, fontWeight: 800, lineHeight: 1, color: eqColor.acento }}>{j.numero || (j.nombre || '?').slice(0, 1).toUpperCase()}</span>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: TEXTO, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', padding: '0 2px' }}>{j.nombre || ('#' + j.numero)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ textAlign: 'center', marginBottom: 6 }}>
+                      <div style={{ fontSize: 13, color: '#7adfa6', fontWeight: 700 }}>↗ {asistPaso.asistente.etiqueta} → {asistPaso.anotador.etiqueta}</div>
+                    </div>
+                    <div style={{ fontSize: 25, fontWeight: 800, color: eqColor.acento, textAlign: 'center', marginBottom: 4 }}>¿Cuántos puntos?</div>
+                    <div style={{ fontSize: 12, color: TENUE, textAlign: 'center', marginBottom: 18 }}>La canasta de {asistPaso.anotador.etiqueta}</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 11 }}>
+                      {[2, 3].map((pts) => (
+                        <button key={pts} onClick={() => completarAsistencia(asistPaso.anotador, pts)} style={{ border: `1.5px solid ${eqColor.borde}`, borderRadius: 16, padding: '30px 6px', cursor: 'pointer', background: VIDRIO_CLARO, color: TEXTO, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 9, minHeight: 130 }}>
+                          <span style={{ fontSize: 48, fontWeight: 800, color: VERDE }}>{pts}</span>
+                          <span style={{ fontSize: 13, fontWeight: 600 }}>{pts === 3 ? 'Triple' : 'Doble'}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <button onClick={() => setAsistPaso({ ...asistPaso, fase: 'anotador', anotador: null })} style={{ width: '100%', marginTop: 14, border: '1px solid rgba(255,255,255,.16)', borderRadius: 12, padding: 12, background: 'transparent', color: TENUE, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>← Elegir otro anotador</button>
+                  </>
+                )}
               </div>
             </div>
           </>
@@ -404,7 +482,7 @@ function ModalPizarra({ T, ORO, historial, eq, onCerrar, onDeshacer, onSustituir
               {[...historial].reverse().map((h, i) => (
                 <div key={h.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 11, background: 'rgba(255,255,255,.04)' }}>
                   <span style={{ fontSize: 11, color: TENUE2, width: 22 }}>{historial.length - i}</span>
-                  <span style={{ flex: 1, fontSize: 14, color: TEXTO2 }}><b style={{ color: eq[h.equipo].acento, fontWeight: 800 }}>{h.etiquetaJug}</b> · {h.sub} <span style={{ color: TENUE2, fontSize: 12.5 }}>({h.etiquetaAccion})</span></span>
+                  <span style={{ flex: 1, fontSize: 14, color: TEXTO2 }}><b style={{ color: eq[h.equipo].acento, fontWeight: 800 }}>{h.etiquetaJug}</b> · {h.sub}{h.asistDe ? <span style={{ color: '#7adfa6', fontSize: 12 }}> (asist. {h.asistDe})</span> : ''}{h.asistA ? <span style={{ color: '#7adfa6', fontSize: 12 }}> → {h.asistA}</span> : ''} <span style={{ color: TENUE2, fontSize: 12.5 }}>({h.etiquetaAccion})</span></span>
                   <button onClick={() => onSustituir(h)} style={{ fontSize: 11, fontWeight: 700, padding: '6px 10px', borderRadius: 8, border: `1px solid ${T.acento}`, background: 'transparent', color: T.acento, cursor: 'pointer' }}>Corregir</button>
                   <button onClick={() => onDeshacer(h)} style={{ fontSize: 11, fontWeight: 700, padding: '6px 10px', borderRadius: 8, border: `1px solid ${ROJO2}`, background: 'transparent', color: ROJO2, cursor: 'pointer' }}>Deshacer</button>
                 </div>

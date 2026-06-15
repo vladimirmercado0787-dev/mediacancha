@@ -9,6 +9,7 @@ import PantallaJuegoConfig from './componentes/PantallaJuegoConfig'
 import PantallaJuegoJugadores from './componentes/PantallaJuegoJugadores'
 import PantallaJuegoVivo from './componentes/PantallaJuegoVivo'
 import PantallaJuegoResultado from './componentes/PantallaJuegoResultado'
+import PantallaResultados from './componentes/PantallaResultados'
 import { guardarJuegoDelDia } from './historialDia'
 
 function App() {
@@ -39,6 +40,19 @@ function App() {
 
   if (vista === 'perfil') {
     return <PantallaPerfil onVolver={() => setVista('publica')} onSalir={() => setVista('publica')} />
+  }
+
+  if (vista === 'resultados') {
+    return (
+      <PantallaResultados
+        onVolver={() => setVista('publica')}
+        onNuevoJuego={() => { setDestinoTrasLogin('juegoConfig'); setVista(sesion ? 'juegoConfig' : 'login') }}
+        onAccion={(id) => {
+          if (id === 'perfil') { setDestinoTrasLogin('perfil'); setVista(sesion ? 'perfil' : 'login') }
+          else if (id === 'publicarJuego') { /* se maneja dentro de Resultados próximamente */ }
+        }}
+      />
+    )
   }
 
   if (vista === 'juegoConfig') {
@@ -118,6 +132,8 @@ function App() {
         } else if (id === 'juego') {
           setDestinoTrasLogin('juegoConfig')
           setVista(sesion ? 'juegoConfig' : 'login')
+        } else if (id === 'resultados') {
+          setVista('resultados')
         } else {
           alert('Módulo "' + id + '" — aquí irá su pantalla (próximamente)')
         }

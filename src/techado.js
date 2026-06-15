@@ -6,6 +6,34 @@ import { supabase } from './supabaseClient'
 
 // ---------- PUBLICAR ----------
 
+// Publica un texto normal en el Techado (publicación de la persona, no expira)
+// Más adelante: aceptará imagenUrl para publicar con foto.
+export async function publicarTexto({ texto, imagenUrl = null }) {
+  const { data: userData } = await supabase.auth.getUser()
+  const user = userData?.user
+  if (!user) return { error: 'Debes iniciar sesión para publicar.' }
+
+  const limpio = (texto || '').trim()
+  if (!limpio && !imagenUrl) return { error: 'Escribe algo o agrega una foto.' }
+
+  const { data, error } = await supabase.from('publicaciones').insert({
+    autor_id: user.id,
+    tipo: 'manual',
+    tag: null,
+    tag_color: null,
+    titulo: null,
+    texto: limpio || null,
+    datos: {
+      plantilla: 'estilo_tema',
+      imagen: imagenUrl || null,
+    },
+    expira_en: null,
+  }).select().single()
+
+  if (error) return { error: error.message }
+  return { data }
+}
+
 // Publica un juego rápido en el Techado (expira a las 24h)
 export async function publicarJuego(resultado) {
   const { data: userData } = await supabase.auth.getUser()
@@ -62,7 +90,7 @@ export async function publicarJuego(resultado) {
       totalA, totalB, hayEmpate,
       jugadores: jugadoresGuardar,
       narracion,
-      plantilla: resultado.plantilla || 'balon_dorado',
+      plantilla: resultado.plantilla || 'estilo_tema',
       statsActivas: resultado.statsActivas || null,
     },
     expira_en: expira,

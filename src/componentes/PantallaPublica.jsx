@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import fondoCancha from '../assets/fondo-cancha.png'
 import fondoTarjetaMiembro from '../assets/fondo-tarjeta-miembro.png'
 import texturaCuero from '../assets/textura-cuero.png'
@@ -10,6 +10,7 @@ import texturaCueroLarimar from '../assets/textura-cuero-larimar.png'
 import { leerHistorialDia, haceCuanto as haceCuantoLocal, publicarEnTechado, quitarDelTechado } from '../historialDia'
 import { leerTechado, misReacciones, reaccionar, leerComentarios, comentar, borrarComentario, haceCuanto, borrarPublicacion, miUsuarioId, miPerfilCompleto } from '../techado'
 import { plantillaPorId, PLANTILLA_DEFAULT, PLANTILLAS, puedeUsar } from '../plantillas'
+import TarjetaResultado from './TarjetaResultado'
 
 // Tokens de superficie OSCURA (compartidos por los temas dorado y azul).
 const SUP_OSCURA = {
@@ -229,6 +230,9 @@ export default function PantallaPublica({ onAccion, haySesion }) {
   const [navHover, setNavHover] = useState(null)
   const [pubAbierta, setPubAbierta] = useState(null)
   const [juegoAPublicar, setJuegoAPublicar] = useState(null)
+  const [textoComposer, setTextoComposer] = useState('')
+  const [publicandoTexto, setPublicandoTexto] = useState(false)
+  const [composerAbierto, setComposerAbierto] = useState(false)
 
   const recargarTechado = async () => {
     const res = await leerTechado()
@@ -325,6 +329,26 @@ export default function PantallaPublica({ onAccion, haySesion }) {
       await recargarTechado()
     }
     setPublicandoId(null)
+  }
+
+  const enviarPublicacionTexto = async () => {
+    const txt = textoComposer.trim()
+    if (!txt || publicandoTexto) return
+    setPublicandoTexto(true)
+    try {
+      const { publicarTexto } = await import('../techado')
+      const res = await publicarTexto({ texto: txt })
+      if (res.error) {
+        alert('No se pudo publicar: ' + res.error)
+      } else {
+        setTextoComposer('')
+        setComposerAbierto(false)
+        await recargarTechado()
+      }
+    } catch (e) {
+      alert('Error al publicar: ' + (e.message || e))
+    }
+    setPublicandoTexto(false)
   }
 
   const T = TEMAS[tema] || TEMAS.dorado
@@ -557,6 +581,24 @@ export default function PantallaPublica({ onAccion, haySesion }) {
     ))}</>
   )
 
+  // color de avatar consistente según el nombre (como el mockup)
+  const avatarColor = (semilla) => {
+    const paleta = [
+      'linear-gradient(150deg,#3a6ea5,#23415f)', 'linear-gradient(150deg,#9e3a3a,#5f2323)',
+      'linear-gradient(150deg,#3a9e6e,#235f43)', 'linear-gradient(150deg,#8a5cc4,#4f3275)',
+      'linear-gradient(150deg,#c4823a,#754d1f)', 'linear-gradient(150deg,#3a8a9e,#23545f)',
+    ]
+    let h = 0
+    const s = String(semilla)
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % paleta.length
+    return paleta[Math.abs(h)]
+  }
+  // estilo de cada botón de la barra de acciones (me gusta, no me gusta, comentar, compartir)
+  const accionBtn = (color) => ({
+    flex: 1, border: 'none', background: 'transparent', borderRadius: 9, padding: '9px 6px', cursor: 'pointer',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, fontSize: 12.5, fontWeight: 600, color,
+  })
+
   const ListaTechado = () => {
     if (cargandoTechado) {
       return <Placa radio={15} pad={20}><div style={{ textAlign: 'center', color: C.tenue, fontSize: 13 }}>Cargando el Techado…</div></Placa>
@@ -572,48 +614,121 @@ export default function PantallaPublica({ onAccion, haySesion }) {
       )
     }
     return (
-      <>{publicaciones.map((p) => {
+      <>
+      <style>{`
+        @keyframes mcPostGlow {
+          0%, 100% { box-shadow: 0 1px 2px rgba(20,24,30,.04), 0 8px 24px rgba(20,24,30,.06); }
+          50% { box-shadow: 0 1px 2px rgba(20,24,30,.04), 0 8px 26px rgba(20,24,30,.08), 0 0 18px var(--mc-glow); }
+        }
+        .mc-post-card { animation: mcPostGlow 3.4s ease-in-out infinite; transition: transform .2s ease; }
+        .mc-post-card:hover { transform: translateY(-2px); }
+        @keyframes mcShineMove {
+          0% { opacity: 0; transform: translateX(-25%); }
+          35% { opacity: .9; }
+          65% { opacity: .9; }
+          100% { opacity: 0; transform: translateX(25%); }
+        }
+        .mc-post-shine { animation: mcShineMove 4.5s ease-in-out infinite; }
+      `}</style>
+      {publicaciones.map((p) => {
         let datos = p.datos || {}
         if (typeof datos === 'string') { try { datos = JSON.parse(datos) } catch (e) { datos = {} } }
+        // ¿Es una publicación de RESULTADO de juego? → tarjeta profesional compartida
+        const esJuego = datos && datos.nombreA && datos.nombreB && (datos.totalA != null || (datos.jugadores && datos.jugadores.length))
+        if (esJuego) {
+          const fuenteJuego = datos.fuente || (p.tipo === 'torneo' ? 'torneo' : p.tipo === 'liga' ? 'liga' : 'rapido')
+          const barraReacciones = (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '6px 8px', borderTop: `1px solid ${T.esClaro ? '#eceef1' : 'rgba(255,255,255,.07)'}` }}>
+              <button onClick={() => onReaccionar(p.id, 'like')} style={accionBtn(misReacc[p.id] === 'like' ? T.acento : (T.esClaro ? '#565c66' : '#aeb6c0'))}><span style={{ fontSize: 16 }}>{misReacc[p.id] === 'like' ? '❤️' : '🤍'}</span> {p.likes || 0}</button>
+              <button onClick={() => onReaccionar(p.id, 'dislike')} style={accionBtn(misReacc[p.id] === 'dislike' ? '#e0563f' : (T.esClaro ? '#565c66' : '#aeb6c0'))}><span style={{ fontSize: 15 }}>👎</span> {p.dislikes || 0}</button>
+              <button onClick={() => setPubAbierta(p)} style={accionBtn(T.esClaro ? '#565c66' : '#aeb6c0')}><span style={{ fontSize: 15 }}>💬</span> {p.num_comentarios || 0}</button>
+              <button onClick={() => setPubAbierta(p)} style={accionBtn(T.esClaro ? '#565c66' : '#aeb6c0')}><span style={{ fontSize: 14 }}>↗</span> Compartir</button>
+            </div>
+          )
+          return (
+            <div key={p.id} style={{ marginBottom: 12 }}>
+              <TarjetaResultado
+                datos={datos}
+                fuente={fuenteJuego}
+                tiempo={haceCuanto(p.creado_en)}
+                autorNombre={`${p.autor_nombre || 'Usuario'}${p.autor_apellido ? ' ' + p.autor_apellido : ''}`}
+                autorFoto={p.autor_foto}
+                comentario={p.texto && !p.texto.startsWith('Ganaron') && !p.texto.startsWith('Quedaron') ? p.texto.split('\n')[0] : null}
+                temaForzado={tema}
+                pie={barraReacciones}
+              />
+              {miId && p.autor_id === miId && (
+                <div style={{ textAlign: 'right', marginTop: 4 }}>
+                  <span onClick={() => onBorrarPublicacion(p.id)} style={{ fontSize: 11, color: T.tenue, cursor: 'pointer' }}>🗑️ Eliminar</span>
+                </div>
+              )}
+            </div>
+          )
+        }
         const plant = plantillaPorId(datos.plantilla || PLANTILLA_DEFAULT)
         const tieneImg = plant && plant.img
+        const esCuero = plant && plant.esCuero
+        const acentoTag = p.tag_color || '#2f9e6e'
+        const fotoPub = datos.imagen || p.imagen_url || null
+        // colores tipo mockup (tarjeta blanca)
+        const cardBg = esCuero ? T.barraImg : (T.esClaro ? '#ffffff' : 'rgba(20,22,26,.96)')
+        const inkName = T.esClaro ? '#16181c' : '#f4f7f9'
+        const inkSoft = T.esClaro ? '#565c66' : '#aeb6c0'
+        const inkFaint = T.esClaro ? '#949aa3' : '#7f8893'
+        const lineSoft = T.esClaro ? '#eceef1' : 'rgba(255,255,255,.07)'
+        const avBg = avatarColor(p.autor_nombre || p.autor_id || 'x')
         return (
-        <div key={p.id} style={{ marginBottom: 10 }}>
-          <Placa radio={15} pad={0}>
-            <div onClick={() => setPubAbierta(p)} style={{ position: 'relative', cursor: 'pointer', borderRadius: '14px 14px 0 0', overflow: 'hidden', padding: 14, minHeight: tieneImg ? 150 : 'auto', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', background: tieneImg ? `linear-gradient(180deg, rgba(8,9,12,.2) 0%, rgba(8,9,12,.55) 55%, rgba(8,9,12,.92) 100%), url(${plant.img}) center/cover` : 'transparent' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 9, position: tieneImg ? 'absolute' : 'static', top: 12, left: 12, right: 12 }}>
-                <div style={{ width: 34, height: 34, borderRadius: '50%', background: p.autor_foto ? `url(${p.autor_foto}) center/cover` : T.avatar, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: T.avatarTexto, flexShrink: 0, border: tieneImg ? '1.5px solid rgba(255,255,255,.35)' : 'none' }}>
+        <div key={p.id} style={{ marginBottom: 12 }}>
+          <div className="mc-post-card" style={{ position: 'relative', borderRadius: 16, overflow: 'hidden', background: esCuero ? `url(${T.barraImg}) center/cover` : cardBg, border: `1.5px solid ${T.acento}55`, '--mc-glow': `${T.acento}3a` }}>
+            {/* orillita dorada animada (brillo que recorre el borde) */}
+            <div className="mc-post-shine" style={{ position: 'absolute', inset: 0, borderRadius: 16, padding: 1.5, background: `linear-gradient(120deg, transparent 20%, ${T.acento}aa 50%, transparent 80%)`, WebkitMask: 'linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)', WebkitMaskComposite: 'xor', maskComposite: 'exclude', pointerEvents: 'none', zIndex: 3 }} />
+            {esCuero && <div style={{ position: 'absolute', inset: 0, background: T.scrimCarnet }} />}
+            <div style={{ position: 'relative' }}>
+              {/* CABECERA: avatar + nombre/meta + tag */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '14px 16px 10px' }}>
+                <div style={{ width: 42, height: 42, borderRadius: '50%', flexShrink: 0, background: p.autor_foto ? `url(${p.autor_foto}) center/cover` : avBg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 700, color: '#fff' }}>
                   {!p.autor_foto && ((p.autor_nombre || '?').slice(0, 1).toUpperCase())}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: tieneImg ? '#fff' : C.texto, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textShadow: tieneImg ? '0 1px 4px rgba(0,0,0,.8)' : 'none' }}>{p.autor_nombre || 'Usuario'}{p.autor_apellido ? ` ${p.autor_apellido}` : ''}</div>
-                  <div style={{ fontSize: 11, color: tieneImg ? 'rgba(255,255,255,.8)' : C.tenue, textShadow: tieneImg ? '0 1px 4px rgba(0,0,0,.8)' : 'none' }}>{haceCuanto(p.creado_en)}</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: esCuero ? '#fff' : inkName, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.autor_nombre || 'Usuario'}{p.autor_apellido ? ` ${p.autor_apellido}` : ''}</div>
+                  <div style={{ fontSize: 11.5, color: esCuero ? '#cdb98e' : inkFaint, marginTop: 1 }}>{p.autor_meta ? `${p.autor_meta} · ` : ''}{haceCuanto(p.creado_en)}</div>
                 </div>
-                {p.tag && <span style={{ fontSize: 8.5, fontWeight: 800, letterSpacing: 0.5, padding: '3px 8px', borderRadius: 8, textTransform: 'uppercase', color: tieneImg ? '#fff' : (p.tag_color || T.acento), background: tieneImg ? (p.tag_color || T.acento) : `${p.tag_color || T.acento}26`, boxShadow: tieneImg ? '0 1px 6px rgba(0,0,0,.5)' : 'none' }}>{p.tag}</span>}
+                {p.tag && <span style={{ fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', fontWeight: 800, padding: '3px 9px', borderRadius: 20, color: acentoTag, background: T.esClaro ? `${acentoTag}1a` : `${acentoTag}26` }}>{p.tag}</span>}
                 {miId && p.autor_id === miId && (
-                  <span onClick={(e) => { e.stopPropagation(); onBorrarPublicacion(p.id) }} title="Eliminar" style={{ fontSize: 16, color: tieneImg ? '#fff' : C.tenue, cursor: 'pointer', padding: '2px 4px', marginLeft: 2 }}>🗑️</span>
+                  <span onClick={(e) => { e.stopPropagation(); onBorrarPublicacion(p.id) }} title="Eliminar" style={{ fontSize: 15, color: esCuero ? '#fff' : inkFaint, cursor: 'pointer', padding: '2px 4px' }}>🗑️</span>
                 )}
               </div>
-              <div style={{ position: 'relative' }}>
-                <div style={{ fontSize: 15, fontWeight: 800, lineHeight: 1.25, color: tieneImg ? '#f4f7f9' : C.texto, textShadow: tieneImg ? '0 1px 6px rgba(0,0,0,.9)' : 'none' }}>{p.titulo}</div>
-                {p.texto && <div style={{ fontSize: 13, color: tieneImg ? '#e6ebef' : C.texto, marginTop: 5, lineHeight: 1.5, textShadow: tieneImg ? '0 1px 5px rgba(0,0,0,.9)' : 'none' }}>{p.texto}</div>}
-                <div style={{ fontSize: 11.5, color: tieneImg ? 'rgba(255,255,255,.7)' : C.tenue, marginTop: 7, fontWeight: 600 }}>Toca para ver los detalles ›</div>
+
+              {/* CUERPO: texto */}
+              <div onClick={() => setPubAbierta(p)} style={{ padding: '0 16px 12px', cursor: 'pointer' }}>
+                {p.titulo && <div style={{ fontSize: 15, fontWeight: 800, lineHeight: 1.3, color: esCuero ? '#fff' : inkName, marginBottom: p.texto ? 4 : 0 }}>{p.titulo}</div>}
+                {p.texto && <div style={{ fontSize: 14, lineHeight: 1.5, color: esCuero ? '#e9e1cf' : (T.esClaro ? '#2a2e34' : '#c3ccd4') }}>{p.texto}</div>}
               </div>
-            </div>
-            <div style={{ padding: '0 14px 14px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 18, marginTop: 12, paddingTop: 10, borderTop: T.esClaro ? '1px solid rgba(0,0,0,.07)' : '1px solid rgba(255,255,255,.06)' }}>
-                <div onClick={() => onReaccionar(p.id, 'like')} style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', color: misReacc[p.id] === 'like' ? T.acento : C.tenue, fontSize: 13, fontWeight: 700 }}>
-                  <span style={{ fontSize: 15 }}>♥</span> {p.likes || 0}
+
+              {/* FOTO de la publicación (si hay) */}
+              {fotoPub && (
+                <div onClick={() => setPubAbierta(p)} style={{ margin: '0 0 4px', cursor: 'pointer', background: '#000' }}>
+                  <img src={fotoPub} alt="" style={{ width: '100%', maxHeight: 460, objectFit: 'cover', display: 'block' }} />
                 </div>
-                <div onClick={() => onReaccionar(p.id, 'dislike')} style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', color: misReacc[p.id] === 'dislike' ? '#e0563f' : C.tenue, fontSize: 13, fontWeight: 700 }}>
+              )}
+
+              {/* BARRA DE ACCIONES: me gusta · no me gusta · comentar · compartir */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '6px 8px', borderTop: `1px solid ${esCuero ? 'rgba(255,255,255,.12)' : lineSoft}` }}>
+                <button onClick={() => onReaccionar(p.id, 'like')} style={accionBtn(misReacc[p.id] === 'like' ? T.acento : (esCuero ? '#e9e1cf' : inkSoft))}>
+                  <span style={{ fontSize: 16 }}>{misReacc[p.id] === 'like' ? '❤️' : '🤍'}</span> {p.likes || 0}
+                </button>
+                <button onClick={() => onReaccionar(p.id, 'dislike')} style={accionBtn(misReacc[p.id] === 'dislike' ? '#e0563f' : (esCuero ? '#e9e1cf' : inkSoft))}>
                   <span style={{ fontSize: 15 }}>👎</span> {p.dislikes || 0}
-                </div>
-                <div onClick={() => setPubAbierta(p)} style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', color: C.tenue, fontSize: 13, fontWeight: 700 }}>
+                </button>
+                <button onClick={() => setPubAbierta(p)} style={accionBtn(esCuero ? '#e9e1cf' : inkSoft)}>
                   <span style={{ fontSize: 15 }}>💬</span> {p.num_comentarios || 0}
-                </div>
+                </button>
+                <button onClick={() => setPubAbierta(p)} style={accionBtn(esCuero ? '#e9e1cf' : inkSoft)}>
+                  <span style={{ fontSize: 14 }}>↗</span> Compartir
+                </button>
               </div>
             </div>
-          </Placa>
+          </div>
         </div>
         )
       })}</>
@@ -704,7 +819,7 @@ export default function PantallaPublica({ onAccion, haySesion }) {
     <>
       {juegoAPublicar && (
         <SelectorPlantilla
-          T={T} C={C}
+          T={T} C={C} ORO_TEXTO={ORO_TEXTO}
           esEscritorio={esEscritorio}
           usuarioPago={false}
           onCancelar={() => setJuegoAPublicar(null)}
@@ -891,28 +1006,19 @@ export default function PantallaPublica({ onAccion, haySesion }) {
     </div>
   )
 
-  const Composer = () => {
-    if (!haySesion || !miPerfil) return null
-    const p = miPerfil
-    const iniciales = `${(p.nombre || '?')[0] || ''}${(p.apellido || '')[0] || ''}`.toUpperCase()
-    return (
-      <Tarjeta>
-        <div style={{ padding: '14px 16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
-            <div style={{ width: 40, height: 40, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: p.foto_url ? `url(${p.foto_url}) center/cover` : T.avatar, color: T.avatarTexto, fontWeight: 700, boxShadow: `0 0 0 2px ${T.acento}` }}>{!p.foto_url && iniciales}</div>
-            <div onClick={() => click('juego')} style={{ flex: 1, background: T.esClaro ? '#f5f6f8' : 'rgba(255,255,255,.05)', border: `1px solid ${T.esClaro ? '#e0e3e8' : 'rgba(255,255,255,.08)'}`, borderRadius: 22, padding: '10px 16px', color: T.tenue, fontSize: 14, cursor: 'pointer' }}>¿Qué está pasando en la cancha?</div>
-          </div>
-          <div style={{ display: 'flex', gap: 6, marginTop: 12, paddingTop: 12, borderTop: `1px solid ${T.esClaro ? '#eceef1' : 'rgba(255,255,255,.06)'}` }}>
-            {[['📷', 'Foto'], ['📊', 'Resultado'], ['🗳️', 'Encuesta']].map(([ic, tx]) => (
-              <button key={tx} onClick={() => click('juego')} style={{ flex: 1, border: 'none', background: 'transparent', borderRadius: 10, padding: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, fontSize: 12.5, fontWeight: 700, color: T.subTexto, cursor: 'pointer' }}>
-                <span style={{ fontSize: 15 }}>{ic}</span>{tx}
-              </button>
-            ))}
-          </div>
-        </div>
-      </Tarjeta>
-    )
-  }
+  const Composer = () => (
+    <ComposerTechado
+      T={T}
+      miPerfil={miPerfil}
+      abierto={composerAbierto}
+      setAbierto={setComposerAbierto}
+      texto={textoComposer}
+      setTexto={setTextoComposer}
+      publicando={publicandoTexto}
+      onPublicar={enviarPublicacionTexto}
+      onResultado={() => click('resultados')}
+    />
+  )
 
   // ===== VISTA ESCRITORIO / TABLET =====
   if (esEscritorio) {
@@ -962,7 +1068,7 @@ export default function PantallaPublica({ onAccion, haySesion }) {
           <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 14 }}>
             {!haySesion && <Bienvenida grande />}
             <EnVivoFino />
-            <Composer />
+            {Composer()}
             <div>
               <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', padding: '2px 2px 12px' }}>
                 <h2 style={{ fontSize: 20, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5, margin: 0, color: T.textoFuerte }}>El <span style={{ color: T.acento }}>Techado</span></h2>
@@ -1028,6 +1134,103 @@ export default function PantallaPublica({ onAccion, haySesion }) {
 }
 
 // ---- Componente de comentarios ----
+const EMOJIS_MC = {
+  'Básquet': ['🏀', '🔥', '💪', '🏆', '🥇', '🥈', '🥉', '⛹️', '🤾', '🏅', '📊', '⏱️', '🎯', '💥', '⚡', '🌟', '👑', '🚀', '💯', '🙌'],
+  'Caritas': ['😀', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇', '🙂', '😉', '😍', '🥰', '😎', '🤩', '😏', '😮', '😱', '🤔', '😤', '😭', '😢', '😡', '🥵', '🤯', '😴'],
+  'Gestos': ['👍', '👎', '👏', '🙌', '🤝', '✊', '👊', '🤜', '🤛', '✌️', '🤞', '🫡', '🙏', '💪', '👈', '👉', '👆', '👇', '☝️', '🤙'],
+  'Símbolos': ['❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '💔', '❤️‍🔥', '⭐', '🌟', '✨', '💫', '🎉', '🎊', '🔔', '📢', '💬', '👀', '✅'],
+  'Banderas': ['🇩🇴', '🇺🇸', '🇵🇷', '🇲🇽', '🇨🇴', '🇻🇪', '🇪🇸', '🇨🇺', '🇦🇷', '🇧🇷', '🇨🇱', '🇵🇪', '🇪🇨', '🇬🇹', '🇭🇳', '🇳🇮', '🇨🇷', '🇵🇦', '🏳️', '🏁'],
+}
+
+function ComposerTechado({ T, miPerfil, abierto, setAbierto, texto, setTexto, publicando, onPublicar, onResultado }) {
+  const p = miPerfil
+  const [panelEmoji, setPanelEmoji] = useState(false)
+  const [catEmoji, setCatEmoji] = useState('Básquet')
+  const areaRef = useRef(null)
+  if (!p) return null
+  const iniciales = `${(p.nombre || '?')[0] || ''}${(p.apellido || '')[0] || ''}`.toUpperCase()
+  const hayTexto = texto.trim().length > 0
+
+  const meterEmoji = (emo) => {
+    const el = areaRef.current
+    if (!el) { setTexto((texto + emo).slice(0, 500)); return }
+    const ini = el.selectionStart || 0
+    const fin = el.selectionEnd || 0
+    const nuevo = (texto.slice(0, ini) + emo + texto.slice(fin)).slice(0, 500)
+    setTexto(nuevo)
+    // recolocar el cursor después del emoji
+    setTimeout(() => {
+      el.focus()
+      const pos = ini + emo.length
+      el.setSelectionRange(pos, pos)
+    }, 0)
+  }
+  return (
+    <div style={{ background: T.esClaro ? '#fff' : 'rgba(20,22,26,.72)', border: `1px solid ${T.esClaro ? '#e0e3e8' : 'rgba(255,255,255,.08)'}`, borderRadius: 16, boxShadow: T.esClaro ? '0 8px 24px rgba(20,24,30,.06)' : 'none', overflow: 'hidden' }}>
+      <div style={{ padding: '14px 16px' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 11 }}>
+          <div style={{ width: 40, height: 40, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: p.foto_url ? `url(${p.foto_url}) center/cover` : T.avatar, color: T.avatarTexto, fontWeight: 700, boxShadow: `0 0 0 2px ${T.acento}` }}>{!p.foto_url && iniciales}</div>
+          {!abierto ? (
+            <div onClick={() => setAbierto(true)} style={{ flex: 1, background: T.esClaro ? '#f5f6f8' : 'rgba(255,255,255,.05)', border: `1px solid ${T.esClaro ? '#e0e3e8' : 'rgba(255,255,255,.08)'}`, borderRadius: 22, padding: '11px 16px', color: T.tenue, fontSize: 14, cursor: 'text' }}>¿Qué está pasando en la cancha?</div>
+          ) : (
+            <div style={{ flex: 1 }}>
+              <textarea
+                ref={areaRef}
+                autoFocus
+                value={texto}
+                onChange={(e) => setTexto(e.target.value.slice(0, 500))}
+                placeholder="¿Qué está pasando en la cancha?"
+                rows={3}
+                style={{ width: '100%', boxSizing: 'border-box', background: T.esClaro ? '#f5f6f8' : 'rgba(255,255,255,.05)', border: `1px solid ${T.esClaro ? '#e0e3e8' : 'rgba(255,255,255,.08)'}`, borderRadius: 14, padding: '12px 14px', color: T.textoFuerte, fontSize: 14.5, outline: 'none', resize: 'none', fontFamily: 'inherit', lineHeight: 1.5 }}
+              />
+              {/* panel de emojis */}
+              {panelEmoji && (
+                <div style={{ marginTop: 8, border: `1px solid ${T.esClaro ? '#e0e3e8' : 'rgba(255,255,255,.1)'}`, borderRadius: 12, background: T.esClaro ? '#fff' : 'rgba(12,14,18,.95)', overflow: 'hidden' }}>
+                  <div style={{ display: 'flex', gap: 2, padding: 6, borderBottom: `1px solid ${T.esClaro ? '#eceef1' : 'rgba(255,255,255,.06)'}`, overflowX: 'auto' }}>
+                    {Object.keys(EMOJIS_MC).map((cat) => (
+                      <button key={cat} onClick={() => setCatEmoji(cat)} style={{ border: 'none', borderRadius: 8, padding: '5px 10px', fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap', cursor: 'pointer', background: catEmoji === cat ? T.acento : 'transparent', color: catEmoji === cat ? '#1a1205' : T.tenue }}>{cat}</button>
+                    ))}
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 2, padding: 8, maxHeight: 160, overflowY: 'auto' }}>
+                    {EMOJIS_MC[catEmoji].map((emo, i) => (
+                      <button key={i} onClick={() => meterEmoji(emo)} style={{ border: 'none', background: 'transparent', borderRadius: 8, padding: 6, fontSize: 22, cursor: 'pointer', lineHeight: 1 }}>{emo}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <button onClick={() => setPanelEmoji((v) => !v)} title="Emojis" style={{ border: 'none', background: panelEmoji ? (T.esClaro ? '#f0e6cf' : 'rgba(234,182,79,.15)') : 'transparent', borderRadius: 9, padding: '5px 9px', fontSize: 18, cursor: 'pointer', lineHeight: 1 }}>😊</button>
+                  <span style={{ fontSize: 11.5, color: T.tenue }}>{texto.length}/500</span>
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => { setAbierto(false); setTexto(''); setPanelEmoji(false) }} style={{ border: 'none', background: 'transparent', color: T.tenue, fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: '8px 12px' }}>Cancelar</button>
+                  <button onClick={onPublicar} disabled={!hayTexto || publicando} style={{ border: 'none', borderRadius: 20, padding: '8px 20px', background: hayTexto ? T.boton : (T.esClaro ? '#e0e3e8' : 'rgba(255,255,255,.1)'), color: hayTexto ? '#1a1205' : T.tenue, fontWeight: 800, fontSize: 13.5, cursor: hayTexto ? 'pointer' : 'default', opacity: publicando ? 0.6 : 1 }}>
+                    {publicando ? 'Publicando…' : 'Publicar'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+        {!abierto && (
+          <div style={{ display: 'flex', gap: 6, marginTop: 12, paddingTop: 12, borderTop: `1px solid ${T.esClaro ? '#eceef1' : 'rgba(255,255,255,.06)'}` }}>
+            <button onClick={() => setAbierto(true)} style={{ flex: 1, border: 'none', background: 'transparent', borderRadius: 10, padding: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, fontSize: 12.5, fontWeight: 700, color: T.subTexto, cursor: 'pointer' }}>
+              <span style={{ fontSize: 15 }}>📷</span>Foto
+            </button>
+            <button onClick={onResultado} style={{ flex: 1, border: 'none', background: 'transparent', borderRadius: 10, padding: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, fontSize: 12.5, fontWeight: 700, color: T.subTexto, cursor: 'pointer' }}>
+              <span style={{ fontSize: 15 }}>📊</span>Resultado
+            </button>
+            <button onClick={() => setAbierto(true)} style={{ flex: 1, border: 'none', background: 'transparent', borderRadius: 10, padding: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, fontSize: 12.5, fontWeight: 700, color: T.subTexto, cursor: 'pointer' }}>
+              <span style={{ fontSize: 15 }}>🗳️</span>Encuesta
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function Comentarios({ pubId, haySesion, T, C, onPedirLogin, onCambio }) {
   const [lista, setLista] = useState([])
   const [texto, setTexto] = useState('')
@@ -1191,51 +1394,54 @@ function DetallePublicacion({ pub, T, C, ORO_TEXTO, haySesion, esMia, onCerrar, 
 }
 
 // ---- Selector de plantilla ----
-function SelectorPlantilla({ T, C, esEscritorio, usuarioPago, onCancelar, onConfirmar }) {
+function SelectorPlantilla({ T, C, ORO_TEXTO, esEscritorio, usuarioPago, onCancelar, onConfirmar }) {
   const [elegida, setElegida] = useState(PLANTILLA_DEFAULT)
   const [texto, setTexto] = useState('')
+  const [verPlantillas, setVerPlantillas] = useState(false)
   const plantSel = PLANTILLAS.find((p) => p.id === elegida)
+  const usandoTema = elegida === PLANTILLA_DEFAULT
 
   const elegir = (p) => {
     if (puedeUsar(p, usuarioPago)) setElegida(p.id)
-    else alert('Esta plantilla es premium. Desbloquéala con cualquier forma de pago para usar las 15.')
+    else alert('Esta plantilla es premium. Desbloquéala con cualquier forma de pago para usar todas.')
   }
 
+  const fondoModal = T.esClaro ? 'rgba(30,26,18,0.55)' : 'rgba(4,5,7,0.85)'
+  const cajaInterior = T.esClaro ? '#fff' : 'linear-gradient(180deg, #14161a, #0c0e12)'
+  const inputBg = T.esClaro ? 'rgba(0,0,0,.03)' : 'rgba(12,14,18,0.7)'
+  const inputBorde = T.esClaro ? 'rgba(0,0,0,.12)' : 'rgba(255,255,255,.12)'
+
   return (
-    <div onClick={onCancelar} style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(4,5,7,0.85)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', display: 'flex', alignItems: esEscritorio ? 'center' : 'flex-end', justifyContent: 'center', padding: esEscritorio ? 20 : 0 }}>
+    <div onClick={onCancelar} style={{ position: 'fixed', inset: 0, zIndex: 80, background: fondoModal, backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', display: 'flex', alignItems: esEscritorio ? 'center' : 'flex-end', justifyContent: 'center', padding: esEscritorio ? 20 : 0 }}>
       <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 480, maxHeight: '90vh', display: 'flex', flexDirection: 'column', borderRadius: esEscritorio ? 20 : '20px 20px 0 0', padding: 1.5, background: T.borde }}>
-        <div style={{ borderRadius: esEscritorio ? 19 : '19px 19px 0 0', background: 'linear-gradient(180deg, #14161a, #0c0e12)', padding: '18px 16px 20px', overflowY: 'auto' }}>
+        <div style={{ borderRadius: esEscritorio ? 19 : '19px 19px 0 0', background: cajaInterior, padding: '18px 16px 20px', overflowY: 'auto' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-            <span style={{ fontSize: 17, fontWeight: 800, color: '#eef3f6' }}>Elige el fondo</span>
+            <span style={{ fontSize: 17, fontWeight: 800, color: T.textoFuerte }}>Publicar en el Techado</span>
             <span onClick={onCancelar} style={{ fontSize: 24, color: C.tenue, cursor: 'pointer', lineHeight: 1 }}>×</span>
           </div>
-          <div style={{ fontSize: 12, color: C.tenue, marginBottom: 14 }}>Toca una plantilla para tu publicación.</div>
+          <div style={{ fontSize: 12, color: C.tenue, marginBottom: 16 }}>Así se verá tu publicación.</div>
 
-          {plantSel && plantSel.img && (
-            <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', marginBottom: 14, height: 120, background: `linear-gradient(180deg, rgba(8,9,12,.25) 0%, rgba(8,9,12,.85) 100%), url(${plantSel.img}) center/cover`, display: 'flex', alignItems: 'flex-end', padding: 12 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', textShadow: '0 1px 5px rgba(0,0,0,.9)' }}>{texto.trim() ? texto : 'Vista previa del fondo'}</div>
-            </div>
-          )}
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 16 }}>
-            {PLANTILLAS.map((p) => {
-              const disponible = puedeUsar(p, usuarioPago)
-              const seleccionada = elegida === p.id
-              return (
-                <div key={p.id} onClick={() => elegir(p)} style={{ position: 'relative', borderRadius: 10, overflow: 'hidden', aspectRatio: '3/4', cursor: 'pointer', border: seleccionada ? `2px solid ${T.acento}` : '2px solid transparent', background: p.img ? `url(${p.img}) center/cover` : 'linear-gradient(150deg,#23262c,#15171b)', opacity: disponible ? 1 : 0.85 }}>
-                  {!p.img && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: C.tenue, textAlign: 'center', padding: 4 }}>{p.nombre}</div>}
-                  {!disponible && (
-                    <div style={{ position: 'absolute', inset: 0, background: 'rgba(4,5,7,.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>🔒</div>
-                  )}
-                  {seleccionada && (
-                    <div style={{ position: 'absolute', bottom: 4, right: 4, width: 18, height: 18, borderRadius: '50%', background: T.acento, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#1a1205', fontWeight: 800 }}>✓</div>
-                  )}
+          {/* VISTA PREVIA estilo tarjeta del tema (default) */}
+          {usandoTema ? (
+            <div style={{ position: 'relative', borderRadius: 16, overflow: 'hidden', marginBottom: 16, border: `1px solid ${T.esClaro ? '#34291a' : T.navActivoBorde}`, backgroundImage: `url(${T.barraImg})`, backgroundSize: 'cover', backgroundPosition: 'center right', boxShadow: T.esClaro ? '0 12px 30px rgba(18,14,8,.2)' : '0 12px 30px rgba(0,0,0,.4)' }}>
+              <div style={{ position: 'absolute', inset: 0, background: T.scrimCarnet }} />
+              <div style={{ position: 'absolute', inset: 9, borderRadius: 9, border: `1.5px dashed ${T.esClaro ? 'rgba(234,182,79,.4)' : 'rgba(234,182,79,.3)'}`, pointerEvents: 'none' }} />
+              <div style={{ position: 'relative', padding: '16px 18px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                  <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: 1, color: '#7adfa6', background: 'rgba(47,191,113,.16)', border: '1px solid rgba(47,191,113,.4)', borderRadius: 20, padding: '3px 10px', textTransform: 'uppercase' }}>🏀 Resultado de juego</span>
+                  <span style={{ fontSize: 13, fontWeight: 800, letterSpacing: 0.5, textTransform: 'uppercase' }}><span style={{ color: '#dfe2e6' }}>MEDIA</span><span style={ORO_TEXTO}>CANCHA</span></span>
                 </div>
-              )
-            })}
-          </div>
-
-          <div style={{ fontSize: 11, color: C.tenue, textAlign: 'center', marginBottom: 14 }}>🔒 Las premium se desbloquean todas con cualquier forma de pago.</div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', textShadow: '0 1px 6px rgba(0,0,0,.7)', lineHeight: 1.35 }}>{texto.trim() ? texto : 'El resultado del juego aparecerá aquí, con el marcador y el jugador destacado.'}</div>
+                <div style={{ marginTop: 12, height: 3, width: 54, borderRadius: 3, background: T.navDorada }} />
+              </div>
+            </div>
+          ) : (
+            plantSel && plantSel.img && (
+              <div style={{ position: 'relative', borderRadius: 14, overflow: 'hidden', marginBottom: 16, height: 130, background: `linear-gradient(180deg, rgba(8,9,12,.25) 0%, rgba(8,9,12,.85) 100%), url(${plantSel.img}) center/cover`, display: 'flex', alignItems: 'flex-end', padding: 14 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', textShadow: '0 1px 5px rgba(0,0,0,.9)' }}>{texto.trim() ? texto : 'Vista previa del fondo'}</div>
+              </div>
+            )
+          )}
 
           <div style={{ fontSize: 11.5, fontWeight: 700, color: C.tenue, marginBottom: 6 }}>Agrega un comentario (opcional)</div>
           <textarea
@@ -1243,11 +1449,44 @@ function SelectorPlantilla({ T, C, esEscritorio, usuarioPago, onCancelar, onConf
             onChange={(e) => setTexto(e.target.value.slice(0, 200))}
             placeholder="Escribe algo sobre el juego…"
             rows={2}
-            style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(12,14,18,0.7)', border: '1px solid rgba(255,255,255,.12)', borderRadius: 10, padding: '10px 12px', color: '#eef3f6', fontSize: 13.5, outline: 'none', resize: 'none', marginBottom: 16, fontFamily: 'inherit' }}
+            style={{ width: '100%', boxSizing: 'border-box', background: inputBg, border: `1px solid ${inputBorde}`, borderRadius: 10, padding: '10px 12px', color: T.textoFuerte, fontSize: 13.5, outline: 'none', resize: 'none', marginBottom: 14, fontFamily: 'inherit' }}
           />
 
+          {/* botón discreto para personalizar fondo */}
+          {!verPlantillas ? (
+            <button onClick={() => setVerPlantillas(true)} style={{ width: '100%', marginBottom: 16, borderRadius: 11, padding: '11px', background: 'transparent', border: `1px dashed ${T.esClaro ? 'rgba(0,0,0,.18)' : 'rgba(255,255,255,.18)'}`, color: C.tenue, fontWeight: 600, fontSize: 12.5, cursor: 'pointer' }}>
+              🎨 Personalizar fondo {!usandoTema && '· (1 elegido)'}
+            </button>
+          ) : (
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: C.tenue }}>Elige un fondo</span>
+                <span onClick={() => { setElegida(PLANTILLA_DEFAULT); setVerPlantillas(false) }} style={{ fontSize: 11.5, color: T.acento, cursor: 'pointer', fontWeight: 700 }}>← Volver al estilo del tema</span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                {/* opción tema (default) dentro de la cuadrícula */}
+                <div onClick={() => setElegida(PLANTILLA_DEFAULT)} style={{ position: 'relative', borderRadius: 10, overflow: 'hidden', aspectRatio: '3/4', cursor: 'pointer', border: usandoTema ? `2px solid ${T.acento}` : '2px solid transparent', backgroundImage: `url(${T.barraImg})`, backgroundSize: 'cover', backgroundPosition: 'center' }}>
+                  <div style={{ position: 'absolute', inset: 0, background: T.scrimCarnet, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, color: T.acento, textAlign: 'center', padding: 4 }}>ESTILO<br />DEL TEMA</div>
+                  {usandoTema && <div style={{ position: 'absolute', bottom: 4, right: 4, width: 18, height: 18, borderRadius: '50%', background: T.acento, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#1a1205', fontWeight: 800 }}>✓</div>}
+                </div>
+                {PLANTILLAS.filter((p) => p.id !== PLANTILLA_DEFAULT).map((p) => {
+                  const disponible = puedeUsar(p, usuarioPago)
+                  const seleccionada = elegida === p.id
+                  return (
+                    <div key={p.id} onClick={() => elegir(p)} style={{ position: 'relative', borderRadius: 10, overflow: 'hidden', aspectRatio: '3/4', cursor: 'pointer', border: seleccionada ? `2px solid ${T.acento}` : '2px solid transparent', background: p.img ? `url(${p.img}) center/cover` : 'linear-gradient(150deg,#23262c,#15171b)', opacity: disponible ? 1 : 0.85 }}>
+                      {!p.img && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: '#9aa7b2', textAlign: 'center', padding: 4 }}>{p.nombre}</div>}
+                      {!disponible && <div style={{ position: 'absolute', inset: 0, background: 'rgba(4,5,7,.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>🔒</div>}
+                      {seleccionada && <div style={{ position: 'absolute', bottom: 4, right: 4, width: 18, height: 18, borderRadius: '50%', background: T.acento, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#1a1205', fontWeight: 800 }}>✓</div>}
+                    </div>
+                  )
+                })}
+              </div>
+              <div style={{ fontSize: 11, color: C.tenue, textAlign: 'center', marginTop: 12 }}>🔒 Las premium se desbloquean con cualquier forma de pago.</div>
+            </div>
+          )}
+
           <div style={{ display: 'flex', gap: 10 }}>
-            <button onClick={onCancelar} style={{ flex: 1, borderRadius: 12, padding: 13, background: 'transparent', border: '1px solid rgba(255,255,255,.14)', color: C.tenue, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>Cancelar</button>
+            <button onClick={onCancelar} style={{ flex: 1, borderRadius: 12, padding: 13, background: 'transparent', border: `1px solid ${inputBorde}`, color: C.tenue, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>Cancelar</button>
             <button onClick={() => onConfirmar(elegida, texto.trim())} style={{ flex: 2, borderRadius: 12, padding: 13, background: T.boton, border: 'none', color: '#1a1205', fontWeight: 800, fontSize: 14, cursor: 'pointer' }}>↗ Publicar</button>
           </div>
         </div>
