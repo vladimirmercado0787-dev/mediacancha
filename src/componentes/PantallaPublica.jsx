@@ -1254,10 +1254,10 @@ function Comentarios({ pubId, haySesion, T, C, onPedirLogin, onCambio }) {
     setEnviando(false)
   }
 
-  const inputStyle = { flex: 1, minWidth: 0, background: 'rgba(12,14,18,0.7)', border: '1px solid rgba(255,255,255,.12)', borderRadius: 10, padding: '10px 12px', color: '#eef3f6', fontSize: 13.5, outline: 'none' }
+  const inputStyle = { flex: 1, minWidth: 0, background: T.esClaro ? '#fff' : 'rgba(12,14,18,0.7)', border: `1px solid ${T.esClaro ? 'rgba(0,0,0,.14)' : 'rgba(255,255,255,.12)'}`, borderRadius: 10, padding: '10px 12px', color: T.textoBody, fontSize: 13.5, outline: 'none' }
 
   return (
-    <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,.06)' }}>
+    <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${T.esClaro ? 'rgba(0,0,0,.07)' : 'rgba(255,255,255,.06)'}` }}>
       {cargando ? (
         <div style={{ fontSize: 12.5, color: C.tenue, textAlign: 'center', padding: '6px 0' }}>Cargando comentarios…</div>
       ) : (
@@ -1273,7 +1273,7 @@ function Comentarios({ pubId, haySesion, T, C, onPedirLogin, onCambio }) {
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 12.5, fontWeight: 700, color: C.texto }}>{nombre} <span style={{ fontSize: 10.5, fontWeight: 400, color: C.tenue }}>· {haceCuanto(c.creado_en)}</span></div>
-                  <div style={{ fontSize: 13, color: '#c3ccd4', marginTop: 2, lineHeight: 1.4, wordBreak: 'break-word' }}>{c.texto}</div>
+                  <div style={{ fontSize: 13, color: T.subTexto || C.texto, marginTop: 2, lineHeight: 1.4, wordBreak: 'break-word' }}>{c.texto}</div>
                 </div>
               </div>
             )
@@ -1291,92 +1291,87 @@ function Comentarios({ pubId, haySesion, T, C, onPedirLogin, onCambio }) {
 // ---- Ventana de DETALLE ----
 function DetallePublicacion({ pub, T, C, ORO_TEXTO, haySesion, esMia, onCerrar, onPedirLogin, onReaccionar, miReaccion, onBorrar, onCambioComentarios }) {
   const esEscritorio = typeof window !== 'undefined' && window.innerWidth >= 900
+  const tema = typeof window !== 'undefined' ? (localStorage.getItem('mc_tema') || 'dorado') : 'dorado'
   let datos = pub.datos || {}
   if (typeof datos === 'string') { try { datos = JSON.parse(datos) } catch (e) { datos = {} } }
-  const esJuego = pub.tipo === 'juego_rapido' && datos.jugadores
-  const plantDetalle = plantillaPorId(datos.plantilla || PLANTILLA_DEFAULT)
-  const imgFondo = plantDetalle && plantDetalle.img
-  const jugA = (datos.jugadores || []).filter((j) => j.equipo === 0).sort((a, b) => (b.pts || 0) - (a.pts || 0))
-  const jugB = (datos.jugadores || []).filter((j) => j.equipo === 1).sort((a, b) => (b.pts || 0) - (a.pts || 0))
-  const ganoA = !datos.hayEmpate && (datos.totalA || 0) > (datos.totalB || 0)
-  const ganoB = !datos.hayEmpate && (datos.totalB || 0) > (datos.totalA || 0)
+  const esJuego = datos && datos.nombreA && datos.nombreB && (datos.totalA != null || (datos.jugadores && datos.jugadores.length))
+  const fuenteJuego = datos.fuente || (pub.tipo === 'torneo' ? 'torneo' : pub.tipo === 'liga' ? 'liga' : 'rapido')
 
-  const TablaEquipo = ({ nombre, total, jugadores, gano }) => (
-    <div style={{ flex: 1, minWidth: 0 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-        <span style={{ fontSize: 12.5, fontWeight: 800, color: gano ? T.acento : C.texto, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nombre}{gano ? ' 🏆' : ''}</span>
-        <span style={{ fontSize: 18, fontWeight: 800, color: gano ? '#fff' : C.tenue }}>{total}</span>
-      </div>
-      <div style={{ borderRadius: 10, overflow: 'hidden', border: '1px solid rgba(255,255,255,.07)' }}>
-        {jugadores.map((j, i) => (
-          <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 9px', background: i % 2 ? 'rgba(255,255,255,.02)' : 'transparent', borderBottom: i < jugadores.length - 1 ? '1px solid rgba(255,255,255,.05)' : 'none' }}>
-            <span style={{ fontSize: 12.5, color: C.texto, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 90 }}>{j.nombre}</span>
-            <span style={{ fontSize: 13, fontWeight: 800, color: T.acento }}>{j.pts || 0}</span>
-          </div>
-        ))}
-        {jugadores.length === 0 && <div style={{ fontSize: 11, color: C.tenue, padding: '7px 9px' }}>—</div>}
-      </div>
-    </div>
-  )
+  // Colores del modal coherentes con el tema actual
+  const modalFondo = T.esClaro ? '#f3eee3' : 'linear-gradient(180deg, #14161a, #0c0e12)'
+  const modalTexto = T.textoBody
+  const modalTenue = T.tenue
+  const lineaModal = T.esClaro ? 'rgba(0,0,0,.08)' : 'rgba(255,255,255,.07)'
+
+  // ¿Compartir disponible en este dispositivo?
+  const compartir = async () => {
+    const titulo = pub.titulo || `${datos.nombreA || ''} vs ${datos.nombreB || ''}`.trim() || 'Media Cancha'
+    const texto = esJuego ? `${datos.nombreA} ${datos.totalA} - ${datos.totalB} ${datos.nombreB} · vía Media Cancha 🏀` : (pub.texto || 'Mira esto en Media Cancha 🏀')
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: titulo, text: texto })
+      } else if (navigator.clipboard) {
+        await navigator.clipboard.writeText(texto)
+        alert('Copiado para compartir 📋')
+      }
+    } catch (e) { /* el usuario canceló */ }
+  }
 
   return (
-    <div onClick={onCerrar} style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(4,5,7,0.82)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', display: 'flex', alignItems: esEscritorio ? 'center' : 'flex-end', justifyContent: 'center', padding: esEscritorio ? 20 : 0 }}>
+    <div onClick={onCerrar} style={{ position: 'fixed', inset: 0, zIndex: 70, background: T.esClaro ? 'rgba(30,26,18,0.5)' : 'rgba(4,5,7,0.82)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', display: 'flex', alignItems: esEscritorio ? 'center' : 'flex-end', justifyContent: 'center', padding: esEscritorio ? 20 : 0 }}>
       <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 480, maxHeight: esEscritorio ? '88vh' : '92vh', display: 'flex', flexDirection: 'column', borderRadius: esEscritorio ? 20 : '20px 20px 0 0', padding: 1.5, background: T.borde }}>
-        <div style={{ borderRadius: esEscritorio ? 19 : '19px 19px 0 0', background: 'linear-gradient(180deg, #14161a, #0c0e12)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <div style={{ position: 'relative', minHeight: imgFondo ? 175 : 'auto', padding: '16px 16px 14px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', background: imgFondo ? `linear-gradient(180deg, rgba(8,9,12,.35) 0%, rgba(8,9,12,.6) 55%, rgba(20,22,26,.96) 100%), url(${imgFondo}) center/cover` : 'transparent' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 9, position: imgFondo ? 'absolute' : 'static', top: 14, left: 16, right: 16, marginBottom: imgFondo ? 0 : 12 }}>
-              <div style={{ width: 36, height: 36, borderRadius: '50%', background: pub.autor_foto ? `url(${pub.autor_foto}) center/cover` : T.avatar, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: T.avatarTexto, flexShrink: 0, border: imgFondo ? '1.5px solid rgba(255,255,255,.35)' : 'none' }}>
-                {!pub.autor_foto && ((pub.autor_nombre || '?').slice(0, 1).toUpperCase())}
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 700, color: imgFondo ? '#fff' : C.texto, textShadow: imgFondo ? '0 1px 4px rgba(0,0,0,.8)' : 'none' }}>{pub.autor_nombre || 'Usuario'}{pub.autor_apellido ? ` ${pub.autor_apellido}` : ''}</div>
-                <div style={{ fontSize: 11, color: imgFondo ? 'rgba(255,255,255,.8)' : C.tenue, textShadow: imgFondo ? '0 1px 4px rgba(0,0,0,.8)' : 'none' }}>{haceCuanto(pub.creado_en)}</div>
-              </div>
-              {esMia && <span onClick={onBorrar} title="Eliminar" style={{ fontSize: 17, color: imgFondo ? '#fff' : C.tenue, cursor: 'pointer', padding: '2px 6px' }}>🗑️</span>}
-              <span onClick={onCerrar} style={{ fontSize: 24, color: imgFondo ? '#fff' : C.tenue, cursor: 'pointer', lineHeight: 1, padding: '0 2px' }}>×</span>
-            </div>
-            <div style={{ position: 'relative', fontSize: 19, fontWeight: 800, color: '#f4f7f9', lineHeight: 1.2, textShadow: imgFondo ? '0 1px 6px rgba(0,0,0,.9)' : 'none' }}>{pub.titulo}</div>
+        <div style={{ borderRadius: esEscritorio ? 19 : '19px 19px 0 0', background: modalFondo, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+
+          {/* cabecera del modal */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', borderBottom: `1px solid ${lineaModal}` }}>
+            <span style={{ fontSize: 14, fontWeight: 800, color: modalTexto, flex: 1 }}>Publicación</span>
+            {esMia && <span onClick={onBorrar} title="Eliminar" style={{ fontSize: 17, color: '#e0563f', cursor: 'pointer', padding: '2px 6px' }}>🗑️</span>}
+            <span onClick={onCerrar} style={{ fontSize: 24, color: modalTenue, cursor: 'pointer', lineHeight: 1, padding: '0 2px' }}>×</span>
           </div>
 
           <div style={{ overflowY: 'auto', padding: '14px 16px 20px' }}>
             {esJuego ? (
-              <>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, padding: '14px 0', marginBottom: 8 }}>
-                  <div style={{ textAlign: 'center', flex: 1 }}>
-                    <div style={{ fontSize: 12.5, fontWeight: 700, color: ganoA ? T.acento : C.tenue, marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{datos.nombreA}{ganoA ? ' 🏆' : ''}</div>
-                    <div style={{ fontSize: 44, fontWeight: 800, color: ganoA ? '#fff' : C.tenue, lineHeight: 1 }}>{datos.totalA}</div>
-                  </div>
-                  <div style={{ fontSize: 16, color: C.tenue }}>—</div>
-                  <div style={{ textAlign: 'center', flex: 1 }}>
-                    <div style={{ fontSize: 12.5, fontWeight: 700, color: ganoB ? T.acento : C.tenue, marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{datos.nombreB}{ganoB ? ' 🏆' : ''}</div>
-                    <div style={{ fontSize: 44, fontWeight: 800, color: ganoB ? '#fff' : C.tenue, lineHeight: 1 }}>{datos.totalB}</div>
-                  </div>
-                </div>
-                {datos.narracion && (
-                  <div style={{ fontSize: 13.5, color: '#d4dbe1', lineHeight: 1.6, padding: '12px 14px', background: 'rgba(255,255,255,.03)', borderRadius: 12, borderLeft: `3px solid ${T.acento}`, marginBottom: 16 }}>
-                    {datos.narracion}
-                  </div>
-                )}
-                <div style={{ fontSize: 11, fontWeight: 700, color: C.tenue, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Jugadores · puntos</div>
-                <div style={{ display: 'flex', gap: 12, marginBottom: 18 }}>
-                  <TablaEquipo nombre={datos.nombreA} total={datos.totalA} jugadores={jugA} gano={ganoA} />
-                  <TablaEquipo nombre={datos.nombreB} total={datos.totalB} jugadores={jugB} gano={ganoB} />
-                </div>
-              </>
+              <div style={{ marginBottom: 16 }}>
+                <TarjetaResultado
+                  datos={datos}
+                  fuente={fuenteJuego}
+                  tiempo={haceCuanto(pub.creado_en)}
+                  autorNombre={`${pub.autor_nombre || 'Usuario'}${pub.autor_apellido ? ' ' + pub.autor_apellido : ''}`}
+                  autorFoto={pub.autor_foto}
+                  comentario={pub.texto && !pub.texto.startsWith('Ganaron') && !pub.texto.startsWith('Quedaron') ? pub.texto.split('\n')[0] : null}
+                  temaForzado={tema}
+                />
+              </div>
             ) : (
-              pub.texto && <div style={{ fontSize: 14.5, color: '#d4dbe1', lineHeight: 1.6, marginBottom: 16 }}>{pub.texto}</div>
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 12 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: '50%', background: pub.autor_foto ? `url(${pub.autor_foto}) center/cover` : T.avatar, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: T.avatarTexto, flexShrink: 0 }}>
+                    {!pub.autor_foto && ((pub.autor_nombre || '?').slice(0, 1).toUpperCase())}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 700, color: modalTexto }}>{pub.autor_nombre || 'Usuario'}{pub.autor_apellido ? ` ${pub.autor_apellido}` : ''}</div>
+                    <div style={{ fontSize: 11, color: modalTenue }}>{haceCuanto(pub.creado_en)}</div>
+                  </div>
+                </div>
+                {pub.titulo && <div style={{ fontSize: 18, fontWeight: 800, color: modalTexto, lineHeight: 1.2, marginBottom: 8 }}>{pub.titulo}</div>}
+                {pub.texto && <div style={{ fontSize: 14.5, color: modalTexto, lineHeight: 1.6, marginBottom: 16 }}>{pub.texto}</div>}
+              </>
             )}
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 20, padding: '12px 0', borderTop: '1px solid rgba(255,255,255,.07)', borderBottom: '1px solid rgba(255,255,255,.07)', marginBottom: 14 }}>
-              <div onClick={() => onReaccionar(pub.id, 'like')} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', color: miReaccion === 'like' ? T.acento : C.tenue, fontSize: 14, fontWeight: 700 }}>
-                <span style={{ fontSize: 17 }}>♥</span> {pub.likes || 0}
+            {/* barra de reacciones + compartir */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 18, padding: '12px 0', borderTop: `1px solid ${lineaModal}`, borderBottom: `1px solid ${lineaModal}`, marginBottom: 14 }}>
+              <div onClick={() => onReaccionar(pub.id, 'like')} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', color: miReaccion === 'like' ? T.acento : modalTenue, fontSize: 14, fontWeight: 700 }}>
+                <span style={{ fontSize: 17 }}>{miReaccion === 'like' ? '❤️' : '🤍'}</span> {pub.likes || 0}
               </div>
-              <div onClick={() => onReaccionar(pub.id, 'dislike')} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', color: miReaccion === 'dislike' ? '#e0563f' : C.tenue, fontSize: 14, fontWeight: 700 }}>
+              <div onClick={() => onReaccionar(pub.id, 'dislike')} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', color: miReaccion === 'dislike' ? '#e0563f' : modalTenue, fontSize: 14, fontWeight: 700 }}>
                 <span style={{ fontSize: 17 }}>👎</span> {pub.dislikes || 0}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: C.tenue, fontSize: 14, fontWeight: 700 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: modalTenue, fontSize: 14, fontWeight: 700 }}>
                 <span style={{ fontSize: 17 }}>💬</span> {pub.num_comentarios || 0}
               </div>
+              <button onClick={compartir} style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 7, border: 'none', borderRadius: 10, padding: '9px 16px', background: T.boton, color: '#1a1205', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>
+                <span style={{ fontSize: 15 }}>↗</span> Compartir
+              </button>
             </div>
 
             <Comentarios pubId={pub.id} haySesion={haySesion} T={T} C={C} onPedirLogin={onPedirLogin} onCambio={onCambioComentarios} />
