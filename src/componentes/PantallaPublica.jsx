@@ -25,6 +25,7 @@ const SUP_OSCURA = {
   headerBg: 'rgba(8,9,12,0.92)',
   veloGrad: 'linear-gradient(90deg, rgba(8,9,12,0.92) 0%, rgba(8,9,12,0.66) 45%, rgba(8,9,12,0.55) 100%)',
   barraInteriorBg: 'rgba(20,22,26,0.55)',
+  navDorada: 'linear-gradient(180deg,#eab64f,#c8842e 55%,#9c6518)',
   texturaImg: texturaCuero,
   barraImg: fondoTarjetaMiembro,
 }
@@ -82,6 +83,7 @@ const TEMAS = {
     headerBg: 'rgba(248,243,233,0.92)',
     veloGrad: 'linear-gradient(90deg, rgba(248,243,233,0.86) 0%, rgba(248,243,233,0.66) 45%, rgba(248,243,233,0.55) 100%)',
     barraInteriorBg: 'rgba(255,255,255,0.5)',
+    navDorada: 'linear-gradient(180deg,#eab64f,#c8842e 55%,#9c6518)',
     texturaImg: texturaCueroClara,
     barraImg: barraMiembroClara,
   },
@@ -109,6 +111,7 @@ const TEMAS = {
     headerBg: 'rgba(232,244,245,0.92)',
     veloGrad: 'linear-gradient(90deg, rgba(232,244,245,0.86) 0%, rgba(232,244,245,0.66) 45%, rgba(232,244,245,0.55) 100%)',
     barraInteriorBg: 'rgba(255,255,255,0.5)',
+    navDorada: 'linear-gradient(180deg,#6ac0d8,#2a8fb8 55%,#1a6a8a)',
     texturaImg: texturaCueroLarimar,
     barraImg: barraMiembroLarimar,
   },
@@ -380,83 +383,83 @@ export default function PantallaPublica({ onAccion, haySesion }) {
     const ubicacion = [p.municipio, p.provincia].filter(Boolean).join(', ')
     const posicion = (p.posiciones && p.posiciones[0]) || null
     return (
-      <div style={{ position: 'relative', borderRadius: 16, cursor: 'pointer', border: `1px solid ${T.navActivoBorde}`, backgroundImage: `url(${T.barraImg})`, backgroundSize: 'cover', backgroundPosition: 'center right' }}>
+      <div style={{ position: 'relative', borderRadius: 16, cursor: 'default', border: T.esClaro ? '1px solid #34291a' : `1px solid ${T.navActivoBorde}`, backgroundImage: `url(${T.barraImg})`, backgroundSize: 'cover', backgroundPosition: 'center right', boxShadow: T.esClaro ? '0 12px 34px rgba(18,14,8,.22)' : '0 12px 34px rgba(0,0,0,.4)' }}>
         <div style={{ position: 'absolute', inset: 0, borderRadius: 16, background: T.scrimCarnet }} />
-        <div onClick={() => click('perfil')} style={{ position: 'relative', padding: '13px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
-          {/* foto protagonista */}
-          <div style={{ width: 60, height: 60, borderRadius: 13, background: p.foto_url ? `url(${p.foto_url}) center/cover` : T.avatar, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, fontWeight: 800, color: T.avatarTexto, flexShrink: 0, border: '1.5px solid rgba(255,255,255,.2)' }}>
+        {/* costura dorada punteada (efecto credencial) */}
+        <div style={{ position: 'absolute', inset: 9, borderRadius: 9, border: `1.5px dashed ${T.esClaro ? 'rgba(234,182,79,.45)' : 'rgba(234,182,79,.32)'}`, pointerEvents: 'none', zIndex: 1 }} />
+        <div onClick={() => click('perfil')} style={{ position: 'relative', zIndex: 2, padding: '15px 18px 13px', display: 'flex', alignItems: 'center', gap: 14, cursor: 'pointer' }}>
+          {/* foto protagonista con aro dorado */}
+          <div style={{ width: 60, height: 60, borderRadius: '50%', background: p.foto_url ? `url(${p.foto_url}) center/cover` : T.avatar, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, fontWeight: 800, color: T.avatarTexto, flexShrink: 0, boxShadow: `0 0 0 2px ${T.esClaro ? '#15110b' : '#0c0e12'}, 0 0 0 4px ${T.acento}` }}>
             {!p.foto_url && iniciales}
           </div>
           {/* nombre + datos */}
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 1 }}>
-              <span style={{ fontSize: 9, color: T.tenue, letterSpacing: 0.5 }}>MEDIA <span style={{ color: T.acento }}>CANCHA</span></span>
-              <span style={{ fontSize: 8, fontWeight: 800, color: T.acento, border: `1px solid ${T.acento}`, padding: '1px 7px', borderRadius: 12, textTransform: 'uppercase' }}>{esJugador ? 'Jugador' : 'Fanático'}</span>
+            <div style={{ fontSize: 19, fontWeight: 800, color: '#fff', lineHeight: 1.05, textShadow: '0 1px 6px rgba(0,0,0,.7)', letterSpacing: 0.3, textTransform: 'uppercase' }}>{nombre}</div>
+            <div style={{ fontSize: 11.5, color: '#cdb98e', marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+              {posicion && <span>{posicion}</span>}
+              {posicion && ubicacion && <span style={{ width: 3, height: 3, borderRadius: '50%', background: '#7d6b49' }} />}
+              {ubicacion && <span>{ubicacion}</span>}
+              <span onClick={(e) => { e.stopPropagation(); copiarMiMC() }} style={{ fontSize: 10, fontWeight: 700, color: '#1c160d', background: T.boton, padding: '2px 8px', borderRadius: 6, fontFamily: 'monospace', letterSpacing: 1, cursor: 'pointer' }}>{copiadoMC ? '✓ copiado' : (p.codigo_unico || 'MC------')}</span>
             </div>
-            <div style={{ fontSize: 19, fontWeight: 800, color: T.textoFuerte, lineHeight: 1.1, textShadow: T.esClaro ? 'none' : '0 1px 6px rgba(0,0,0,.8)' }}>{nombre}</div>
-            {(posicion || ubicacion) && <div style={{ fontSize: 11.5, color: T.subTexto, marginTop: 1, textShadow: T.esClaro ? 'none' : '0 1px 4px rgba(0,0,0,.8)' }}>{[posicion, ubicacion].filter(Boolean).join(' · ')}</div>}
           </div>
-          {/* stats (solo jugador, en pantallas anchas) */}
-          {esJugador && esEscritorio && !esTablet && (
-            <div style={{ display: 'flex', gap: 18, flexShrink: 0 }}>
-              {[['—', 'PTS'], ['—', 'REB'], ['—', 'AST'], ['—', 'ROB']].map(([v, l]) => (
-                <div key={l} style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: l === 'PTS' ? T.acento : T.textoFuerte, lineHeight: 1 }}>{v}</div>
-                  <div style={{ fontSize: 8.5, color: T.tenue, marginTop: 3, letterSpacing: 0.5 }}>{l}</div>
-                </div>
-              ))}
+          {/* marca MEDIA CANCHA */}
+          <div style={{ flexShrink: 0, textAlign: 'right' }}>
+            <div style={{ fontSize: 17, fontWeight: 800, lineHeight: 0.95, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+              <span style={{ color: '#dfe2e6' }}>MEDIA</span><br />
+              <span style={ORO_TEXTO}>CANCHA</span>
             </div>
-          )}
-          {/* MC ID */}
-          <div onClick={(e) => { e.stopPropagation(); copiarMiMC() }} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: copiadoMC ? 'rgba(47,191,113,.18)' : 'rgba(232,182,90,0.14)', border: `0.5px solid ${copiadoMC ? 'rgba(47,191,113,.5)' : 'rgba(232,182,90,0.4)'}`, borderRadius: 7, padding: '5px 10px', cursor: 'pointer', flexShrink: 0 }}>
-            <span style={{ fontSize: 8.5, color: T.tenue, letterSpacing: 0.5 }}>MC ID</span>
-            <span style={{ fontSize: 12.5, fontWeight: 700, fontFamily: 'monospace', letterSpacing: 1.5, color: T.acento }}>{p.codigo_unico || '--------'}</span>
-            <span style={{ fontSize: 12, color: copiadoMC ? '#7bd6a3' : T.acento }}>{copiadoMC ? '✓' : '⧉'}</span>
+            <span style={{ display: 'inline-block', marginTop: 5, fontSize: 8.5, letterSpacing: 1.5, color: '#1c160d', background: T.boton, padding: '2px 8px', borderRadius: 12, fontWeight: 800, textTransform: 'uppercase' }}>{esJugador ? 'Jugador' : 'Fanático'}</span>
           </div>
           {/* selector de tema */}
           <div onClick={(e) => e.stopPropagation()} style={{ flexShrink: 0 }}><BotonTema /></div>
         </div>
-        {/* fila del menú horizontal */}
-        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 2, padding: '7px 10px', background: T.barraInteriorBg, borderTop: T.esClaro ? '1px solid rgba(0,0,0,.1)' : '1px solid rgba(255,255,255,.08)', borderRadius: '0 0 16px 16px', flexWrap: 'wrap' }}>
+        {/* fila de stats oficiales (solo jugador) */}
+        {esJugador && (
+          <div style={{ position: 'relative', zIndex: 2, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1, background: 'rgba(234,182,79,.16)', borderTop: '1px solid rgba(234,182,79,.18)' }}>
+            {[['—', 'PTS'], ['—', 'REB'], ['—', 'AST'], ['—', 'ROB']].map(([v, l]) => (
+              <div key={l} style={{ background: T.esClaro ? 'rgba(21,17,11,.9)' : 'rgba(12,14,18,.85)', padding: '8px 6px', textAlign: 'center' }}>
+                <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', lineHeight: 1 }}>{v}</div>
+                <div style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 1, color: T.acento, marginTop: 3, textTransform: 'uppercase' }}>{l}</div>
+              </div>
+            ))}
+          </div>
+        )}
+        {/* NAV DORADA integrada (estilo credencial) */}
+        <div style={{ position: 'relative', zIndex: 2, display: 'flex', alignItems: 'center', gap: 2, padding: '5px 8px', background: T.navDorada, borderRadius: '0 0 16px 16px', flexWrap: 'wrap', boxShadow: '0 8px 22px rgba(156,101,24,.18)' }}>
           {NAV_PRINCIPAL.map((n) => {
-            const resaltado = navHover === n.id
+            const activo = n.id === 'inicio'
             return (
-              <button key={n.id} onClick={() => click(n.id)} onMouseEnter={() => setNavHover(n.id)} onMouseLeave={() => setNavHover(null)} style={{ display: 'flex', alignItems: 'center', gap: 6, background: resaltado ? T.navActivoBg : 'transparent', border: resaltado ? `1px solid ${T.navActivoBorde}` : '1px solid transparent', color: resaltado ? T.acento : C.texto, fontSize: 12.5, fontWeight: 600, padding: '7px 11px', borderRadius: 8, cursor: 'pointer', transition: 'all .15s ease', whiteSpace: 'nowrap' }}>
-                <span style={{ fontSize: 14, display: 'inline-flex', color: T.acento }}>{n.icono === 'techado' ? <IconoTechado size={14} cols={T.balon} /> : n.icono}</span>{n.txt}
+              <button key={n.id} onClick={() => click(n.id)} style={{ display: 'flex', alignItems: 'center', gap: 6, background: activo ? 'linear-gradient(180deg,#1f1810,#120d07)' : 'transparent', color: activo ? T.acento : '#3a2a10', fontSize: 12, fontWeight: 700, padding: '8px 13px', borderRadius: 9, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: 0.4, whiteSpace: 'nowrap', border: 'none', transition: 'all .15s ease' }}>
+                <span style={{ fontSize: 14, display: 'inline-flex' }}>{n.icono === 'techado' ? <IconoTechado size={14} cols={activo ? T.balon : ['#3a2a10', '#3a2a10', '#3a2a10']} /> : n.icono}</span>{n.txt}
               </button>
             )
           })}
-          {/* separador */}
-          <div style={{ width: 1, height: 22, background: T.esClaro ? 'rgba(0,0,0,.1)' : 'rgba(255,255,255,.1)', margin: '0 6px' }} />
-          {/* Armar juego (acción estrella, resaltada) */}
-          <button onClick={() => click('juego')} style={{ display: 'flex', alignItems: 'center', gap: 6, background: T.boton, border: 'none', color: T.avatarTexto, fontSize: 12.5, fontWeight: 800, padding: '7px 14px', borderRadius: 8, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+          {/* Armar juego (acción estrella) */}
+          <button onClick={() => click('juego')} style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'linear-gradient(180deg,#1f1810,#120d07)', border: 'none', color: T.acento, fontSize: 12, fontWeight: 800, padding: '8px 13px', borderRadius: 9, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: 0.4, whiteSpace: 'nowrap', marginLeft: 4 }}>
             ⚡ Armar juego
           </button>
-          {/* Crear ▾ (torneo / liga) */}
-          <div style={{ position: 'relative' }}>
-            <button onClick={(e) => { e.stopPropagation(); setCrearAbierto((v) => !v); setMasAbierto(false) }} style={{ display: 'flex', alignItems: 'center', gap: 5, background: crearAbierto ? T.navActivoBg : 'transparent', border: `1px solid ${T.navActivoBorde}`, color: T.acento, fontSize: 12.5, fontWeight: 600, padding: '7px 12px', borderRadius: 8, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-              + Crear <span style={{ fontSize: 10 }}>{crearAbierto ? '▴' : '▾'}</span>
-            </button>
-            {crearAbierto && (
-              <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, minWidth: 180, background: T.esClaro ? 'rgba(252,250,245,.99)' : 'rgba(18,20,24,.98)', border: `1px solid ${T.navActivoBorde}`, borderRadius: 12, padding: 7, zIndex: 200, backdropFilter: 'blur(12px)', boxShadow: '0 10px 30px rgba(0,0,0,.4)' }}>
-                {CREAR_DROPDOWN.map((a) => (
-                  <button key={a.id} onClick={() => click(a.id)} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'transparent', border: 'none', color: C.texto, fontSize: 13, fontWeight: 600, padding: '9px 11px', borderRadius: 8, cursor: 'pointer' }}>{a.txt}</button>
-                ))}
-              </div>
-            )}
-          </div>
-          {/* tuerca de configuración (solo icono) */}
-          <button onClick={() => click('configuracion')} title="Configuración" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: `1px solid ${T.navActivoBorde}`, color: T.acento, fontSize: 15, padding: '7px 10px', borderRadius: 8, cursor: 'pointer' }}>
+          {/* tuerca config */}
+          <button onClick={() => click('configuracion')} title="Configuración" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: 'none', color: '#3a2a10', fontSize: 15, padding: '8px 9px', borderRadius: 9, cursor: 'pointer' }}>
             ⚙️
           </button>
-          {/* Más ▾ (lo que sobra) */}
+          {/* Más ▾ */}
           <div style={{ position: 'relative', marginLeft: 'auto' }}>
-            <button onClick={(e) => { e.stopPropagation(); setMasAbierto((v) => !v); setCrearAbierto(false) }} style={{ display: 'flex', alignItems: 'center', gap: 5, background: masAbierto ? T.navActivoBg : 'transparent', border: `1px solid ${T.navActivoBorde}`, color: T.acento, fontSize: 12.5, fontWeight: 600, padding: '7px 12px', borderRadius: 8, cursor: 'pointer' }}>
+            <button onClick={(e) => { e.stopPropagation(); setMasAbierto((v) => !v); setCrearAbierto(false) }} style={{ display: 'flex', alignItems: 'center', gap: 5, background: masAbierto ? 'linear-gradient(180deg,#1f1810,#120d07)' : 'transparent', border: 'none', color: masAbierto ? T.acento : '#3a2a10', fontSize: 12, fontWeight: 700, padding: '8px 13px', borderRadius: 9, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: 0.4 }}>
               Más <span style={{ fontSize: 10 }}>{masAbierto ? '▴' : '▾'}</span>
             </button>
             {masAbierto && (
-              <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, minWidth: 190, background: T.esClaro ? 'rgba(252,250,245,.99)' : 'rgba(18,20,24,.98)', border: `1px solid ${T.navActivoBorde}`, borderRadius: 12, padding: 7, zIndex: 200, backdropFilter: 'blur(12px)', boxShadow: '0 10px 30px rgba(0,0,0,.4)' }}>
-                <div style={{ fontSize: 9.5, fontWeight: 800, color: T.tenue, letterSpacing: 1, textTransform: 'uppercase', padding: '2px 11px 6px' }}>Lo mío</div>
+              <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, minWidth: 200, background: T.esClaro ? 'rgba(252,250,245,.99)' : 'rgba(18,20,24,.98)', border: `1px solid ${T.navActivoBorde}`, borderRadius: 12, padding: 7, zIndex: 200, backdropFilter: 'blur(12px)', boxShadow: '0 10px 30px rgba(0,0,0,.4)' }}>
+                {NAV_MAS.map((n) => (
+                  <button key={n.id} onClick={() => click(n.id)} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', background: 'transparent', border: 'none', color: C.texto, fontSize: 13, fontWeight: 600, padding: '9px 11px', borderRadius: 8, cursor: 'pointer' }}>
+                    <span style={{ fontSize: 15, color: T.acento }}>{n.icono}</span>{n.txt}
+                  </button>
+                ))}
+                <div style={{ height: 1, background: T.esClaro ? 'rgba(0,0,0,.08)' : 'rgba(255,255,255,.08)', margin: '6px 4px' }} />
+                <div style={{ fontSize: 9.5, fontWeight: 800, color: T.tenue, letterSpacing: 1, textTransform: 'uppercase', padding: '2px 11px 6px' }}>Crear</div>
+                {CREAR_DROPDOWN.map((a) => (
+                  <button key={a.id} onClick={() => click(a.id)} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'transparent', border: 'none', color: C.texto, fontSize: 13, fontWeight: 600, padding: '8px 11px', borderRadius: 8, cursor: 'pointer' }}>{a.txt}</button>
+                ))}
+                <div style={{ fontSize: 9.5, fontWeight: 800, color: T.tenue, letterSpacing: 1, textTransform: 'uppercase', padding: '8px 11px 6px' }}>Lo mío</div>
                 {ACCIONES_MIAS.map((a) => (
                   <button key={a.id} onClick={() => click(a.id)} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'transparent', border: 'none', color: C.texto, fontSize: 13, fontWeight: 600, padding: '8px 11px', borderRadius: 8, cursor: 'pointer' }}>{a.txt}</button>
                 ))}
@@ -739,6 +742,178 @@ export default function PantallaPublica({ onAccion, haySesion }) {
     </>
   )
 
+  // ===== COMPONENTES NUEVOS (estructura red social, datos de ejemplo por ahora) =====
+
+  const Tarjeta = ({ titulo, children, accion }) => (
+    <div style={{ background: T.esClaro ? '#fff' : 'rgba(20,22,26,.72)', border: `1px solid ${T.esClaro ? '#e0e3e8' : 'rgba(255,255,255,.08)'}`, borderRadius: 16, boxShadow: T.esClaro ? '0 8px 24px rgba(20,24,30,.06)' : 'none', overflow: 'hidden' }}>
+      {titulo && (
+        <div style={{ padding: '13px 16px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+            <h3 style={{ fontSize: 12.5, letterSpacing: 0.6, textTransform: 'uppercase', fontWeight: 800, margin: 0, color: T.textoFuerte }}>{titulo}</h3>
+            <span style={{ width: 22, height: 3, borderRadius: 3, background: T.boton }} />
+          </div>
+          {accion && <button onClick={accion.fn} style={{ fontSize: 11.5, color: T.tenue, background: 'transparent', border: 'none', fontWeight: 600, cursor: 'pointer' }}>{accion.txt}</button>}
+        </div>
+      )}
+      {children}
+    </div>
+  )
+
+  const MiniPerfil = () => {
+    if (!miPerfil) return null
+    const p = miPerfil
+    const nombre = `${p.nombre || ''} ${p.apellido || ''}`.trim() || 'Miembro'
+    const iniciales = `${(p.nombre || '?')[0] || ''}${(p.apellido || '')[0] || ''}`.toUpperCase()
+    return (
+      <Tarjeta>
+        <div style={{ padding: 16, textAlign: 'center' }}>
+          <div style={{ width: 58, height: 58, borderRadius: '50%', margin: '0 auto 10px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: p.foto_url ? `url(${p.foto_url}) center/cover` : T.avatar, color: T.avatarTexto, fontWeight: 800, fontSize: 22, boxShadow: `0 0 0 3px ${T.acento}` }}>{!p.foto_url && iniciales}</div>
+          <div style={{ fontSize: 15, fontWeight: 800, textTransform: 'uppercase', color: T.textoFuerte }}>{nombre}</div>
+          <span style={{ display: 'inline-block', marginTop: 6, fontSize: 10.5, letterSpacing: 1, textTransform: 'uppercase', color: T.esClaro ? '#9c6518' : T.acento, background: T.navActivoBg, padding: '3px 10px', borderRadius: 20, fontWeight: 700 }}>Nivel Intermedio</span>
+          <div style={{ display: 'flex', borderTop: `1px solid ${T.esClaro ? '#eceef1' : 'rgba(255,255,255,.07)'}`, marginTop: 14 }}>
+            <div style={{ flex: 1, padding: '11px 6px', textAlign: 'center' }}>
+              <b style={{ fontSize: 16, fontWeight: 800, display: 'block', color: T.textoFuerte }}>#1,284</b>
+              <small style={{ fontSize: 9.5, color: T.tenue, letterSpacing: 0.4, textTransform: 'uppercase' }}>Rank Nacional</small>
+            </div>
+            <div style={{ flex: 1, padding: '11px 6px', textAlign: 'center', borderLeft: `1px solid ${T.esClaro ? '#eceef1' : 'rgba(255,255,255,.07)'}` }}>
+              <b style={{ fontSize: 16, fontWeight: 800, display: 'block', color: T.textoFuerte }}>#212</b>
+              <small style={{ fontSize: 9.5, color: T.tenue, letterSpacing: 0.4, textTransform: 'uppercase' }}>Regional</small>
+            </div>
+          </div>
+        </div>
+      </Tarjeta>
+    )
+  }
+
+  const CATEGORIAS = [
+    { txt: 'Superior', cnt: '128' },
+    { txt: 'Intermedio', cnt: '340' },
+    { txt: 'Aficionado', cnt: '512' },
+    { txt: 'Juvenil (U-17)', cnt: '96' },
+  ]
+  const CategoriasCard = () => (
+    <Tarjeta titulo="Categorías">
+      <div style={{ padding: '6px 8px 10px' }}>
+        {CATEGORIAS.map((c) => (
+          <div key={c.txt} onClick={() => click('rankings')} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '9px 8px', borderRadius: 11, cursor: 'pointer' }}>
+            <div style={{ width: 34, height: 34, borderRadius: 10, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: T.navActivoBg, color: T.acento, fontSize: 15 }}>🏀</div>
+            <div style={{ flex: 1, minWidth: 0 }}><b style={{ fontSize: 13.5, fontWeight: 700, color: T.textoFuerte }}>{c.txt}</b></div>
+            <span style={{ fontSize: 12, color: T.tenue, fontWeight: 700 }}>{c.cnt}</span>
+          </div>
+        ))}
+      </div>
+    </Tarjeta>
+  )
+
+  const MENSAJES = [
+    { ini: 'SR', col: 'linear-gradient(150deg,#3a6ea5,#23415f)', nombre: 'Starling Reyes', txt: "¿Vas pa'l torneo del sábado?" },
+    { ini: 'LJ', col: 'linear-gradient(150deg,#9e3a3a,#5f2323)', nombre: 'Liga de Jícome', txt: 'Confirmado: tu equipo en grupo B' },
+    { ini: 'EM', col: 'linear-gradient(150deg,#3a9e6e,#235f43)', nombre: 'El Mello', txt: 'Buena esa jugada anoche' },
+  ]
+  const MensajesCard = () => (
+    <Tarjeta titulo="Mensajes">
+      <div style={{ padding: '6px 8px 10px' }}>
+        {MENSAJES.map((m) => (
+          <div key={m.ini} onClick={() => click('mensajes')} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '9px 8px', borderRadius: 11, cursor: 'pointer' }}>
+            <div style={{ width: 34, height: 34, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: m.col, color: '#fff', fontWeight: 700, fontSize: 13 }}>{m.ini}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <b style={{ fontSize: 13, fontWeight: 700, color: T.textoFuerte, display: 'block' }}>{m.nombre}</b>
+              <small style={{ fontSize: 11.5, color: T.tenue, display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.txt}</small>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Tarjeta>
+  )
+
+  const BuscadorBar = () => (
+    <div onClick={() => click('buscar')} style={{ display: 'flex', alignItems: 'center', gap: 9, background: T.esClaro ? '#fff' : 'rgba(20,22,26,.72)', border: `1px solid ${T.esClaro ? '#e0e3e8' : 'rgba(255,255,255,.08)'}`, borderRadius: 24, padding: '11px 15px', boxShadow: T.esClaro ? '0 8px 24px rgba(20,24,30,.06)' : 'none', cursor: 'pointer' }}>
+      <span style={{ fontSize: 15, color: T.tenue }}>🔍</span>
+      <span style={{ flex: 1, fontSize: 13.5, color: T.tenue }}>Buscar jugador, torneo o equipo</span>
+    </div>
+  )
+
+  const SOLICITUDES = [
+    { ini: 'EM', col: 'linear-gradient(150deg,#3a9e6e,#235f43)', nombre: 'El Mello Tavárez', meta: 'Alero · Mao' },
+    { ini: 'YP', col: 'linear-gradient(150deg,#8a5cc4,#4f3275)', nombre: 'Yariel Peña', meta: 'Center · Esperanza' },
+  ]
+  const SolicitudesCard = () => (
+    <Tarjeta titulo="Solicitudes">
+      <div style={{ padding: '6px 8px 10px' }}>
+        {SOLICITUDES.map((s) => (
+          <div key={s.ini} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 8px' }}>
+            <div style={{ width: 38, height: 38, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: s.col, color: '#fff', fontWeight: 700, fontSize: 14 }}>{s.ini}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <b style={{ fontSize: 13, fontWeight: 700, color: T.textoFuerte, display: 'block' }}>{s.nombre}</b>
+              <small style={{ fontSize: 11, color: T.tenue }}>{s.meta}</small>
+            </div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button style={{ border: 'none', cursor: 'pointer', borderRadius: 8, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', background: T.boton, color: T.avatarTexto, fontSize: 14, fontWeight: 800 }}>✓</button>
+              <button style={{ cursor: 'pointer', borderRadius: 8, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', background: T.esClaro ? '#f5f6f8' : 'rgba(255,255,255,.06)', color: T.tenue, border: `1px solid ${T.esClaro ? '#e0e3e8' : 'rgba(255,255,255,.1)'}`, fontSize: 13 }}>✕</button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Tarjeta>
+  )
+
+  const TENDENCIAS = [
+    { e: 'TORNEO · CIBAO', t: '#LigaDeJícome', c: '312 publicaciones hoy' },
+    { e: 'MERCADO', t: '#RefuerzoBuscado', c: '48 jugadores disponibles' },
+    { e: 'RANKING', t: '#TopDelCibao', c: 'Starling Reyes sube al #1' },
+  ]
+  const TendenciasCard = () => (
+    <Tarjeta titulo="Tendencias">
+      <div style={{ padding: '6px 8px 10px' }}>
+        {TENDENCIAS.map((t) => (
+          <div key={t.t} onClick={() => click('tendencias')} style={{ padding: '9px 12px', borderRadius: 11, cursor: 'pointer' }}>
+            <div style={{ fontSize: 10, color: T.tenue, letterSpacing: 0.4 }}>{t.e}</div>
+            <div style={{ fontSize: 14.5, fontWeight: 800, color: T.textoFuerte, marginTop: 1 }}>{t.t}</div>
+            <div style={{ fontSize: 11.5, color: T.subTexto, marginTop: 1 }}>{t.c}</div>
+          </div>
+        ))}
+      </div>
+    </Tarjeta>
+  )
+
+  const EnVivoFino = () => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '9px 14px', borderRadius: 12, background: 'linear-gradient(100deg,#16140f,#1e1a12)', border: '1px solid #3a2c18', color: '#fff', overflow: 'hidden' }}>
+      <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#e0532a', flexShrink: 0 }} />
+      <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 1.5, color: '#e0532a' }}>EN VIVO</span>
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#e9e1cf', minWidth: 0 }}>
+        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Tigres</span>
+        <b style={{ fontSize: 16, color: '#fff' }}>41</b>
+        <span style={{ color: '#7d6b49' }}>·</span>
+        <b style={{ fontSize: 16, color: '#fff' }}>38</b>
+        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Leones</span>
+      </div>
+      <span style={{ fontSize: 10, color: T.acento, border: `1px solid ${T.acento}66`, padding: '2px 7px', borderRadius: 6, flexShrink: 0 }}>2do cuarto</span>
+    </div>
+  )
+
+  const Composer = () => {
+    if (!haySesion || !miPerfil) return null
+    const p = miPerfil
+    const iniciales = `${(p.nombre || '?')[0] || ''}${(p.apellido || '')[0] || ''}`.toUpperCase()
+    return (
+      <Tarjeta>
+        <div style={{ padding: '14px 16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
+            <div style={{ width: 40, height: 40, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: p.foto_url ? `url(${p.foto_url}) center/cover` : T.avatar, color: T.avatarTexto, fontWeight: 700, boxShadow: `0 0 0 2px ${T.acento}` }}>{!p.foto_url && iniciales}</div>
+            <div onClick={() => click('juego')} style={{ flex: 1, background: T.esClaro ? '#f5f6f8' : 'rgba(255,255,255,.05)', border: `1px solid ${T.esClaro ? '#e0e3e8' : 'rgba(255,255,255,.08)'}`, borderRadius: 22, padding: '10px 16px', color: T.tenue, fontSize: 14, cursor: 'pointer' }}>¿Qué está pasando en la cancha?</div>
+          </div>
+          <div style={{ display: 'flex', gap: 6, marginTop: 12, paddingTop: 12, borderTop: `1px solid ${T.esClaro ? '#eceef1' : 'rgba(255,255,255,.06)'}` }}>
+            {[['📷', 'Foto'], ['📊', 'Resultado'], ['🗳️', 'Encuesta']].map(([ic, tx]) => (
+              <button key={tx} onClick={() => click('juego')} style={{ flex: 1, border: 'none', background: 'transparent', borderRadius: 10, padding: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, fontSize: 12.5, fontWeight: 700, color: T.subTexto, cursor: 'pointer' }}>
+                <span style={{ fontSize: 15 }}>{ic}</span>{tx}
+              </button>
+            ))}
+          </div>
+        </div>
+      </Tarjeta>
+    )
+  }
+
   // ===== VISTA ESCRITORIO / TABLET =====
   if (esEscritorio) {
     return (
@@ -767,34 +942,47 @@ export default function PantallaPublica({ onAccion, haySesion }) {
             </div>
           </div>
         )}
-        {/* barra de miembro CON menú horizontal (fija arriba) */}
+        {/* carnet con nav dorada (fijo arriba) */}
         {haySesion && miPerfil && (
           <div style={{ position: 'sticky', top: 0, zIndex: 15, padding: '14px 24px 0', background: T.headerBg, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)' }}>
-            <BarraMiembro />
+            <div style={{ maxWidth: 1280, margin: '0 auto' }}><BarraMiembro /></div>
           </div>
         )}
         {/* contenido: SOLO 2 columnas (Techado ancho + paneles) */}
-        <main style={{ flex: 1, position: 'relative', zIndex: 1, display: 'flex', padding: esTablet ? '16px 16px' : '18px 24px', gap: esTablet ? 16 : 22, alignItems: 'flex-start' }}>
-          {/* TECHADO protagonista */}
-          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', height: haySesion ? 'calc(100vh - 150px)' : 'calc(100vh - 90px)', borderRadius: 16, padding: '16px 16px 6px', backgroundImage: `${T.panelWash}, url(${T.texturaImg})`, backgroundSize: 'cover', backgroundPosition: 'center', border: '1px solid rgba(200,132,46,0.2)' }}>
-            {!haySesion && <div style={{ flexShrink: 0 }}><Bienvenida grande /></div>}
-            <div style={{ flexShrink: 0 }}>
-              <div style={{ marginBottom: 12 }}><EnVivo /></div>
-              <div style={{ marginBottom: 4 }}>
-                <SecHead titulo="El Techado" icono="techado" accion={{ txt: 'Ver todo →', fn: () => click('techado') }} />
+        <main style={{ flex: 1, position: 'relative', zIndex: 1, display: 'grid', gridTemplateColumns: esTablet ? '1fr 300px' : '248px 1fr 320px', gap: esTablet ? 16 : 18, alignItems: 'start', padding: esTablet ? '16px 16px 40px' : '18px 24px 50px', maxWidth: 1280, margin: '0 auto', width: '100%' }}>
+          {/* COLUMNA IZQUIERDA (se oculta en tablet) */}
+          {!esTablet && (
+            <aside style={{ display: 'flex', flexDirection: 'column', gap: 16, position: 'sticky', top: haySesion ? 150 : 20, alignSelf: 'start' }}>
+              {haySesion && <MiniPerfil />}
+              <CategoriasCard />
+              {haySesion && <MensajesCard />}
+            </aside>
+          )}
+          {/* COLUMNA CENTRO: EL TECHADO (protagonista) */}
+          <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {!haySesion && <Bienvenida grande />}
+            <EnVivoFino />
+            <Composer />
+            <div>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', padding: '2px 2px 12px' }}>
+                <h2 style={{ fontSize: 20, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5, margin: 0, color: T.textoFuerte }}>El <span style={{ color: T.acento }}>Techado</span></h2>
+                <span style={{ fontSize: 12, color: T.tenue }}>Lo que se mueve en las canchas</span>
               </div>
-            </div>
-            <div style={{ flex: 1, overflowY: 'auto', paddingRight: 4 }}>
               <ListaTechado />
             </div>
           </div>
-          {/* paneles derecha */}
-          <div style={{ width: esTablet ? 290 : 360, flexShrink: 0, position: 'sticky', top: haySesion ? 150 : 20, alignSelf: 'flex-start', borderRadius: 16, padding: esTablet ? '14px 12px' : '16px 14px', backgroundImage: `${T.panelWash}, url(${T.texturaImg})`, backgroundSize: 'cover', backgroundPosition: 'center', border: '1px solid rgba(200,132,46,0.2)', maxHeight: haySesion ? 'calc(100vh - 170px)' : 'calc(100vh - 40px)', overflowY: 'auto' }}>
-            <div style={{ marginBottom: 18 }}><SecHead titulo="Torneos populares" accion={{ txt: 'Ver todos →', fn: () => click('torneos') }} /><ListaTorneos /></div>
-            <SecHead titulo="Ranking nacional" accion={{ txt: 'Ver todo →', fn: () => click('rankings') }} />
-            <ListaRanking n={5} />
-            <button onClick={() => click('rankings')} style={{ width: '100%', marginTop: 10, background: T.navActivoBg, border: `1px solid ${T.navActivoBorde}`, borderRadius: 12, padding: 11, color: T.acento, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Ver ranking completo →</button>
-          </div>
+          {/* COLUMNA DERECHA */}
+          <aside style={{ display: 'flex', flexDirection: 'column', gap: 16, position: 'sticky', top: haySesion ? 150 : 20, alignSelf: 'start' }}>
+            <BuscadorBar />
+            {haySesion && <SolicitudesCard />}
+            <Tarjeta titulo="Torneos populares" accion={{ txt: 'Ver todos →', fn: () => click('torneos') }}>
+              <div style={{ padding: '4px 10px 12px' }}><ListaTorneos /></div>
+            </Tarjeta>
+            <Tarjeta titulo="Ranking nacional" accion={{ txt: 'Ver todo →', fn: () => click('rankings') }}>
+              <div style={{ padding: '4px 10px 12px' }}><ListaRanking n={5} /></div>
+            </Tarjeta>
+            <TendenciasCard />
+          </aside>
         </main>
         {Modales()}
       </div>
