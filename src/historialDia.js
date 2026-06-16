@@ -56,6 +56,8 @@ export function guardarJuegoDelDia(resultado) {
       nombreJuego: resultado.nombreJuego || 'Juego rápido',
       nombreA: resultado.nombreA,
       nombreB: resultado.nombreB,
+      logoA: resultado.logoA || null,
+      logoB: resultado.logoB || null,
       totalA: r.totalA,
       totalB: r.totalB,
       hayEmpate: r.hayEmpate,

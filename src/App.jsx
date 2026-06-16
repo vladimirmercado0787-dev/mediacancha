@@ -10,6 +10,9 @@ import PantallaJuegoJugadores from './componentes/PantallaJuegoJugadores'
 import PantallaJuegoVivo from './componentes/PantallaJuegoVivo'
 import PantallaJuegoResultado from './componentes/PantallaJuegoResultado'
 import PantallaResultados from './componentes/PantallaResultados'
+import PantallaBuscar from './componentes/PantallaBuscar'
+import PantallaPerfilAjeno from './componentes/PantallaPerfilAjeno'
+import PantallaChat from './componentes/PantallaChat'
 import { guardarJuegoDelDia } from './historialDia'
 
 function App() {
@@ -19,6 +22,8 @@ function App() {
   const [configJuego, setConfigJuego] = useState(null)
   const [resultadoJuego, setResultadoJuego] = useState(null)
   const [destinoTrasLogin, setDestinoTrasLogin] = useState('perfil')
+  const [perfilViendo, setPerfilViendo] = useState(null)
+  const [chatCon, setChatCon] = useState(null)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSesion(data.session))
@@ -40,6 +45,34 @@ function App() {
 
   if (vista === 'perfil') {
     return <PantallaPerfil onVolver={() => setVista('publica')} onSalir={() => setVista('publica')} />
+  }
+
+  if (vista === 'buscar') {
+    return (
+      <PantallaBuscar
+        onVolver={() => setVista('publica')}
+        onVerPerfil={(id) => { setPerfilViendo(id); setVista('perfilAjeno') }}
+      />
+    )
+  }
+
+  if (vista === 'chat') {
+    return (
+      <PantallaChat
+        abrirCon={chatCon}
+        onVolver={() => { setChatCon(null); setVista('publica') }}
+      />
+    )
+  }
+
+  if (vista === 'perfilAjeno') {
+    return (
+      <PantallaPerfilAjeno
+        usuarioId={perfilViendo}
+        onVolver={() => setVista('publica')}
+        onMensaje={(id) => { setChatCon(id); setVista('chat') }}
+      />
+    )
   }
 
   if (vista === 'resultados') {
@@ -134,6 +167,16 @@ function App() {
           setVista(sesion ? 'juegoConfig' : 'login')
         } else if (id === 'resultados') {
           setVista('resultados')
+        } else if (id === 'buscar') {
+          setVista(sesion ? 'buscar' : 'login')
+        } else if (id === 'mensajes') {
+          setVista(sesion ? 'chat' : 'login')
+        } else if (id.startsWith && id.startsWith('chatCon:')) {
+          setChatCon(id.slice('chatCon:'.length))
+          setVista(sesion ? 'chat' : 'login')
+        } else if (id.startsWith && id.startsWith('verPerfil:')) {
+          setPerfilViendo(id.slice('verPerfil:'.length))
+          setVista('perfilAjeno')
         } else {
           alert('Módulo "' + id + '" — aquí irá su pantalla (próximamente)')
         }

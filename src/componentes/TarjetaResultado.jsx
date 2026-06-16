@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import LogoEquipo from './LogoEquipo'
 
 // Temas compactos (solo lo que la tarjeta necesita) — coherentes con el resto de la app
 const TEMAS_CARD = {
@@ -75,11 +76,11 @@ export default function TarjetaResultado({ datos, fuente = 'rapido', tiempo, aut
   const jugA = jugadores.filter((x) => x.equipo === 0)
   const jugB = jugadores.filter((x) => x.equipo === 1)
 
-  const escudo = (nombre, gano) => (
+  const escudo = (nombre, gano, logoId) => (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7, textAlign: 'center', flex: 1, minWidth: 0 }}>
-      <div style={{ width: 56, height: 56, borderRadius: 15, display: 'grid', placeItems: 'center', color: '#fff', fontWeight: 800, fontSize: 22, fontFamily: 'ui-monospace, monospace', background: colorEquipo(nombre), position: 'relative', boxShadow: '0 6px 16px rgba(20,24,30,.2)' }}>
-        {gano && <span style={{ position: 'absolute', top: -14, left: '50%', transform: 'translateX(-50%)', fontSize: 16 }}>{F.icono}</span>}
-        {(nombre || '?').slice(0, 1).toUpperCase()}
+      <div style={{ width: 56, height: 56, borderRadius: 15, display: 'grid', placeItems: 'center', color: '#fff', fontWeight: 800, fontSize: 22, fontFamily: 'ui-monospace, monospace', background: logoId ? (T.esClaro ? '#f5f6f8' : 'rgba(255,255,255,.04)') : colorEquipo(nombre), position: 'relative', boxShadow: '0 6px 16px rgba(20,24,30,.2)', overflow: 'hidden' }}>
+        {gano && <span style={{ position: 'absolute', top: -14, left: '50%', transform: 'translateX(-50%)', fontSize: 16, zIndex: 2 }}>{F.icono}</span>}
+        {logoId ? <LogoEquipo id={logoId} size={52} /> : (nombre || '?').slice(0, 1).toUpperCase()}
       </div>
       <div style={{ fontSize: 14, fontWeight: 700, color: gano ? T.acento : T.textoFuerte, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{nombre}</div>
     </div>
@@ -135,7 +136,7 @@ export default function TarjetaResultado({ datos, fuente = 'rapido', tiempo, aut
 
       {/* matchup */}
       <div style={{ display: 'flex', alignItems: 'center', padding: '14px 16px', gap: 8 }}>
-        {escudo(d.nombreA, ganoA)}
+        {escudo(d.nombreA, ganoA, d.logoA)}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 92 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 9, fontWeight: 800, fontSize: 36, fontFamily: 'ui-monospace, monospace', lineHeight: 1 }}>
             <span style={{ color: ganoA ? T.acento : T.textoFuerte }}>{totalA}</span>
@@ -144,7 +145,7 @@ export default function TarjetaResultado({ datos, fuente = 'rapido', tiempo, aut
           </div>
           <div style={{ fontSize: 9.5, letterSpacing: 1.5, textTransform: 'uppercase', color: T.tenue, marginTop: 4 }}>{hayEmpate ? 'Empate' : 'Final'}</div>
         </div>
-        {escudo(d.nombreB, ganoB)}
+        {escudo(d.nombreB, ganoB, d.logoB)}
       </div>
 
       {/* figura del partido */}

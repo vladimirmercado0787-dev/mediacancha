@@ -146,6 +146,7 @@ export default function PantallaResultados({ onVolver, onNuevoJuego, onAccion })
       const { publicarJuego } = await import('../techado')
       const res = await publicarJuego({
         nombreA: j.nombreA, nombreB: j.nombreB,
+        logoA: j.logoA || null, logoB: j.logoB || null,
         jugadores: j.jugadores || [],
         nombreJuego: j.nombreJuego,
         plantilla: 'estilo_tema',

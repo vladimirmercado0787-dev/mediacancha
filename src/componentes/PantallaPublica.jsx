@@ -11,6 +11,9 @@ import { leerHistorialDia, haceCuanto as haceCuantoLocal, publicarEnTechado, qui
 import { leerTechado, misReacciones, reaccionar, leerComentarios, comentar, borrarComentario, haceCuanto, borrarPublicacion, miUsuarioId, miPerfilCompleto } from '../techado'
 import { plantillaPorId, PLANTILLA_DEFAULT, PLANTILLAS, puedeUsar } from '../plantillas'
 import TarjetaResultado from './TarjetaResultado'
+import { supabase } from '../supabaseClient'
+import { alternarSeguir, idsQueSigo } from '../social'
+import { contarNoLeidos } from '../mensajes'
 
 // Tokens de superficie OSCURA (compartidos por los temas dorado y azul).
 const SUP_OSCURA = {
@@ -167,6 +170,7 @@ const NAV_PRINCIPAL = [
   { id: 'inicio', txt: 'Inicio', icono: '⌂' },
   { id: 'perfil', txt: 'Mi Perfil', icono: '◉' },
   { id: 'techado', txt: 'El Techado', icono: 'techado' },
+  { id: 'buscar', txt: 'Buscar', icono: '🔍' },
   { id: 'torneos', txt: 'Torneos', icono: '🏆' },
   { id: 'rankings', txt: 'Rankings', icono: '★' },
   { id: 'mapa', txt: 'Mapa', icono: '🗺️' },
@@ -180,6 +184,7 @@ const NAV = [
   { id: 'inicio', txt: 'Inicio', icono: '⌂' },
   { id: 'perfil', txt: 'Mi Perfil', icono: '◉' },
   { id: 'techado', txt: 'El Techado', icono: 'techado' },
+  { id: 'buscar', txt: 'Buscar personas', icono: '🔍' },
   { id: 'torneos', txt: 'Torneos', icono: '🏆' },
   { id: 'rankings', txt: 'Rankings', icono: '★' },
   { id: 'mapa', txt: 'Mapa del baloncesto', icono: '🗺️' },
@@ -205,6 +210,12 @@ export default function PantallaPublica({ onAccion, haySesion }) {
   const [esTablet, setEsTablet] = useState(typeof window !== 'undefined' ? window.innerWidth >= 768 && window.innerWidth < 1100 : false)
   const [menuAbierto, setMenuAbierto] = useState(false)
   const [masAbierto, setMasAbierto] = useState(false)
+  const [bq, setBq] = useState('')
+  const [bResultados, setBResultados] = useState([])
+  const [bCargando, setBCargando] = useState(false)
+  const [bSiguiendo, setBSiguiendo] = useState([])
+  const [bProcesando, setBProcesando] = useState(null)
+  const [noLeidos, setNoLeidos] = useState(0)
   const [crearAbierto, setCrearAbierto] = useState(false)
   const [likes, setLikes] = useState({})
   const [tema, setTema] = useState(() => {
@@ -368,6 +379,45 @@ export default function PantallaPublica({ onAccion, haySesion }) {
     try { localStorage.setItem('mc_tema', nuevo) } catch (e) {}
   }
 
+  // ===== Buscador inline (en el Techado) =====
+  useEffect(() => {
+    if (bq.trim().length < 2) { setBResultados([]); return }
+    const t = setTimeout(async () => {
+      setBCargando(true)
+      const termino = bq.trim()
+      const { data, error } = await supabase
+        .from('perfiles')
+        .select('id, nombre, apellido, codigo_unico, foto_url, municipio')
+        .or(`nombre.ilike.%${termino}%,apellido.ilike.%${termino}%,codigo_unico.ilike.%${termino}%`)
+        .limit(8)
+      if (!error && data) setBResultados(data.filter((p) => p.id !== miId))
+      setBCargando(false)
+    }, 300)
+    return () => clearTimeout(t)
+  }, [bq, miId])
+
+  useEffect(() => { (async () => { if (haySesion) setBSiguiendo(await idsQueSigo()) })() }, [haySesion])
+
+  // conteo de mensajes no leídos (badge) + realtime
+  useEffect(() => {
+    if (!haySesion || !miId) return
+    const refrescar = async () => setNoLeidos(await contarNoLeidos())
+    refrescar()
+    const canal = supabase
+      .channel('inbox-badge')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'mensajes', filter: `para_id=eq.${miId}` }, refrescar)
+      .subscribe()
+    return () => { supabase.removeChannel(canal) }
+  }, [haySesion, miId])
+
+  const bSeguir = async (persona) => {
+    if (!haySesion) { click('entrar'); return }
+    setBProcesando(persona.id)
+    const r = await alternarSeguir(persona.id)
+    if (!r.error) setBSiguiendo((prev) => r.siguiendo ? [...prev, persona.id] : prev.filter((x) => x !== persona.id))
+    setBProcesando(null)
+  }
+
   const click = (id) => {
     setMenuAbierto(false)
     setMasAbierto(false)
@@ -458,6 +508,11 @@ export default function PantallaPublica({ onAccion, haySesion }) {
           {/* Armar juego (acción estrella) */}
           <button onClick={() => click('juego')} style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'linear-gradient(180deg,#1f1810,#120d07)', border: 'none', color: T.acento, fontSize: 12, fontWeight: 800, padding: '8px 13px', borderRadius: 9, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: 0.4, whiteSpace: 'nowrap', marginLeft: 4 }}>
             ⚡ Armar juego
+          </button>
+          {/* mensajes con badge */}
+          <button onClick={() => click('mensajes')} title="Mensajes" style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: 'none', color: '#3a2a10', fontSize: 15, padding: '8px 9px', borderRadius: 9, cursor: 'pointer' }}>
+            ✉️
+            {noLeidos > 0 && <span style={{ position: 'absolute', top: 1, right: 1, minWidth: 16, height: 16, borderRadius: 8, background: '#e0563f', color: '#fff', fontSize: 9.5, fontWeight: 800, display: 'grid', placeItems: 'center', padding: '0 4px', border: '1.5px solid #c8842e' }}>{noLeidos > 9 ? '9+' : noLeidos}</span>}
           </button>
           {/* tuerca config */}
           <button onClick={() => click('configuracion')} title="Configuración" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: 'none', color: '#3a2a10', fontSize: 15, padding: '8px 9px', borderRadius: 9, cursor: 'pointer' }}>
@@ -935,10 +990,50 @@ export default function PantallaPublica({ onAccion, haySesion }) {
     </Tarjeta>
   )
 
+  const avatarMini = (p) => {
+    const nom = `${p.nombre || ''}${p.apellido ? ' ' + p.apellido : ''}`.trim() || '?'
+    return p.foto_url ? `url(${p.foto_url}) center/cover` : null
+  }
+
   const BuscadorBar = () => (
-    <div onClick={() => click('buscar')} style={{ display: 'flex', alignItems: 'center', gap: 9, background: T.esClaro ? '#fff' : 'rgba(20,22,26,.72)', border: `1px solid ${T.esClaro ? '#e0e3e8' : 'rgba(255,255,255,.08)'}`, borderRadius: 24, padding: '11px 15px', boxShadow: T.esClaro ? '0 8px 24px rgba(20,24,30,.06)' : 'none', cursor: 'pointer' }}>
-      <span style={{ fontSize: 15, color: T.tenue }}>🔍</span>
-      <span style={{ flex: 1, fontSize: 13.5, color: T.tenue }}>Buscar jugador, torneo o equipo</span>
+    <div style={{ position: 'relative', zIndex: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 9, background: T.esClaro ? '#fff' : 'rgba(20,22,26,.72)', border: `1px solid ${bq ? T.acento + '88' : (T.esClaro ? '#e0e3e8' : 'rgba(255,255,255,.08)')}`, borderRadius: 24, padding: '11px 15px', boxShadow: T.esClaro ? '0 8px 24px rgba(20,24,30,.06)' : 'none' }}>
+        <span style={{ fontSize: 15, color: T.tenue }}>🔍</span>
+        <input
+          type="text"
+          value={bq}
+          onChange={(e) => setBq(e.target.value)}
+          placeholder="Buscar jugador o equipo"
+          autoComplete="off"
+          style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', background: 'transparent', color: T.textoFuerte, fontSize: 16 }}
+        />
+        {bq && <span onClick={() => setBq('')} style={{ fontSize: 16, color: T.tenue, cursor: 'pointer', padding: '0 2px' }}>×</span>}
+      </div>
+
+      {/* sugerencias inline */}
+      {bq.trim().length >= 2 && (
+        <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, background: T.esClaro ? '#fff' : '#14161a', border: `1px solid ${T.esClaro ? '#e0e3e8' : 'rgba(255,255,255,.1)'}`, borderRadius: 16, boxShadow: '0 12px 32px rgba(0,0,0,.35)', overflow: 'hidden', maxHeight: 340, overflowY: 'auto' }}>
+          {bCargando ? (
+            <div style={{ padding: '16px', textAlign: 'center', fontSize: 13, color: T.tenue }}>Buscando…</div>
+          ) : bResultados.length === 0 ? (
+            <div style={{ padding: '16px', textAlign: 'center', fontSize: 13, color: T.tenue }}>No se encontró a nadie con "{bq.trim()}".</div>
+          ) : bResultados.map((p) => {
+            const nom = `${p.nombre || ''}${p.apellido ? ' ' + p.apellido : ''}`.trim() || 'Jugador'
+            const sigo = bSiguiendo.includes(p.id)
+            const fondoAv = avatarMini(p)
+            return (
+              <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '10px 13px', borderBottom: `1px solid ${T.esClaro ? '#f0f1f3' : 'rgba(255,255,255,.05)'}` }}>
+                <div onClick={() => { setBq(''); onAccion && onAccion('verPerfil:' + p.id) }} style={{ width: 40, height: 40, borderRadius: '50%', flexShrink: 0, background: fondoAv || T.avatar, display: 'grid', placeItems: 'center', fontSize: 15, fontWeight: 800, color: T.avatarTexto, cursor: 'pointer' }}>{!fondoAv && nom.slice(0, 1).toUpperCase()}</div>
+                <div onClick={() => { setBq(''); onAccion && onAccion('verPerfil:' + p.id) }} style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: T.textoFuerte, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nom}</div>
+                  <div style={{ fontSize: 11.5, color: T.tenue, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.municipio ? p.municipio : 'Jugador'}</div>
+                </div>
+                <button onClick={() => bSeguir(p)} disabled={bProcesando === p.id} style={{ flexShrink: 0, border: sigo ? `1px solid ${T.esClaro ? '#e0e3e8' : 'rgba(255,255,255,.16)'}` : 'none', borderRadius: 18, padding: '7px 14px', fontSize: 12, fontWeight: 800, cursor: 'pointer', background: sigo ? 'transparent' : T.boton, color: sigo ? T.tenue : '#1a1205', opacity: bProcesando === p.id ? 0.6 : 1 }}>{sigo ? 'Siguiendo' : '+ Seguir'}</button>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 
@@ -1073,7 +1168,7 @@ export default function PantallaPublica({ onAccion, haySesion }) {
           </div>
           {/* COLUMNA DERECHA */}
           <aside style={{ display: 'flex', flexDirection: 'column', gap: 16, position: 'sticky', top: haySesion ? 150 : 20, alignSelf: 'start' }}>
-            <BuscadorBar />
+            {BuscadorBar()}
             {haySesion && <SolicitudesCard />}
             <Tarjeta titulo="Torneos populares" accion={{ txt: 'Ver todos →', fn: () => click('torneos') }}>
               <div style={{ padding: '4px 10px 12px' }}><ListaTorneos /></div>

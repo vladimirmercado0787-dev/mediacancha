@@ -87,6 +87,7 @@ export async function publicarJuego(resultado) {
     texto: textoFinal,
     datos: {
       nombreA: resultado.nombreA, nombreB: resultado.nombreB,
+      logoA: resultado.logoA || null, logoB: resultado.logoB || null,
       totalA, totalB, hayEmpate,
       jugadores: jugadoresGuardar,
       narracion,

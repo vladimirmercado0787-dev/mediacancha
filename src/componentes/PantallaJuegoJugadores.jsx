@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import fondoJuego from '../assets/fondo-juego.png'
+import LogoEquipo from './LogoEquipo'
+import { LOGOS_EQUIPO, CATEGORIAS_LOGO } from '../logosEquipos'
 
 const SUP_OSCURA = {
   esClaro: false, fondo: '#08090c', textoFuerte: '#f4f7f9', textoBody: '#eef3f6', tenue: '#9aa7b2',
@@ -76,6 +78,10 @@ export default function PantallaJuegoJugadores({ config, onListo, onVolver }) {
 
   const [nombreA, setNombreA] = useState(initNombre(0, 'Equipo A'))
   const [nombreB, setNombreB] = useState(initNombre(1, 'Equipo B'))
+  const [logoA, setLogoA] = useState(config?.logoEquipoFijo && equipoFijo === 0 ? config.logoEquipoFijo : null)
+  const [logoB, setLogoB] = useState(config?.logoEquipoFijo && equipoFijo === 1 ? config.logoEquipoFijo : null)
+  const [eligiendoLogo, setEligiendoLogo] = useState(null) // 0 | 1 | null
+  const [catLogo, setCatLogo] = useState(CATEGORIAS_LOGO[0])
   const [jugA, setJugA] = useState(initJug(0))
   const [jugB, setJugB] = useState(initJug(1))
   const [error, setError] = useState('')
@@ -103,8 +109,8 @@ export default function PantallaJuegoJugadores({ config, onListo, onVolver }) {
       etiqueta: j.nombre.trim() || ('#' + j.numero.trim()),
       pts: 0, reb: 0, ast: 0, rob: 0,
     }))
-    const { equipoFijo: _ef, nombreEquipoFijo: _nef, jugadoresFijos: _jf, ...configLimpia } = config || {}
-    onListo && onListo({ ...configLimpia, nombreA: nombreA.trim() || 'Equipo A', nombreB: nombreB.trim() || 'Equipo B', jugadores })
+    const { equipoFijo: _ef, nombreEquipoFijo: _nef, jugadoresFijos: _jf, logoEquipoFijo: _lf, ...configLimpia } = config || {}
+    onListo && onListo({ ...configLimpia, nombreA: nombreA.trim() || 'Equipo A', nombreB: nombreB.trim() || 'Equipo B', logoA, logoB, jugadores })
   }
 
   const inputBase = {
@@ -112,17 +118,24 @@ export default function PantallaJuegoJugadores({ config, onListo, onVolver }) {
     borderRadius: 10, padding: '11px 12px', color: T.textoFuerte, fontSize: 15, outline: 'none', fontFamily: C.font, boxSizing: 'border-box',
   }
 
-  const bloqueEquipo = (equipo, nombreEq, setNombreEq, lista, esFijo) => (
+  const bloqueEquipo = (equipo, nombreEq, setNombreEq, lista, esFijo) => {
+    const logoActual = equipo === 0 ? logoA : logoB
+    return (
     <div style={{ position: 'relative', borderRadius: 18, padding: 1.5, background: T.borde, marginBottom: 14, opacity: esFijo ? 0.82 : 1 }}>
       <div style={{ borderRadius: 17, padding: 16, background: T.vidrio, backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}>
         {esFijo && <div style={{ fontSize: 10, fontWeight: 800, color: T.acento, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>🏆 Ganador · se queda</div>}
-        <div style={{ fontSize: 10.5, fontWeight: 700, color: C.tenue, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 5 }}>✏️ Nombre del equipo (tócalo para cambiarlo)</div>
-        <input
-          value={nombreEq}
-          onChange={(e) => setNombreEq(e.target.value)}
-          placeholder={equipo === 0 ? 'Equipo A' : 'Equipo B'}
-          style={{ ...inputBase, width: '100%', fontWeight: 800, fontSize: 17, marginBottom: 14, color: equipo === 0 ? T.textoFuerte : T.acento, background: T.inputWash, border: `1px solid ${T.acento}55`, borderRadius: 10, padding: '11px 12px' }}
-        />
+        <div style={{ fontSize: 10.5, fontWeight: 700, color: C.tenue, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 5 }}>✏️ Nombre y escudo del equipo</div>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 14 }}>
+          <button onClick={() => { setEligiendoLogo(equipo); setCatLogo(CATEGORIAS_LOGO[0]) }} title="Escoger escudo" style={{ flexShrink: 0, width: 52, height: 52, borderRadius: 13, border: `1px solid ${T.acento}55`, background: T.inputWash, display: 'grid', placeItems: 'center', cursor: 'pointer', padding: 0, overflow: 'hidden' }}>
+            {logoActual ? <LogoEquipo id={logoActual} size={48} /> : <span style={{ fontSize: 20, color: C.tenue }}>＋</span>}
+          </button>
+          <input
+            value={nombreEq}
+            onChange={(e) => setNombreEq(e.target.value)}
+            placeholder={equipo === 0 ? 'Equipo A' : 'Equipo B'}
+            style={{ ...inputBase, flex: 1, minWidth: 0, fontWeight: 800, fontSize: 17, color: equipo === 0 ? T.textoFuerte : T.acento, background: T.inputWash, border: `1px solid ${T.acento}55`, borderRadius: 10, padding: '11px 12px' }}
+          />
+        </div>
         {lista.map((j, idx) => (
           <div key={idx} style={{ display: 'flex', gap: 8, marginBottom: 9, alignItems: 'center' }}>
             <span style={{ fontSize: 12, color: C.tenue, width: 18, flexShrink: 0 }}>{idx + 1}.</span>
@@ -143,7 +156,8 @@ export default function PantallaJuegoJugadores({ config, onListo, onVolver }) {
         ))}
       </div>
     </div>
-  )
+    )
+  }
 
   return (
     <div style={{ minHeight: '100vh', position: 'relative', fontFamily: C.font, background: T.fondo, color: C.texto }}>
@@ -178,6 +192,38 @@ export default function PantallaJuegoJugadores({ config, onListo, onVolver }) {
           Empezar el juego →
         </button>
       </div>
+
+      {/* Selector de logo/escudo */}
+      {eligiendoLogo !== null && (
+        <div onClick={() => setEligiendoLogo(null)} style={{ position: 'fixed', inset: 0, zIndex: 80, background: T.esClaro ? 'rgba(30,26,18,0.5)' : 'rgba(4,5,7,0.84)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 560, maxHeight: '86vh', display: 'flex', flexDirection: 'column', borderRadius: '20px 20px 0 0', padding: 1.5, background: T.borde }}>
+            <div style={{ borderRadius: '19px 19px 0 0', background: T.esClaro ? '#f3eee3' : 'linear-gradient(180deg, #14161a, #0c0e12)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '15px 16px 10px' }}>
+                <span style={{ fontSize: 17, fontWeight: 800, color: T.textoFuerte }}>Escudo de {eligiendoLogo === 0 ? (nombreA || 'Equipo A') : (nombreB || 'Equipo B')}</span>
+                <span onClick={() => setEligiendoLogo(null)} style={{ fontSize: 24, color: C.tenue, cursor: 'pointer', lineHeight: 1 }}>×</span>
+              </div>
+              {/* pestañas de categoría */}
+              <div style={{ display: 'flex', gap: 7, padding: '0 16px 12px', overflowX: 'auto' }}>
+                <button onClick={() => { const eq = eligiendoLogo; eq === 0 ? setLogoA(null) : setLogoB(null) }} style={{ flexShrink: 0, padding: '7px 13px', borderRadius: 18, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: `1px solid ${T.inputBorde}`, background: 'transparent', color: C.tenue }}>Sin escudo</button>
+                {CATEGORIAS_LOGO.map((cat) => (
+                  <button key={cat} onClick={() => setCatLogo(cat)} style={{ flexShrink: 0, padding: '7px 14px', borderRadius: 18, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', border: `1px solid ${catLogo === cat ? T.acento : T.inputBorde}`, background: catLogo === cat ? T.acento : 'transparent', color: catLogo === cat ? '#1a1205' : C.tenue }}>{cat}</button>
+                ))}
+              </div>
+              {/* grid de logos */}
+              <div style={{ overflowY: 'auto', padding: '4px 16px 24px', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+                {LOGOS_EQUIPO.filter((l) => l.cat === catLogo).map((l) => {
+                  const sel = (eligiendoLogo === 0 ? logoA : logoB) === l.id
+                  return (
+                    <button key={l.id} onClick={() => { eligiendoLogo === 0 ? setLogoA(l.id) : setLogoB(l.id); setEligiendoLogo(null) }} style={{ aspectRatio: '1', borderRadius: 14, border: `2px solid ${sel ? T.acento : T.inputBorde}`, background: T.inputWash, display: 'grid', placeItems: 'center', cursor: 'pointer', padding: 8 }}>
+                      <LogoEquipo id={l.id} size={56} />
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
