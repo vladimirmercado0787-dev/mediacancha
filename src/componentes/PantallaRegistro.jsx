@@ -2,14 +2,26 @@ import { useState } from 'react'
 import { supabase } from '../supabaseClient'
 import fondoCancha from '../assets/fondo-cancha.png'
 import { MUNICIPIOS_RD } from '../data/municipiosRD'
+import { ESTADOS_USA } from '../data/estadosUSA'
 
-const PROVINCIAS = Object.keys(MUNICIPIOS_RD)
-  .map((k) => ({ llave: k, nombre: MUNICIPIOS_RD[k].provincia }))
-  .sort((a, b) => a.nombre.localeCompare(b.nombre))
+// Catálogo de divisiones por país (RD = provincias/municipios, USA = estados/ciudades)
+const PAISES = {
+  rd: { nombre: 'República Dominicana', datos: MUNICIPIOS_RD, etiquetaRegion: 'Provincia', etiquetaCiudad: 'Municipio' },
+  usa: { nombre: 'Estados Unidos', datos: ESTADOS_USA, etiquetaRegion: 'Estado', etiquetaCiudad: 'Ciudad' },
+}
 
-function municipiosDe(llaveProvincia) {
-  if (!llaveProvincia || !MUNICIPIOS_RD[llaveProvincia]) return []
-  return MUNICIPIOS_RD[llaveProvincia].municipios
+function regionesDe(paisLlave) {
+  const pais = PAISES[paisLlave]
+  if (!pais) return []
+  return Object.keys(pais.datos)
+    .map((k) => ({ llave: k, nombre: pais.datos[k].provincia }))
+    .sort((a, b) => a.nombre.localeCompare(b.nombre))
+}
+
+function ciudadesDe(paisLlave, llaveRegion) {
+  const pais = PAISES[paisLlave]
+  if (!pais || !llaveRegion || !pais.datos[llaveRegion]) return []
+  return pais.datos[llaveRegion].municipios
     .map((m) => m.nombre)
     .sort((a, b) => a.localeCompare(b))
 }
@@ -99,7 +111,7 @@ export default function PantallaRegistro({ onListo, onIrLogin, onVolver }) {
   }
 
   const [modo, setModo] = useState(null)
-  const [f, setF] = useState({ nombre: '', apellido: '', correo: '', clave: '', clave2: '', sexo: '', fechaNac: '', provincia: '', municipio: '', pies: '', pulgadas: '', posiciones: [] })
+  const [f, setF] = useState({ nombre: '', apellido: '', correo: '', clave: '', clave2: '', sexo: '', fechaNac: '', pais: 'rd', provincia: '', municipio: '', pies: '', pulgadas: '', posiciones: [] })
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState('')
   const [ok, setOk] = useState(false)
@@ -108,9 +120,12 @@ export default function PantallaRegistro({ onListo, onIrLogin, onVolver }) {
   const set = (k, v) => setF((p) => {
     const next = { ...p, [k]: v }
     if (k === 'provincia') next.municipio = ''
+    if (k === 'pais') { next.provincia = ''; next.municipio = '' }
     return next
   })
-  const muniLista = municipiosDe(f.provincia)
+  const regionLista = regionesDe(f.pais)
+  const muniLista = ciudadesDe(f.pais, f.provincia)
+  const paisActual = PAISES[f.pais] || PAISES.rd
 
   const togglePosicion = (v) => setF((p) => {
     const ya = p.posiciones.includes(v)
@@ -127,7 +142,7 @@ export default function PantallaRegistro({ onListo, onIrLogin, onVolver }) {
     if (f.clave !== f.clave2) return setError('Las dos contraseñas no son iguales. Revísalas.')
     if (!f.sexo) return setError('Selecciona tu sexo.')
     if (!f.fechaNac) return setError('Pon tu fecha de nacimiento.')
-    if (!f.provincia) return setError('Selecciona tu provincia.')
+    if (!f.provincia) return setError(`Selecciona tu ${paisActual.etiquetaRegion.toLowerCase()}.`)
     setCargando(true)
     try {
       const { data, error: errAuth } = await supabase.auth.signUp({ email: f.correo.trim(), password: f.clave })
@@ -135,10 +150,10 @@ export default function PantallaRegistro({ onListo, onIrLogin, onVolver }) {
       const userId = data.user?.id
       if (!userId) throw new Error('No se pudo crear la cuenta. Revisa el correo.')
 
-      const nombreProvincia = MUNICIPIOS_RD[f.provincia]?.provincia || f.provincia
+      const nombreProvincia = paisActual.datos[f.provincia]?.provincia || f.provincia
       const perfil = {
         id: userId, nombre: f.nombre.trim(), apellido: f.apellido.trim() || null,
-        pais: 'República Dominicana', modo,
+        pais: paisActual.nombre, modo,
         sexo: f.sexo, fecha_nacimiento: f.fechaNac,
         provincia: nombreProvincia, municipio: f.municipio || null,
         estatura_pies: modo === 'jugador' && f.pies ? parseInt(f.pies) : null,
@@ -288,18 +303,26 @@ export default function PantallaRegistro({ onListo, onIrLogin, onVolver }) {
             </div>
           </div>
 
+          <div style={{ marginBottom: 12 }}>
+            <label style={label}>País *</label>
+            <select style={inputStyle} value={f.pais} onChange={(e) => set('pais', e.target.value)}>
+              <option value="rd" style={{ background: T.optionBg }}>🇩🇴 República Dominicana</option>
+              <option value="usa" style={{ background: T.optionBg }}>🇺🇸 Estados Unidos</option>
+            </select>
+          </div>
+
           <div style={{ display: 'flex', gap: 10, marginBottom: modo === 'jugador' ? 18 : 6 }}>
             <div style={{ flex: 1 }}>
-              <label style={label}>Provincia *</label>
+              <label style={label}>{paisActual.etiquetaRegion} *</label>
               <select style={inputStyle} value={f.provincia} onChange={(e) => set('provincia', e.target.value)}>
                 <option value="" style={{ background: T.optionBg }}>Selecciona...</option>
-                {PROVINCIAS.map((p) => <option key={p.llave} value={p.llave} style={{ background: T.optionBg }}>{p.nombre}</option>)}
+                {regionLista.map((p) => <option key={p.llave} value={p.llave} style={{ background: T.optionBg }}>{p.nombre}</option>)}
               </select>
             </div>
             <div style={{ flex: 1 }}>
-              <label style={label}>Municipio</label>
+              <label style={label}>{paisActual.etiquetaCiudad}</label>
               <select style={inputStyle} value={f.municipio} onChange={(e) => set('municipio', e.target.value)} disabled={!f.provincia}>
-                <option value="" style={{ background: T.optionBg }}>{f.provincia ? 'Selecciona...' : 'Elige provincia'}</option>
+                <option value="" style={{ background: T.optionBg }}>{f.provincia ? 'Selecciona...' : `Elige ${paisActual.etiquetaRegion.toLowerCase()}`}</option>
                 {muniLista.map((m) => <option key={m} value={m} style={{ background: T.optionBg }}>{m}</option>)}
               </select>
             </div>
