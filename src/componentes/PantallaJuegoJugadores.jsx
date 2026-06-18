@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import fondoJuego from '../assets/fondo-juego.png'
 import LogoEquipo from './LogoEquipo'
 import { LOGOS_EQUIPO, CATEGORIAS_LOGO } from '../logosEquipos'
+import { supabase } from '../supabaseClient'
+import { idsQueSigo } from '../social'
 
 const SUP_OSCURA = {
   esClaro: false, fondo: '#08090c', textoFuerte: '#f4f7f9', textoBody: '#eef3f6', tenue: '#9aa7b2',
@@ -61,11 +63,13 @@ export default function PantallaJuegoJugadores({ config, onListo, onVolver }) {
     try { localStorage.setItem('mc_tema', nuevo) } catch (e) {}
   }
 
-  const n = config?.jugadoresPorLado || 5
-  const vacios = (eq) => Array.from({ length: n }, (_, i) => ({ nombre: '', numero: '', equipo: eq }))
+  const n = config?.tipo === 'fogueo'
+    ? ((config?.rosterEquipo || config?.jugadoresPorLado || 5) + (config?.reservas || 0))
+    : (config?.jugadoresPorLado || 5)
+  const vacios = (eq) => Array.from({ length: n }, (_, i) => ({ nombre: '', numero: '', equipo: eq, perfilId: null, foto: null, ini: null }))
 
   const equipoFijo = config?.equipoFijo
-  const fijosComoInputs = (config?.jugadoresFijos || []).map((j) => ({ nombre: j.nombre || '', numero: j.numero || '', equipo: j.equipo }))
+  const fijosComoInputs = (config?.jugadoresFijos || []).map((j) => ({ nombre: j.nombre || '', numero: j.numero || '', equipo: j.equipo, perfilId: j.perfilId || null, foto: j.foto || null, ini: null }))
 
   const initNombre = (eq, def) => {
     if (equipoFijo === eq) return config?.nombreEquipoFijo || def
@@ -86,6 +90,81 @@ export default function PantallaJuegoJugadores({ config, onListo, onVolver }) {
   const [jugB, setJugB] = useState(initJug(1))
   const [error, setError] = useState('')
 
+  // ===== Agregar jugadores desde "los que sigo" =====
+  const [buscandoPara, setBuscandoPara] = useState(null) // {equipo, idx} | null
+  const [siguiendo, setSiguiendo] = useState([])
+  const [bq, setBq] = useState('')
+  const [bResultados, setBResultados] = useState([])
+  const [bCargando, setBCargando] = useState(false)
+  const [dupAviso, setDupAviso] = useState('')
+
+  // mínimo en cancha = formato (5 para 5v5). Puede haber más (banca) y equipos disparejos.
+  const minimo = config?.jugadoresPorLado || 5
+  const [eligiendoQuinteto, setEligiendoQuinteto] = useState(false)
+  const [titA, setTitA] = useState([]) // índices de jugA titulares
+  const [titB, setTitB] = useState([])
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const ids = await idsQueSigo()
+        if (ids && ids.length) {
+          const { data } = await supabase.from('perfiles').select('id, nombre, apellido, codigo_unico, foto_url, municipio').in('id', ids)
+          setSiguiendo(data || [])
+        }
+      } catch (e) {}
+    })()
+  }, [])
+
+  useEffect(() => {
+    if (bq.trim().length < 2) { setBResultados([]); return }
+    const t = setTimeout(async () => {
+      setBCargando(true)
+      const termino = bq.trim()
+      const { data } = await supabase.from('perfiles')
+        .select('id, nombre, apellido, codigo_unico, foto_url, municipio')
+        .or(`nombre.ilike.%${termino}%,apellido.ilike.%${termino}%,codigo_unico.ilike.%${termino}%`)
+        .limit(10)
+      setBResultados(data || [])
+      setBCargando(false)
+    }, 300)
+    return () => clearTimeout(t)
+  }, [bq])
+
+  const inicialesDe = (nom, ape) => `${(nom || '?')[0] || ''}${(ape || '')[0] || ''}`.toUpperCase()
+  const colorAvatar = (semilla) => {
+    const paleta = ['linear-gradient(150deg,#3a6ea5,#23415f)', 'linear-gradient(150deg,#9e3a3a,#5f2323)', 'linear-gradient(150deg,#3a9e6e,#235f43)', 'linear-gradient(150deg,#8a5cc4,#4f3275)', 'linear-gradient(150deg,#c4823a,#754d1f)', 'linear-gradient(150deg,#3a8a9e,#23545f)']
+    let h = 0; const s = String(semilla || 'x')
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % paleta.length
+    return paleta[Math.abs(h)]
+  }
+  // ¿este perfil ya está en otra casilla del juego? (excluye la casilla que se edita)
+  const idUsado = (perfilId) => {
+    if (!perfilId) return false
+    const enLista = (lista, eq) => lista.some((j, i) => j.perfilId === perfilId && !(buscandoPara && buscandoPara.equipo === eq && buscandoPara.idx === i))
+    return enLista(jugA, 0) || enLista(jugB, 1)
+  }
+
+  const asignarPerfil = (persona) => {
+    if (!buscandoPara) return
+    if (idUsado(persona.id)) {
+      setDupAviso(`${(persona.nombre || 'Ese jugador').split(' ')[0]} ya está en este juego.`)
+      setTimeout(() => setDupAviso(''), 2600)
+      return
+    }
+    const { equipo, idx } = buscandoPara
+    const setter = equipo === 0 ? setJugA : setJugB
+    const lista = equipo === 0 ? jugA : jugB
+    const nombreP = `${persona.nombre || ''} ${persona.apellido || ''}`.trim()
+    setter(lista.map((j, i) => i === idx ? { ...j, nombre: nombreP, perfilId: persona.id, foto: persona.foto_url || null, ini: inicialesDe(persona.nombre, persona.apellido) } : j))
+    setBuscandoPara(null); setBq(''); setBResultados([])
+  }
+  const quitarPerfil = (equipo, idx) => {
+    const setter = equipo === 0 ? setJugA : setJugB
+    const lista = equipo === 0 ? jugA : jugB
+    setter(lista.map((j, i) => i === idx ? { ...j, perfilId: null, foto: null, ini: null } : j))
+  }
+
   const setJ = (equipo, idx, campo, valor) => {
     const setter = equipo === 0 ? setJugA : setJugB
     const lista = equipo === 0 ? jugA : jugB
@@ -93,24 +172,55 @@ export default function PantallaJuegoJugadores({ config, onListo, onVolver }) {
     setter(copia)
   }
 
+  // casillas con algo escrito (nombre o número), con su índice original
+  const llenosCon = (lista) => lista.map((j, idx) => ({ j, idx })).filter(({ j }) => j.nombre.trim() || j.numero.trim())
+
   const empezar = () => {
     setError('')
-    const todos = [...jugA, ...jugB]
-    const incompleto = todos.find((j) => !j.nombre.trim() && !j.numero.trim())
-    if (incompleto) {
-      setError('Cada jugador necesita al menos un nombre o un número.')
+    const lA = llenosCon(jugA), lB = llenosCon(jugB)
+    if (lA.length < minimo || lB.length < minimo) {
+      setError(`Cada equipo necesita al menos ${minimo} jugadores en cancha.`)
       return
     }
-    const jugadores = todos.map((j, i) => ({
-      id: 'j' + i,
+    // si algún equipo tiene banca (más del mínimo), hay que elegir quinteto abridor
+    const hayBanca = lA.length > minimo || lB.length > minimo
+    if (hayBanca) {
+      setTitA(lA.slice(0, minimo).map((x) => x.idx))
+      setTitB(lB.slice(0, minimo).map((x) => x.idx))
+      setEligiendoQuinteto(true)
+      return
+    }
+    finalizar(lA.map((x) => x.idx), lB.map((x) => x.idx))
+  }
+
+  const toggleTit = (equipo, idx) => {
+    const sel = equipo === 0 ? titA : titB
+    const setSel = equipo === 0 ? setTitA : setTitB
+    if (sel.includes(idx)) { setSel(sel.filter((i) => i !== idx)); return }
+    if (sel.length >= minimo) return // ya hay cinco
+    setSel([...sel, idx])
+  }
+
+  const finalizar = (titIdxA, titIdxB) => {
+    const construir = (lista, eq, titIdx) => llenosCon(lista).map(({ j, idx }, k) => ({
+      id: 'j' + eq + '_' + k,
       nombre: j.nombre.trim(),
       numero: j.numero.trim(),
-      equipo: j.equipo,
+      equipo: eq,
+      perfilId: j.perfilId || null,
+      foto: j.foto || null,
       etiqueta: j.nombre.trim() || ('#' + j.numero.trim()),
+      enCancha: titIdx.includes(idx),
       pts: 0, reb: 0, ast: 0, rob: 0,
     }))
+    const jugadores = [...construir(jugA, 0, titIdxA), ...construir(jugB, 1, titIdxB)]
     const { equipoFijo: _ef, nombreEquipoFijo: _nef, jugadoresFijos: _jf, logoEquipoFijo: _lf, ...configLimpia } = config || {}
     onListo && onListo({ ...configLimpia, nombreA: nombreA.trim() || 'Equipo A', nombreB: nombreB.trim() || 'Equipo B', logoA, logoB, jugadores })
+  }
+
+  const confirmarQuinteto = () => {
+    if (titA.length !== minimo || titB.length !== minimo) return
+    finalizar(titA, titB)
   }
 
   const inputBase = {
@@ -138,7 +248,15 @@ export default function PantallaJuegoJugadores({ config, onListo, onVolver }) {
         </div>
         {lista.map((j, idx) => (
           <div key={idx} style={{ display: 'flex', gap: 8, marginBottom: 9, alignItems: 'center' }}>
-            <span style={{ fontSize: 12, color: C.tenue, width: 18, flexShrink: 0 }}>{idx + 1}.</span>
+            <span style={{ fontSize: 12, color: C.tenue, width: 16, flexShrink: 0 }}>{idx + 1}.</span>
+            {j.perfilId ? (
+              <button onClick={() => quitarPerfil(equipo, idx)} title="Quitar enlace" style={{ position: 'relative', width: 38, height: 38, borderRadius: '50%', flexShrink: 0, border: `2px solid ${T.acento}`, background: j.foto ? `url(${j.foto}) center/cover` : colorAvatar(j.nombre), display: 'grid', placeItems: 'center', color: '#fff', fontSize: 12.5, fontWeight: 800, cursor: 'pointer', padding: 0 }}>
+                {!j.foto && (j.ini || inicialesDe(j.nombre))}
+                <span style={{ position: 'absolute', top: -4, right: -4, width: 16, height: 16, borderRadius: '50%', background: '#e0563f', color: '#fff', fontSize: 11, lineHeight: 1, display: 'grid', placeItems: 'center', border: `1.5px solid ${T.fondo}` }}>×</span>
+              </button>
+            ) : (
+              <button onClick={() => { setBuscandoPara({ equipo, idx }); setBq('') }} title="Agregar de los que sigues" style={{ width: 38, height: 38, borderRadius: '50%', flexShrink: 0, border: `1px dashed ${T.acento}77`, background: T.inputWash, color: T.acento, fontSize: 20, fontWeight: 800, cursor: 'pointer', display: 'grid', placeItems: 'center', padding: 0, lineHeight: 1 }}>＋</button>
+            )}
             <input
               value={j.nombre}
               onChange={(e) => setJ(equipo, idx, 'nombre', e.target.value)}
@@ -150,7 +268,7 @@ export default function PantallaJuegoJugadores({ config, onListo, onVolver }) {
               onChange={(e) => setJ(equipo, idx, 'numero', e.target.value.replace(/\D/g, '').slice(0, 2))}
               placeholder="#"
               inputMode="numeric"
-              style={{ ...inputBase, width: 56, flexShrink: 0, textAlign: 'center' }}
+              style={{ ...inputBase, width: 52, flexShrink: 0, textAlign: 'center' }}
             />
           </div>
         ))}
@@ -165,7 +283,6 @@ export default function PantallaJuegoJugadores({ config, onListo, onVolver }) {
       <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: T.veloGrad }} />
       <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: `radial-gradient(ellipse 60% 40% at 50% 15%, ${T.glow}, transparent 70%)` }} />
 
-      {/* selector de tema flotante */}
       <button onClick={cambiarTema} title={`Tema: ${T.nombre}`} style={{ position: 'fixed', top: 16, right: 16, zIndex: 5, display: 'flex', alignItems: 'center', gap: 7, background: T.esClaro ? 'rgba(255,255,255,.6)' : 'rgba(20,18,16,.7)', border: `1px solid ${T.acento}55`, color: T.acento, fontSize: 11.5, fontWeight: 700, padding: '7px 11px', borderRadius: 10, cursor: 'pointer', backdropFilter: 'blur(8px)' }}>
         <span style={{ width: 12, height: 12, borderRadius: '50%', background: T.boton, display: 'inline-block' }} />{T.nombre}
       </button>
@@ -202,14 +319,12 @@ export default function PantallaJuegoJugadores({ config, onListo, onVolver }) {
                 <span style={{ fontSize: 17, fontWeight: 800, color: T.textoFuerte }}>Escudo de {eligiendoLogo === 0 ? (nombreA || 'Equipo A') : (nombreB || 'Equipo B')}</span>
                 <span onClick={() => setEligiendoLogo(null)} style={{ fontSize: 24, color: C.tenue, cursor: 'pointer', lineHeight: 1 }}>×</span>
               </div>
-              {/* pestañas de categoría */}
               <div style={{ display: 'flex', gap: 7, padding: '0 16px 12px', overflowX: 'auto' }}>
                 <button onClick={() => { const eq = eligiendoLogo; eq === 0 ? setLogoA(null) : setLogoB(null) }} style={{ flexShrink: 0, padding: '7px 13px', borderRadius: 18, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: `1px solid ${T.inputBorde}`, background: 'transparent', color: C.tenue }}>Sin escudo</button>
                 {CATEGORIAS_LOGO.map((cat) => (
                   <button key={cat} onClick={() => setCatLogo(cat)} style={{ flexShrink: 0, padding: '7px 14px', borderRadius: 18, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', border: `1px solid ${catLogo === cat ? T.acento : T.inputBorde}`, background: catLogo === cat ? T.acento : 'transparent', color: catLogo === cat ? '#1a1205' : C.tenue }}>{cat}</button>
                 ))}
               </div>
-              {/* grid de logos */}
               <div style={{ overflowY: 'auto', padding: '4px 16px 24px', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
                 {LOGOS_EQUIPO.filter((l) => l.cat === catLogo).map((l) => {
                   const sel = (eligiendoLogo === 0 ? logoA : logoB) === l.id
@@ -219,6 +334,101 @@ export default function PantallaJuegoJugadores({ config, onListo, onVolver }) {
                     </button>
                   )
                 })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Buscar entre los que sigues (o cualquiera por nombre/MC-ID) */}
+      {buscandoPara !== null && (
+        <div onClick={() => setBuscandoPara(null)} style={{ position: 'fixed', inset: 0, zIndex: 85, background: T.esClaro ? 'rgba(30,26,18,0.5)' : 'rgba(4,5,7,0.84)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 560, maxHeight: '86vh', display: 'flex', flexDirection: 'column', borderRadius: '20px 20px 0 0', padding: 1.5, background: T.borde }}>
+            <div style={{ borderRadius: '19px 19px 0 0', background: T.esClaro ? '#f3eee3' : 'linear-gradient(180deg, #14161a, #0c0e12)', display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '15px 16px 8px' }}>
+                <span style={{ fontSize: 16, fontWeight: 800, color: T.textoFuerte }}>Agregar jugador</span>
+                <span onClick={() => setBuscandoPara(null)} style={{ fontSize: 24, color: C.tenue, cursor: 'pointer', lineHeight: 1 }}>×</span>
+              </div>
+              <div style={{ padding: '0 16px 12px' }}>
+                <input autoFocus value={bq} onChange={(e) => setBq(e.target.value)} placeholder="Busca por nombre o MC-ID..." style={{ ...inputBase, width: '100%' }} />
+                {dupAviso && <div style={{ marginTop: 8, fontSize: 12.5, color: '#e0563f', fontWeight: 700 }}>⚠ {dupAviso}</div>}
+              </div>
+              <div style={{ overflowY: 'auto', padding: '0 10px 24px', minHeight: 0 }}>
+                {(() => {
+                  const usarBusqueda = bq.trim().length >= 2
+                  const lista = usarBusqueda ? bResultados : siguiendo
+                  const titulo = usarBusqueda ? (bCargando ? 'Buscando…' : 'Resultados') : (siguiendo.length ? 'A quién sigues' : '')
+                  return (
+                    <>
+                      {titulo && <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1, color: T.acento, padding: '4px 6px 8px' }}>{titulo}</div>}
+                      {lista.length === 0 && !bCargando && (
+                        <div style={{ fontSize: 13, color: C.tenue, textAlign: 'center', padding: '20px 16px', lineHeight: 1.5 }}>
+                          {usarBusqueda ? 'Nadie con ese nombre o MC-ID.' : 'Todavía no sigues a nadie. Busca por nombre o MC-ID arriba.'}
+                        </div>
+                      )}
+                      {lista.map((p) => {
+                        const yaEsta = idUsado(p.id)
+                        return (
+                        <button key={p.id} disabled={yaEsta} onClick={() => asignarPerfil(p)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left', background: 'transparent', border: 'none', borderRadius: 12, padding: '10px 8px', cursor: yaEsta ? 'default' : 'pointer', opacity: yaEsta ? 0.45 : 1 }}>
+                          <div style={{ width: 40, height: 40, borderRadius: '50%', flexShrink: 0, background: p.foto_url ? `url(${p.foto_url}) center/cover` : colorAvatar(p.nombre), display: 'grid', placeItems: 'center', color: '#fff', fontWeight: 800, fontSize: 14 }}>{!p.foto_url && inicialesDe(p.nombre, p.apellido)}</div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 14.5, fontWeight: 700, color: T.textoFuerte, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{`${p.nombre || ''} ${p.apellido || ''}`.trim()}</div>
+                            <div style={{ fontSize: 11.5, color: C.tenue, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.municipio ? `${p.municipio} · ` : ''}{p.codigo_unico || ''}</div>
+                          </div>
+                          {yaEsta ? <span style={{ color: C.tenue, fontSize: 11, fontWeight: 700, flexShrink: 0 }}>Ya está</span> : <span style={{ color: T.acento, fontSize: 20, flexShrink: 0 }}>＋</span>}
+                        </button>
+                        )
+                      })}
+                    </>
+                  )
+                })()}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Elegir quinteto abridor (sale solo cuando hay banca) */}
+      {eligiendoQuinteto && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 90, background: T.esClaro ? 'rgba(30,26,18,0.55)' : 'rgba(4,5,7,0.88)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+          <div style={{ width: '100%', maxWidth: 560, maxHeight: '90vh', display: 'flex', flexDirection: 'column', borderRadius: '20px 20px 0 0', padding: 1.5, background: T.borde }}>
+            <div style={{ borderRadius: '19px 19px 0 0', background: T.esClaro ? '#f3eee3' : 'linear-gradient(180deg, #14161a, #0c0e12)', display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
+              <div style={{ padding: '16px 18px 6px' }}>
+                <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1.5, textTransform: 'uppercase', ...ORO }}>Quinteto abridor</div>
+                <div style={{ fontSize: 22, fontWeight: 900, color: T.textoFuerte, fontFamily: C.fontDisp || C.font, letterSpacing: 0.3 }}>¿Quiénes empiezan en cancha?</div>
+                <div style={{ fontSize: 13, color: C.tenue, marginTop: 4 }}>Elige {minimo} por equipo. Los demás quedan en banca y entran por cambio.</div>
+              </div>
+              <div style={{ overflowY: 'auto', padding: '8px 16px 12px', minHeight: 0 }}>
+                {[0, 1].map((eq) => {
+                  const lista = llenosCon(eq === 0 ? jugA : jugB)
+                  const sel = eq === 0 ? titA : titB
+                  const nombreEq = (eq === 0 ? nombreA : nombreB) || (eq === 0 ? 'Equipo A' : 'Equipo B')
+                  return (
+                    <div key={eq} style={{ marginBottom: 16 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 9 }}>
+                        <span style={{ fontSize: 14.5, fontWeight: 800, color: T.textoFuerte, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nombreEq}</span>
+                        <span style={{ fontSize: 13, fontWeight: 800, color: sel.length === minimo ? T.acento : '#e0563f', flexShrink: 0 }}>{sel.length} / {minimo}</span>
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                        {lista.map(({ j, idx }) => {
+                          const on = sel.includes(idx)
+                          const lleno = sel.length >= minimo
+                          return (
+                            <button key={idx} onClick={() => toggleTit(eq, idx)} disabled={!on && lleno} style={{ display: 'flex', alignItems: 'center', gap: 7, borderRadius: 11, padding: '9px 12px', fontSize: 13.5, fontWeight: 700, cursor: (!on && lleno) ? 'default' : 'pointer', border: on ? 'none' : `1px solid ${T.inputBorde}`, background: on ? T.boton : 'transparent', color: on ? '#1a1205' : (lleno ? C.tenue : T.textoFuerte), opacity: (!on && lleno) ? 0.4 : 1 }}>
+                              {j.numero ? <span style={{ fontWeight: 900, opacity: 0.85 }}>#{j.numero}</span> : null}
+                              <span style={{ maxWidth: 130, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{j.nombre || ('#' + j.numero)}</span>
+                              {on && <span style={{ fontSize: 12 }}>✓</span>}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+              <div style={{ display: 'flex', gap: 10, padding: '10px 16px 22px', borderTop: `1px solid ${T.bordeTenue || T.inputBorde}` }}>
+                <button onClick={() => setEligiendoQuinteto(false)} style={{ flex: 1, border: `1px solid ${T.inputBorde}`, borderRadius: 13, padding: 15, background: 'transparent', color: C.tenue, fontWeight: 700, fontSize: 15, cursor: 'pointer' }}>Atrás</button>
+                <button onClick={confirmarQuinteto} disabled={titA.length !== minimo || titB.length !== minimo} style={{ flex: 2, border: 'none', borderRadius: 13, padding: 15, background: (titA.length === minimo && titB.length === minimo) ? T.boton : T.inputBorde, color: '#1a1205', fontWeight: 800, fontSize: 16, cursor: (titA.length === minimo && titB.length === minimo) ? 'pointer' : 'default', opacity: (titA.length === minimo && titB.length === minimo) ? 1 : 0.6 }}>
+                  Empezar el juego →
+                </button>
               </div>
             </div>
           </div>

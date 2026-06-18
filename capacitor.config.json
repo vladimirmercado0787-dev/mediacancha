@@ -1,0 +1,13 @@
+{
+  "appId": "com.andamio.mediacancha",
+  "appName": "Media Cancha",
+  "webDir": "dist",
+  "plugins": {
+    "Keyboard": {
+      "resize": "none"
+    }
+  },
+  "ios": {
+    "contentInset": "always"
+  }
+}

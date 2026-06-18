@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import LogoEquipo from './LogoEquipo'
 
 // Temas compactos (solo lo que la tarjeta necesita) — coherentes con el resto de la app
@@ -14,6 +14,9 @@ const FUENTES = {
   liga: { etiqueta: 'Liga', color: '#3a6ea5', colorClaro: '#e6eef7', icono: '👑' },
   torneo: { etiqueta: 'Torneo', color: '#c8842e', colorClaro: '#f6e9cf', icono: '👑' },
 }
+
+// fuente deportiva condensada (igual que el resto del rediseño)
+const DISP = '"Arial Narrow", Impact, "Haettenschweiler", system-ui, sans-serif'
 
 function colorEquipo(semilla) {
   const paleta = [
@@ -45,14 +48,39 @@ function generarNota(d, totalA, totalB, destacado) {
   return nota
 }
 
+// === TITULAR con verbo fuerte (psicología periodística) según cómo se dio el juego ===
+// Devuelve { antes, verbo, despues, gancho } — "verbo" va en oro.
+function generarTitular(d, totalA, totalB) {
+  const empate = totalA === totalB
+  if (empate) {
+    return { antes: d.nombreA + ' y ' + d.nombreB, verbo: 'empataron', despues: 'a lo grande', gancho: 'Un duelo que pudo caer para cualquier lado.' }
+  }
+  const ganaA = totalA > totalB
+  const ganador = ganaA ? d.nombreA : d.nombreB
+  const perdedor = ganaA ? d.nombreB : d.nombreA
+  const dif = Math.abs(totalA - totalB)
+  if (dif >= 20) return { antes: ganador, verbo: 'aplastó', despues: 'a ' + perdedor, gancho: 'Una paliza de principio a fin.' }
+  if (dif >= 12) return { antes: ganador, verbo: 'dominó', despues: 'el juego', gancho: 'Controló de principio a fin ante ' + perdedor + '.' }
+  if (dif <= 3) return { antes: ganador, verbo: 'sobrevivió', despues: 'al final', gancho: 'Partido cerrado, definido en los detalles.' }
+  return { antes: ganador, verbo: 'venció', despues: 'a ' + perdedor, gancho: 'Se llevó un buen duelo de canchas.' }
+}
+
 export default function TarjetaResultado({ datos, fuente = 'rapido', tiempo, autorNombre, autorFoto, comentario, acciones, pie, temaForzado }) {
   const [abierto, setAbierto] = useState(false)
+  const [esAncho, setEsAncho] = useState(typeof window !== 'undefined' ? window.innerWidth >= 768 : false)
+  useEffect(() => {
+    const f = () => setEsAncho(window.innerWidth >= 768)
+    window.addEventListener('resize', f)
+    return () => window.removeEventListener('resize', f)
+  }, [])
   const tema = temaForzado || (typeof window !== 'undefined' ? (localStorage.getItem('mc_tema') || 'dorado') : 'dorado')
   const T = TEMAS_CARD[tema] || TEMAS_CARD.dorado
   const F = FUENTES[fuente] || FUENTES.rapido
 
   const d = datos || {}
   const jugadores = d.jugadores || []
+  const momentosCard = (d.momentos || []).slice(0, 6)
+  const iconoMom = (tipo) => ({ racha: '🔥', parcial: '💥', mejorJuego: '⭐', cambioMando: '🔄', empate: '🤝', manual: '⭐' }[tipo] || '🏀')
   const totalA = d.totalA != null ? d.totalA : jugadores.filter((x) => x.equipo === 0).reduce((a, x) => a + (x.pts || 0), 0)
   const totalB = d.totalB != null ? d.totalB : jugadores.filter((x) => x.equipo === 1).reduce((a, x) => a + (x.pts || 0), 0)
   const hayEmpate = totalA === totalB
@@ -73,16 +101,40 @@ export default function TarjetaResultado({ datos, fuente = 'rapido', tiempo, aut
   const destAst = d.destacadoAst != null ? d.destacadoAst : (destacado ? (destacado.ast || 0) : 0)
 
   const nota = d.narracion || generarNota(d, totalA, totalB, destacado)
+  const titular = generarTitular(d, totalA, totalB)
   const jugA = jugadores.filter((x) => x.equipo === 0)
   const jugB = jugadores.filter((x) => x.equipo === 1)
 
-  const escudo = (nombre, gano, logoId) => (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7, textAlign: 'center', flex: 1, minWidth: 0 }}>
-      <div style={{ width: 56, height: 56, borderRadius: 15, display: 'grid', placeItems: 'center', color: '#fff', fontWeight: 800, fontSize: 22, fontFamily: 'ui-monospace, monospace', background: logoId ? (T.esClaro ? '#f5f6f8' : 'rgba(255,255,255,.04)') : colorEquipo(nombre), position: 'relative', boxShadow: '0 6px 16px rgba(20,24,30,.2)', overflow: 'hidden' }}>
-        {gano && <span style={{ position: 'absolute', top: -14, left: '50%', transform: 'translateX(-50%)', fontSize: 16, zIndex: 2 }}>{F.icono}</span>}
-        {logoId ? <LogoEquipo id={logoId} size={52} /> : (nombre || '?').slice(0, 1).toUpperCase()}
+  // columnas dinámicas: se muestran si se activaron O si hay datos anotados
+  const COLS_POS = [['reb', 'REB'], ['ast', 'AST'], ['rob', 'ROB'], ['tap', 'TAP'], ['fal', 'FAL'], ['per', 'PER'], ['min', 'MIN']]
+  const statsActivas = d.statsActivas || ['pts']
+  const tieneDato = (id) => jugadores.some((x) => (x[id] || 0) > 0)
+  // El % de tiro de campo SOLO sale si se anotaron tiros FALLADOS (sin ellos daría 100% falso)
+  const hayFalladosT = jugadores.some((x) => (x.fa2 || 0) + (x.fa3 || 0) > 0)
+  const hayLibresT = jugadores.some((x) => (x.tlm || 0) + (x.tlf || 0) > 0)
+  const colsT = [{ id: 'pts', t: 'PTS', fuerte: true }]
+  COLS_POS.forEach(([id, t]) => { if (statsActivas.includes(id) || tieneDato(id)) colsT.push({ id, t }) })
+  if (hayFalladosT) colsT.push({ id: 'tc', t: 'TC%', porc: true })
+  if (hayLibresT) colsT.push({ id: 'tl', t: 'TL%', porc: true })
+  const pctT = (m, a) => (a > 0 ? Math.round((m / a) * 100) : null)
+  const celdaT = (x, c) => {
+    if (c.id === 'tc') { const p = pctT((x.m2 || 0) + (x.m3 || 0), (x.m2 || 0) + (x.m3 || 0) + (x.fa2 || 0) + (x.fa3 || 0)); return p == null ? '—' : p + '%' }
+    if (c.id === 'tl') { const p = pctT(x.tlm || 0, (x.tlm || 0) + (x.tlf || 0)); return p == null ? '—' : p + '%' }
+    return x[c.id] || 0
+  }
+  const ANCHO_NOM_T = 104, ANCHO_COL_T = 46
+
+  // escudo con marcador GRANDE al lado (estilo mockup) — crece en computadora
+  const fila = (nombre, total, gano, logoId, alinearDer) => (
+    <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: esAncho ? 14 : 11, flexDirection: alinearDer ? 'row-reverse' : 'row', textAlign: alinearDer ? 'right' : 'left', minWidth: 0 }}>
+      <div style={{ width: esAncho ? 54 : 44, height: esAncho ? 54 : 44, borderRadius: 13, flexShrink: 0, display: 'grid', placeItems: 'center', color: '#fff', fontWeight: 800, fontSize: esAncho ? 19 : 16, fontFamily: 'ui-monospace, monospace', background: logoId ? (T.esClaro ? '#f5f6f8' : 'rgba(255,255,255,.04)') : colorEquipo(nombre), position: 'relative', boxShadow: '0 6px 16px rgba(20,24,30,.2)', overflow: 'hidden' }}>
+        {gano && <span style={{ position: 'absolute', top: -13, left: '50%', transform: 'translateX(-50%)', fontSize: 16, zIndex: 2 }}>{F.icono}</span>}
+        {logoId ? <LogoEquipo id={logoId} size={esAncho ? 50 : 40} /> : (nombre || '?').slice(0, 1).toUpperCase()}
       </div>
-      <div style={{ fontSize: 14, fontWeight: 700, color: gano ? T.acento : T.textoFuerte, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{nombre}</div>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ fontSize: esAncho ? 16 : 12.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.2, color: gano ? T.acento : T.textoFuerte, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nombre}</div>
+      </div>
+      <div style={{ fontFamily: DISP, fontWeight: 900, fontSize: esAncho ? 56 : 44, lineHeight: 0.8, color: gano ? T.acento : (T.esClaro ? '#bcae92' : '#6f6452') }}>{total}</div>
     </div>
   )
 
@@ -90,62 +142,63 @@ export default function TarjetaResultado({ datos, fuente = 'rapido', tiempo, aut
     <div style={{ marginBottom: 10 }}>
       <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.5, textTransform: 'uppercase', color, marginBottom: 6 }}>{titulo}</div>
       <div style={{ borderRadius: 10, overflow: 'hidden', border: `1px solid ${T.lineaSuave}` }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 38px 38px 38px', padding: '7px 12px', background: T.esClaro ? '#f5f6f8' : 'rgba(255,255,255,.04)', fontSize: 10, fontWeight: 700, color: T.tenue, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-          <span>Jugador</span><span style={{ textAlign: 'center' }}>PTS</span><span style={{ textAlign: 'center' }}>REB</span><span style={{ textAlign: 'center' }}>AST</span>
-        </div>
-        {lista.length === 0 ? (
-          <div style={{ padding: '10px 12px', fontSize: 12, color: T.tenue }}>Sin datos de jugadores.</div>
-        ) : lista.map((x, i) => (
-          <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 38px 38px 38px', padding: '8px 12px', borderTop: `1px solid ${T.lineaSuave}`, fontSize: 12.5, color: T.textoBody, alignItems: 'center' }}>
-            <span style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{x.nombre || ('#' + (x.numero || '?'))}</span>
-            <span style={{ textAlign: 'center', fontWeight: 800, color: T.acento }}>{x.pts || 0}</span>
-            <span style={{ textAlign: 'center' }}>{x.reb || 0}</span>
-            <span style={{ textAlign: 'center' }}>{x.ast || 0}</span>
+        <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+          <div style={{ minWidth: ANCHO_NOM_T + colsT.length * ANCHO_COL_T }}>
+            <div style={{ display: 'flex', alignItems: 'center', padding: '7px 12px', background: T.esClaro ? '#f5f6f8' : 'rgba(255,255,255,.04)', fontSize: 10, fontWeight: 700, color: T.tenue, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              <span style={{ width: ANCHO_NOM_T, flexShrink: 0 }}>Jugador</span>
+              {colsT.map((c) => <span key={c.id} style={{ width: ANCHO_COL_T, flexShrink: 0, textAlign: 'center' }}>{c.t}</span>)}
+            </div>
+            {lista.length === 0 ? (
+              <div style={{ padding: '10px 12px', fontSize: 12, color: T.tenue }}>Sin datos de jugadores.</div>
+            ) : lista.map((x, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', padding: '8px 12px', borderTop: `1px solid ${T.lineaSuave}`, fontSize: 12.5, color: T.textoBody }}>
+                <span style={{ width: ANCHO_NOM_T, flexShrink: 0, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', paddingRight: 6 }}>{x.nombre || ('#' + (x.numero || '?'))}</span>
+                {colsT.map((c) => (
+                  <span key={c.id} style={{ width: ANCHO_COL_T, flexShrink: 0, textAlign: 'center', fontWeight: c.fuerte ? 800 : 500, color: c.fuerte ? T.acento : (c.porc ? T.textoFuerte : T.textoBody) }}>{celdaT(x, c)}</span>
+                ))}
+              </div>
+            ))}
           </div>
-        ))}
+        </div>
       </div>
     </div>
   )
 
   return (
-    <div style={{ background: T.tarjetaBg, border: `1px solid ${T.tarjetaBorde}`, borderLeft: `4px solid ${F.color}`, borderRadius: 16, boxShadow: T.tarjetaSombra, overflow: 'hidden' }}>
+    <div style={{ background: T.tarjetaBg, border: `1px solid ${T.tarjetaBorde}`, borderRadius: 16, boxShadow: T.tarjetaSombra, overflow: 'hidden' }}>
       <style>{`
         @keyframes mcDetalleIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
         .mc-detalle-anim { animation: mcDetalleIn .32s cubic-bezier(.2,.8,.3,1); }
         @keyframes mcChevron { from { transform: rotate(0); } to { transform: rotate(180deg); } }
       `}</style>
 
-      {/* cabecera */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 16px', borderBottom: `1px solid ${T.lineaSuave}` }}>
+      {/* cabecera: autor + sello FINAL dorado */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 16px 9px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
           {autorNombre && (
             <div style={{ width: 26, height: 26, borderRadius: '50%', flexShrink: 0, background: autorFoto ? `url(${autorFoto}) center/cover` : colorEquipo(autorNombre), display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 800, color: '#fff' }}>{!autorFoto && autorNombre.slice(0, 1).toUpperCase()}</div>
           )}
-          <span style={{ fontSize: 12.5, fontWeight: 700, color: T.textoFuerte, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{autorNombre || d.nombreJuego || 'Juego'}</span>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: T.textoFuerte, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{autorNombre || d.nombreJuego || 'Juego'}</div>
+            <div style={{ fontSize: 10, color: T.tenue }}>{F.etiqueta}{tiempo ? ` · ${tiempo}` : ''}</div>
+          </div>
         </div>
-        <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: 0.8, textTransform: 'uppercase', padding: '3px 9px', borderRadius: 20, color: F.color, background: T.esClaro ? F.colorClaro : `${F.color}26`, flexShrink: 0, marginLeft: 8 }}>{F.etiqueta}{tiempo ? ` · ${tiempo}` : ''}</span>
+        <span style={{ fontFamily: DISP, fontWeight: 900, fontSize: 14, letterSpacing: 1, color: '#1a1205', background: T.boton, padding: '3px 11px', borderRadius: 6, flexShrink: 0, marginLeft: 8 }}>{hayEmpate ? 'EMPATE' : 'FINAL'}</span>
       </div>
 
-      {/* nota inteligente */}
-      {nota && (
-        <div style={{ padding: '13px 16px 2px', display: 'flex', gap: 9, alignItems: 'flex-start' }}>
-          <span style={{ fontSize: 14, flexShrink: 0, marginTop: 1 }}>🏀</span>
-          <span style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.4, color: T.textoBody }}>{nota}</span>
+      {/* TITULAR grande con verbo fuerte en oro + gancho */}
+      <div style={{ padding: '2px 16px 0' }}>
+        <div style={{ fontFamily: DISP, fontWeight: 900, fontSize: esAncho ? 33 : 26, lineHeight: 0.96, textTransform: 'uppercase', color: T.textoFuerte }}>
+          {titular.antes} <span style={{ background: T.boton, WebkitBackgroundClip: 'text', backgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{titular.verbo}</span> {titular.despues}
         </div>
-      )}
+        <div style={{ fontSize: esAncho ? 14 : 12.5, color: T.subTexto, marginTop: 5, lineHeight: 1.35 }}>{d.narracion || titular.gancho}</div>
+      </div>
 
-      {/* matchup */}
-      <div style={{ display: 'flex', alignItems: 'center', padding: '14px 16px', gap: 8 }}>
-        {escudo(d.nombreA, ganoA, d.logoA)}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 92 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 9, fontWeight: 800, fontSize: 36, fontFamily: 'ui-monospace, monospace', lineHeight: 1 }}>
-            <span style={{ color: ganoA ? T.acento : T.textoFuerte }}>{totalA}</span>
-            <span style={{ fontSize: 15, color: T.tenue, fontWeight: 400 }}>–</span>
-            <span style={{ color: ganoB ? T.acento : T.textoFuerte }}>{totalB}</span>
-          </div>
-          <div style={{ fontSize: 9.5, letterSpacing: 1.5, textTransform: 'uppercase', color: T.tenue, marginTop: 4 }}>{hayEmpate ? 'Empate' : 'Final'}</div>
-        </div>
-        {escudo(d.nombreB, ganoB, d.logoB)}
+      {/* MARCADOR grande: equipo + número a cada lado */}
+      <div style={{ display: 'flex', alignItems: 'center', padding: '14px 16px 12px', gap: 12 }}>
+        {fila(d.nombreA, totalA, ganoA, d.logoA, false)}
+        <div style={{ width: 1, alignSelf: 'stretch', background: T.lineaSuave }} />
+        {fila(d.nombreB, totalB, ganoB, d.logoB, true)}
       </div>
 
       {/* figura del partido */}
@@ -168,6 +221,16 @@ export default function TarjetaResultado({ datos, fuente = 'rapido', tiempo, aut
       {abierto && (
         <div className="mc-detalle-anim" style={{ padding: '4px 16px 14px' }}>
           <div style={{ height: 1, background: T.lineaSuave, marginBottom: 14 }} />
+          {momentosCard.length > 0 && (
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 0.5, textTransform: 'uppercase', color: T.acento, marginBottom: 8 }}>🔥 Momentos</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+                {momentosCard.map((m, i) => (
+                  <span key={i} style={{ fontSize: 11.5, fontWeight: 600, color: T.textoBody, background: T.esClaro ? 'rgba(176,122,38,.08)' : 'rgba(232,182,90,.08)', border: `1px solid ${T.esClaro ? 'rgba(176,122,38,.18)' : 'rgba(232,182,90,.16)'}`, borderRadius: 9, padding: '6px 10px' }}>{iconoMom(m.tipo)} {m.etiqueta}</span>
+                ))}
+              </div>
+            </div>
+          )}
           {tablaStats(d.nombreA, jugA, ganoA ? T.acento : T.tenue)}
           {tablaStats(d.nombreB, jugB, ganoB ? T.acento : T.tenue)}
         </div>
@@ -178,7 +241,7 @@ export default function TarjetaResultado({ datos, fuente = 'rapido', tiempo, aut
         <div style={{ display: 'flex', gap: 8, padding: acciones ? '0 16px 14px' : '0 16px 12px' }}>
           <button onClick={() => setAbierto(!abierto)} style={{ flex: acciones ? 1 : 'none', border: `1px solid ${T.tarjetaBorde}`, borderRadius: 10, padding: '10px 16px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', background: abierto ? `${T.acento}1a` : (T.esClaro ? '#f5f6f8' : 'rgba(255,255,255,.04)'), color: abierto ? T.acento : T.subTexto, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
             <span style={{ display: 'inline-block', fontSize: 10, animation: abierto ? 'mcChevron .3s forwards' : 'none' }}>▼</span>
-            {abierto ? 'Ocultar detalles' : 'Detalles'}
+            {abierto ? 'Ocultar tabla' : 'Tabla'}
           </button>
           {acciones}
         </div>

@@ -32,7 +32,7 @@ function App() {
   }, [])
 
   if (mostrarIntro) {
-    return <IntroMediaCancha onComplete={() => setMostrarIntro(false)} />
+    return <IntroMediaCancha onFinish={() => setMostrarIntro(false)} />
   }
 
   if (vista === 'registro') {

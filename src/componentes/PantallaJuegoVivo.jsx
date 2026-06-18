@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import fondoJuego from '../assets/fondo-juego.png'
+import { crearNarrador } from './narrador'
 
 const TEMAS = {
   dorado: { nombre: 'Dorado', acento: '#e8b65a', borde: 'linear-gradient(140deg,#f7d785,#b9802c 40%,#5e4318 70%,#caa050)', texto: 'linear-gradient(120deg,#fbe08a,#c8842e)', boton: 'linear-gradient(150deg, #f3cf63, #c8842e)', glow: 'rgba(190,135,55,0.20)', balon: ['#fbe08a', '#d18f33', '#9a6420'], eqA: { acento: '#e8b65a', fuerte: '#c8842e', suave: 'rgba(232,169,75,.10)', borde: 'rgba(232,169,75,.45)', solido: 'linear-gradient(150deg,#f3cf63,#c8842e)', textoBoton: '#1a1205' }, eqB: { acento: '#6fb0ec', fuerte: '#3b7fcf', suave: 'rgba(111,176,236,.10)', borde: 'rgba(111,176,236,.45)', solido: 'linear-gradient(150deg,#6fb0ec,#2f6fc8)', textoBoton: '#04121f' }, esClaro: false, fondo: '#08090c', texto: '#eef3f6', tenue: '#9aa7b2', vidrio: 'linear-gradient(150deg, rgba(24,26,30,0.88), rgba(12,14,18,0.92))', vidrioAlt: 'linear-gradient(150deg, rgba(30,33,38,0.9), rgba(16,18,22,0.93))', bordeTenue: 'rgba(255,255,255,.12)', pieBg: 'linear-gradient(150deg, rgba(24,26,30,0.88), rgba(12,14,18,0.92))', botonNeutro: 'rgba(255,255,255,.04)' },
@@ -12,6 +13,7 @@ const VERDE = '#2fbf71', ROJO = '#e0563f', TENUE = '#9aa7b2', TEXTO = '#eef3f6'
 const VIDRIO = 'linear-gradient(150deg, rgba(24,26,30,0.88), rgba(12,14,18,0.92))'
 const VIDRIO_CLARO = 'linear-gradient(150deg, rgba(30,33,38,0.9), rgba(16,18,22,0.93))'
 const BORDE_TENUE = 'rgba(255,255,255,.12)'
+const DISP = '"Arial Narrow", Impact, "Haettenschweiler", system-ui, sans-serif'
 
 const ACCIONES_PUNTO = [
   { id: 'p2', ico: '2', et: '2 Puntos', pts: 2, sub: 'Doble', pos: true },
@@ -21,7 +23,15 @@ const ACCIONES_PUNTO = [
 const ACCIONES_OTRAS = {
   reb: { id: 'reb', ico: '⊕', et: 'Rebote', pts: 0, sub: 'Rebote', suma: { reb: 1 } },
   ast: { id: 'ast', ico: '↗', et: 'Asistencia', pts: 0, sub: 'Asist.', suma: { ast: 1 }, encadena: true },
+  rob: { id: 'rob', ico: '✋', et: 'Robo', pts: 0, sub: 'Robo', suma: { rob: 1 } },
+  tap: { id: 'tap', ico: '🛡', et: 'Bloqueo', pts: 0, sub: 'Bloqueo', suma: { tap: 1 } },
+  fal: { id: 'fal', ico: '⚠', et: 'Falta', pts: 0, sub: 'Falta', suma: { fal: 1 } },
+  per: { id: 'per', ico: '✕', et: 'Pérdida', pts: 0, sub: 'Pérdida', suma: { per: 1 } },
+  tl: { id: 'tl', ico: '①', et: 'Tiro libre', pts: 0, sub: 'Tiro libre', pos: true, pregunta: 'libre' },
+  fall: { id: 'fall', ico: '⊘', et: 'Tiro fallado', pts: 0, sub: 'Fallado', pregunta: 'fallo' },
+  min: { id: 'min', ico: '⏱', et: 'Minutos', pts: 0, sub: 'Minutos', suma: { min: 1 } },
 }
+const ORDEN_OTRAS = ['reb', 'ast', 'rob', 'tap', 'tl', 'fal', 'per', 'fall', 'min']
 
 export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
   const [tema, setTema] = useState(() => {
@@ -45,8 +55,8 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
   }
 
   const statsActivas = config?.statsActivas || ['pts']
-  const accionesOtras = ['reb', 'ast'].filter((s) => statsActivas.includes(s)).map((s) => ACCIONES_OTRAS[s])
-  const accionesTodas = [...ACCIONES_PUNTO.map((a) => ({ ...a, suma: { pts: a.pts } })), ...accionesOtras]
+  const accionesOtras = ORDEN_OTRAS.filter((s) => statsActivas.includes(s)).map((s) => ACCIONES_OTRAS[s])
+  const accionesTodas = [...ACCIONES_PUNTO.map((a) => ({ ...a, suma: a.id === 'p3' ? { pts: 3, m3: 1 } : a.id === 'p2' ? { pts: 2, m2: 1 } : { pts: a.pts } })), ...accionesOtras]
 
   const [jugadores, setJugadores] = useState(config?.jugadores || [])
   const [historial, setHistorial] = useState([])
@@ -56,8 +66,38 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
   const [toast, setToast] = useState('')
   const toastRef = useRef(null)
 
-  // Estado para la asistencia encadenada: guarda al asistente mientras se elige anotador y puntos
-  const [asistPaso, setAsistPaso] = useState(null) // { asistente, equipo, fase: 'anotador' | 'puntos', anotador }
+  // ===== NARRADOR: motor que canta cada jugada y detecta momentos =====
+  const [narrador] = useState(() => crearNarrador({ nombreA: config?.nombreA || 'Equipo A', nombreB: config?.nombreB || 'Equipo B', metaPuntos: config?.puntosMeta }))
+  const [momentos, setMomentos] = useState([])
+  const [momentoAviso, setMomentoAviso] = useState('')
+
+  // suma una jugada a un arreglo de jugadores (sin mutar) y lo devuelve
+  const aplicarSumaArr = (arr, jugId, suma) => arr.map((j) => {
+    if (j.id !== jugId) return j
+    const nuevo = { ...j }
+    Object.entries(suma).forEach(([k, v]) => { nuevo[k] = (nuevo[k] || 0) + v })
+    return nuevo
+  })
+
+  // llama al motor y, si detectó un momento automático, lo guarda
+  const narrar = (jugadaObj, nuevosJug) => {
+    const r = narrador.narrar(jugadaObj, nuevosJug)
+    if (r.momento) setMomentos((m) => [...m, { ...r.momento, auto: true, t: Date.now() }])
+    return r
+  }
+
+  // marca un momento a mano (botón ⭐)
+  const marcarMomento = (h) => {
+    if (!h) return
+    setMomentos((m) => [...m, { tipo: 'manual', jugId: h.jugId, etiqueta: `⭐ ${h.etiquetaJug}: ${h.sub}`, manual: true, t: Date.now() }])
+    setMomentoAviso(`Momento marcado: ${h.etiquetaJug} · ${h.sub}`)
+    vibrar([20, 40, 20])
+    setTimeout(() => setMomentoAviso(''), 2200)
+  }
+
+  // Estado para la asistencia encadenada
+  const [asistPaso, setAsistPaso] = useState(null)
+  const [subPaso, setSubPaso] = useState(null)
 
   const [verPizarra, setVerPizarra] = useState(false)
   const [sustituyendo, setSustituyendo] = useState(null)
@@ -97,6 +137,7 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
     setCuartoActual((c) => c + 1)
     setSegs((config.minutos || 10) * 60)
     setAvisoFin(null)
+    narrador.reiniciarRachas && narrador.reiniciarRachas()
   }
 
   useEffect(() => {
@@ -115,44 +156,61 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
   const totalEquipo = (eq) => jugadores.filter((j) => j.equipo === eq).reduce((a, j) => a + j.pts, 0)
   const metaPuntos = config?.tipoFin === 'puntos' ? config.puntosMeta : null
   const jugadoresEq = (eq) => jugadores.filter((j) => j.equipo === eq)
+  const enCanchaEq = (eq) => jugadores.filter((j) => j.equipo === eq && j.enCancha !== false)
+  const bancaEq = (eq) => jugadores.filter((j) => j.equipo === eq && j.enCancha === false)
 
   const mostrarToast = (txt) => { setToast(txt); clearTimeout(toastRef.current); toastRef.current = setTimeout(() => setToast(''), 1500) }
 
   const vibrar = (patron) => { try { if (navigator.vibrate) navigator.vibrate(patron) } catch (e) {} }
 
   const registrar = (accion, jug) => {
-    // Si la acción es asistencia, NO cerrar: encadenar con la canasta
     if (accion.encadena) {
       vibrar(20)
       setSeleccion(null)
       setAsistPaso({ asistente: jug, equipo: jug.equipo, fase: 'anotador', anotador: null })
       return
     }
+    if (accion.pregunta) {
+      vibrar(20)
+      setSeleccion(null)
+      setSubPaso({ jug, equipo: jug.equipo, pregunta: accion.pregunta })
+      return
+    }
     const suma = accion.suma || (accion.pts ? { pts: accion.pts } : {})
-    setJugadores((prev) => prev.map((j) => {
-      if (j.id !== jug.id) return j
-      const nuevo = { ...j }
-      Object.entries(suma).forEach(([k, v]) => { nuevo[k] = (nuevo[k] || 0) + v })
-      return nuevo
-    }))
-    setHistorial((prev) => [...prev, { id: 'h' + Date.now() + Math.random().toString(36).slice(2, 6), jugId: jug.id, etiquetaJug: jug.etiqueta, equipo: jug.equipo, accionId: accion.id, etiquetaAccion: accion.et || accion.etiqueta, sub: accion.sub, suma }])
+    const nuevos = aplicarSumaArr(jugadores, jug.id, suma)
+    setJugadores(nuevos)
+    const nar = narrar({ jugId: jug.id, etiquetaJug: jug.etiqueta, equipo: jug.equipo, accionId: accion.id, suma }, nuevos)
+    setHistorial((prev) => [...prev, { id: 'h' + Date.now() + Math.random().toString(36).slice(2, 6), jugId: jug.id, etiquetaJug: jug.etiqueta, equipo: jug.equipo, accionId: accion.id, etiquetaAccion: accion.et || accion.etiqueta, sub: accion.sub, suma, narracion: nar.texto, tono: nar.tono, extras: nar.extras }])
     mostrarToast(`${accion.sub} · ${jug.etiqueta}`)
     vibrar((suma.pts && suma.pts > 0) ? 35 : 20)
     setSeleccion(null)
   }
 
-  // Completa la asistencia encadenada: suma ast al asistente + pts al anotador, conectados
+  const registrarSub = (suma, accionId, etiquetaAccion, sub) => {
+    const jug = subPaso.jug
+    const nuevos = aplicarSumaArr(jugadores, jug.id, suma)
+    setJugadores(nuevos)
+    const nar = narrar({ jugId: jug.id, etiquetaJug: jug.etiqueta, equipo: jug.equipo, accionId, suma }, nuevos)
+    setHistorial((prev) => [...prev, { id: 'h' + Date.now() + Math.random().toString(36).slice(2, 6), jugId: jug.id, etiquetaJug: jug.etiqueta, equipo: jug.equipo, accionId, etiquetaAccion, sub, suma, narracion: nar.texto, tono: nar.tono, extras: nar.extras }])
+    mostrarToast(`${sub} · ${jug.etiqueta}`)
+    vibrar(suma.pts ? 35 : 20)
+    setSubPaso(null)
+  }
+
   const completarAsistencia = (anotador, pts) => {
     const asistente = asistPaso.asistente
-    setJugadores((prev) => prev.map((j) => {
+    const nuevos = jugadores.map((j) => {
       let nuevo = { ...j }
       if (j.id === asistente.id) nuevo.ast = (nuevo.ast || 0) + 1
       if (j.id === anotador.id) nuevo.pts = (nuevo.pts || 0) + pts
       return nuevo
-    }))
+    })
+    setJugadores(nuevos)
+    const sumaAnot = pts === 3 ? { pts: 3, m3: 1 } : { pts: 2, m2: 1 }
+    const nar = narrar({ jugId: anotador.id, etiquetaJug: anotador.etiqueta, equipo: anotador.equipo, accionId: pts === 3 ? 'p3' : 'p2', suma: sumaAnot, asistDe: asistente.etiqueta }, nuevos)
     const idBase = 'h' + Date.now() + Math.random().toString(36).slice(2, 6)
     setHistorial((prev) => [...prev,
-      { id: idBase + 'a', jugId: anotador.id, etiquetaJug: anotador.etiqueta, equipo: anotador.equipo, accionId: pts === 3 ? 'p3' : 'p2', etiquetaAccion: pts === 3 ? 'Triple' : '2 Puntos', sub: pts === 3 ? 'Triple' : 'Doble', suma: { pts }, asistDe: asistente.etiqueta },
+      { id: idBase + 'a', jugId: anotador.id, etiquetaJug: anotador.etiqueta, equipo: anotador.equipo, accionId: pts === 3 ? 'p3' : 'p2', etiquetaAccion: pts === 3 ? 'Triple' : '2 Puntos', sub: pts === 3 ? 'Triple' : 'Doble', suma: sumaAnot, asistDe: asistente.etiqueta, narracion: nar.texto, tono: nar.tono, extras: nar.extras },
       { id: idBase + 'b', jugId: asistente.id, etiquetaJug: asistente.etiqueta, equipo: asistente.equipo, accionId: 'ast', etiquetaAccion: 'Asistencia', sub: 'Asist.', suma: { ast: 1 }, asistA: anotador.etiqueta },
     ])
     mostrarToast(`${pts} pts ${anotador.etiqueta} · Asist. ${asistente.etiqueta}`)
@@ -195,9 +253,19 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
     setCambioEquipo(null); setJugASustituir(null); setNuevoNombre(''); setNuevoNumero('')
   }
 
+  const cambiarPorBanca = (sale, entra) => {
+    if (!sale || !entra) return
+    setJugadores((prev) => prev.map((j) => {
+      if (j.id === sale.id) return { ...j, enCancha: false }
+      if (j.id === entra.id) return { ...j, enCancha: true }
+      return j
+    }))
+    setCambioEquipo(null); setJugASustituir(null); setNuevoNombre(''); setNuevoNumero('')
+  }
+
   const ladoHead = (eq) => (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, flexShrink: 0 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 800, color: EQ[eq].acento, textTransform: 'uppercase', letterSpacing: 0.3 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontFamily: DISP, fontSize: 14, fontWeight: 900, color: EQ[eq].acento, textTransform: 'uppercase', letterSpacing: 0.4 }}>
         <span style={{ width: 9, height: 9, borderRadius: '50%', background: EQ[eq].fuerte }} />
         {eq === 0 ? config?.nombreA : config?.nombreB} · {modo === 'jugada' ? '¿qué pasó?' : '¿quién?'}
       </div>
@@ -207,11 +275,11 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
 
   const botonAccion = (a, eq) => (
     <button key={a.id} onClick={() => tocarAccion(a, eq)} style={{
-      border: `1.5px solid ${T.bordeTenue}`, borderRadius: 13, cursor: 'pointer', background: T.vidrio,
+      border: `1.5px solid ${a.pos ? VERDE + '88' : T.bordeTenue}`, borderRadius: 13, cursor: 'pointer', background: a.pos ? `linear-gradient(160deg, rgba(47,191,113,.14), ${T.vidrio})` : T.vidrio,
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3, minHeight: 0, padding: '4px 2px',
     }}>
-      <span style={{ fontSize: 21, fontWeight: 800, lineHeight: 1, color: a.pos ? VERDE : EQ[eq].acento }}>{a.ico}</span>
-      <span style={{ fontSize: 10.5, fontWeight: 600, color: T.tenue }}>{a.et}</span>
+      <span style={{ fontFamily: DISP, fontSize: 26, fontWeight: 900, lineHeight: 1, color: a.pos ? VERDE : EQ[eq].acento }}>{a.ico}</span>
+      <span style={{ fontSize: 10.5, fontWeight: 700, color: T.tenue }}>{a.et}</span>
     </button>
   )
 
@@ -220,7 +288,7 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
       border: `1.5px solid ${EQ[j.equipo].borde}`, borderRadius: 16, cursor: 'pointer', background: T.vidrio,
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 2px', minHeight: 0, height: '100%',
     }}>
-      <span style={{ fontSize: 34, fontWeight: 800, lineHeight: 1, color: EQ[j.equipo].acento }}>{j.numero || (j.nombre || '?').slice(0, 1).toUpperCase()}</span>
+      <span style={{ fontFamily: DISP, fontSize: 36, fontWeight: 900, lineHeight: 1, color: EQ[j.equipo].acento }}>{j.numero || (j.nombre || '?').slice(0, 1).toUpperCase()}</span>
       <span style={{ fontSize: 11, color: T.tenue, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', padding: '0 2px' }}>{j.nombre || ('#' + j.numero)}</span>
     </button>
   )
@@ -230,7 +298,7 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
       border: `1.5px solid ${EQ[j.equipo].borde}`, borderRadius: 14, cursor: 'pointer', background: VIDRIO_CLARO,
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '16px 4px', minHeight: 96,
     }}>
-      <span style={{ fontSize: 30, fontWeight: 800, lineHeight: 1, color: EQ[j.equipo].acento }}>{j.numero || (j.nombre || '?').slice(0, 1).toUpperCase()}</span>
+      <span style={{ fontFamily: DISP, fontSize: 32, fontWeight: 900, lineHeight: 1, color: EQ[j.equipo].acento }}>{j.numero || (j.nombre || '?').slice(0, 1).toUpperCase()}</span>
       <span style={{ fontSize: 11, fontWeight: 600, color: TEXTO, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', padding: '0 2px' }}>{j.nombre || ('#' + j.numero)}</span>
     </button>
   )
@@ -255,22 +323,18 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
             </div>
           </div>
 
-          {/* TABLERO estilo marcador real: equipo A | RELOJ central | equipo B */}
           <div style={{ display: 'flex', alignItems: 'stretch', gap: 8 }}>
-            {/* equipo A */}
             <div style={{ flex: 1, textAlign: 'center', background: `linear-gradient(160deg, ${EQ[0].suave}, transparent)`, border: `1px solid ${EQ[0].borde}`, borderRadius: 14, padding: '8px 4px 9px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-              <div style={{ fontSize: 11, fontWeight: 800, color: EQ[0].acento, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 2 }}>{config?.nombreA}</div>
+              <div style={{ fontFamily: DISP, fontSize: 13, fontWeight: 900, color: EQ[0].acento, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>{config?.nombreA}</div>
               <div style={{ fontSize: 52, fontWeight: 800, lineHeight: 0.95, color: '#fff', fontFamily: 'ui-monospace, monospace', textShadow: `0 0 18px ${EQ[0].borde}` }}>{totalEquipo(0)}</div>
             </div>
 
-            {/* RELOJ / META central - el tablero LED */}
             <div style={{ flexShrink: 0, width: 132, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
               {esPorReloj ? (
                 <>
                   {totalCuartos > 1 && (
                     <div style={{ fontSize: 9.5, fontWeight: 800, color: T.acento, textTransform: 'uppercase', letterSpacing: 1, background: 'rgba(234,182,79,.12)', border: `1px solid ${T.acento}44`, borderRadius: 20, padding: '2px 10px' }}>Cuarto {cuartoActual}/{totalCuartos}</div>
                   )}
-                  {/* pantalla LED del reloj */}
                   <div style={{
                     width: '100%', borderRadius: 12, padding: '10px 6px 9px', textAlign: 'center',
                     background: 'linear-gradient(180deg, #05070a, #0a0d11)',
@@ -284,7 +348,6 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
                       animation: corriendo ? 'mcRelojLate 1s steps(2) infinite' : 'none',
                     }}>{segs === 0 ? (cuartoActual >= totalCuartos ? 'FINAL' : '0:00') : fmt(segs)}</div>
                   </div>
-                  {/* botón grande iniciar/pausar */}
                   <button onClick={() => setCorriendo(!corriendo)} disabled={segs === 0} style={{
                     width: '100%', fontSize: 13, fontWeight: 800, padding: '9px 6px', borderRadius: 10, border: 'none', cursor: segs === 0 ? 'default' : 'pointer',
                     background: segs === 0 ? 'rgba(255,255,255,.06)' : (corriendo ? 'linear-gradient(150deg,#e0563f,#b23a28)' : 'linear-gradient(150deg,#2fbf71,#1f9156)'),
@@ -301,9 +364,8 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
               )}
             </div>
 
-            {/* equipo B */}
             <div style={{ flex: 1, textAlign: 'center', background: `linear-gradient(200deg, ${EQ[1].suave}, transparent)`, border: `1px solid ${EQ[1].borde}`, borderRadius: 14, padding: '8px 4px 9px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-              <div style={{ fontSize: 11, fontWeight: 800, color: EQ[1].acento, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 2 }}>{config?.nombreB}</div>
+              <div style={{ fontFamily: DISP, fontSize: 13, fontWeight: 900, color: EQ[1].acento, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>{config?.nombreB}</div>
               <div style={{ fontSize: 52, fontWeight: 800, lineHeight: 0.95, color: '#fff', fontFamily: 'ui-monospace, monospace', textShadow: `0 0 18px ${EQ[1].borde}` }}>{totalEquipo(1)}</div>
             </div>
           </div>
@@ -318,8 +380,8 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
                   {accionesTodas.map((a) => botonAccion(a, eq))}
                 </div>
               ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(jugadoresEq(eq).length, 5)}, 1fr)`, gap: 7, flex: 1, minHeight: 0 }}>
-                  {jugadoresEq(eq).map((j) => jugadorEnCancha(j))}
+                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(enCanchaEq(eq).length, 5)}, 1fr)`, gap: 7, flex: 1, minHeight: 0 }}>
+                  {enCanchaEq(eq).map((j) => jugadorEnCancha(j))}
                 </div>
               )}
             </div>
@@ -330,13 +392,17 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
           {historial.length > 0 && (() => {
             const u = historial[historial.length - 1]
             return (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 9 }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 9.5, color: T.tenue, textTransform: 'uppercase', letterSpacing: 0.5 }}>Última jugada</div>
-                  <div style={{ fontSize: 13.5, color: T.texto, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}><b style={{ color: EQ[u.equipo].acento }}>{u.etiquetaJug}</b> · {u.sub}{u.asistDe ? ` (asist. ${u.asistDe})` : ''}{u.asistA ? ` → ${u.asistA}` : ''}</div>
+              <div style={{ marginBottom: 9 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 9.5, color: T.tenue, textTransform: 'uppercase', letterSpacing: 0.5 }}>🎙️ Narración</div>
+                    <div style={{ fontSize: 13.5, color: u.tono === 'fuego' ? T.acento : T.texto, fontWeight: u.tono === 'fuego' ? 800 : 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.narracion || (u.etiquetaJug + ' · ' + u.sub)}</div>
+                  </div>
+                  <button onClick={() => marcarMomento(u)} title="Marcar momento destacado" style={{ fontSize: 13, fontWeight: 700, padding: '7px 9px', borderRadius: 9, border: `1px solid ${T.acento}`, background: 'transparent', color: T.acento, cursor: 'pointer' }}>⭐</button>
+                  <button onClick={() => setSustituyendo(u)} style={{ fontSize: 11, fontWeight: 700, padding: '7px 10px', borderRadius: 9, border: `1px solid ${T.acento}`, background: 'transparent', color: T.acento, cursor: 'pointer' }}>Corregir</button>
+                  <button onClick={() => deshacer(u)} style={{ fontSize: 11, fontWeight: 700, padding: '7px 10px', borderRadius: 9, border: `1px solid ${ROJO}`, background: 'transparent', color: ROJO, cursor: 'pointer' }}>Deshacer</button>
                 </div>
-                <button onClick={() => setSustituyendo(u)} style={{ fontSize: 11, fontWeight: 700, padding: '7px 11px', borderRadius: 9, border: `1px solid ${T.acento}`, background: 'transparent', color: T.acento, cursor: 'pointer' }}>Corregir</button>
-                <button onClick={() => deshacer(u)} style={{ fontSize: 11, fontWeight: 700, padding: '7px 11px', borderRadius: 9, border: `1px solid ${ROJO}`, background: 'transparent', color: ROJO, cursor: 'pointer' }}>Deshacer</button>
+                {momentoAviso && <div style={{ marginTop: 6, fontSize: 11.5, color: T.acento, fontWeight: 700 }}>⭐ {momentoAviso}</div>}
               </div>
             )
           })()}
@@ -372,25 +438,25 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
                 {hoja && hoja.tipo === 'accion' ? (
                   <>
                     <div style={{ textAlign: 'center', marginBottom: 20 }}>
-                      <div style={{ fontSize: 25, fontWeight: 800, color: eqColor.acento }}>{hoja.accion.et}</div>
+                      <div style={{ fontFamily: DISP, fontSize: 30, fontWeight: 900, textTransform: 'uppercase', color: eqColor.acento }}>{hoja.accion.et}</div>
                       <div style={{ fontSize: 13, color: TENUE, marginTop: 3 }}>{hoja.equipo === 0 ? config?.nombreA : config?.nombreB}</div>
                     </div>
                     <div style={{ fontSize: 12, letterSpacing: 1, textTransform: 'uppercase', color: TENUE, textAlign: 'center', marginBottom: 16, fontWeight: 700 }}>{hoja.accion.encadena ? '¿Quién dio la asistencia?' : '¿Quién lo hizo?'}</div>
-                    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(jugadoresEq(hoja.equipo).length, 5)}, 1fr)`, gap: 8 }}>
-                      {jugadoresEq(hoja.equipo).map((j) => jugadorVertical(j, elegirJugadorEnHoja))}
+                    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(enCanchaEq(hoja.equipo).length, 5)}, 1fr)`, gap: 8 }}>
+                      {enCanchaEq(hoja.equipo).map((j) => jugadorVertical(j, elegirJugadorEnHoja))}
                     </div>
                   </>
                 ) : hoja && hoja.tipo === 'jugador' ? (
                   <>
                     <div style={{ textAlign: 'center', marginBottom: 20 }}>
-                      <div style={{ fontSize: 25, fontWeight: 800, color: eqColor.acento }}>{hoja.jug.etiqueta}</div>
+                      <div style={{ fontFamily: DISP, fontSize: 30, fontWeight: 900, textTransform: 'uppercase', color: eqColor.acento }}>{hoja.jug.etiqueta}</div>
                       <div style={{ fontSize: 13, color: TENUE, marginTop: 3 }}>{hoja.equipo === 0 ? config?.nombreA : config?.nombreB}</div>
                     </div>
                     <div style={{ fontSize: 12, letterSpacing: 1, textTransform: 'uppercase', color: TENUE, textAlign: 'center', marginBottom: 16, fontWeight: 700 }}>¿Qué hizo?</div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 11 }}>
                       {accionesTodas.map((a) => (
                         <button key={a.id} onClick={() => elegirAccionEnHoja(a)} style={{ border: `1.5px solid ${eqColor.borde}`, borderRadius: 16, padding: '26px 6px', cursor: 'pointer', background: VIDRIO_CLARO, color: TEXTO, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 9, minHeight: 130 }}>
-                          <span style={{ fontSize: 38, fontWeight: 800, color: a.pos ? VERDE : eqColor.acento }}>{a.ico}</span>
+                          <span style={{ fontFamily: DISP, fontSize: 42, fontWeight: 900, color: a.pos ? VERDE : eqColor.acento }}>{a.ico}</span>
                           <span style={{ fontSize: 13, fontWeight: 600 }}>{a.et}</span>
                         </button>
                       ))}
@@ -403,7 +469,6 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
         )
       })()}
 
-      {/* HOJA DE ASISTENCIA ENCADENADA: paso 2 (anotador) y paso 3 (puntos) */}
       {asistPaso && (() => {
         const eqColor = EQ[asistPaso.equipo]
         return (
@@ -417,12 +482,12 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
                     <div style={{ textAlign: 'center', marginBottom: 6 }}>
                       <div style={{ fontSize: 13, color: '#7adfa6', fontWeight: 700 }}>↗ Asistencia de {asistPaso.asistente.etiqueta}</div>
                     </div>
-                    <div style={{ fontSize: 25, fontWeight: 800, color: eqColor.acento, textAlign: 'center', marginBottom: 4 }}>¿Quién anotó?</div>
+                    <div style={{ fontFamily: DISP, fontSize: 30, fontWeight: 900, textTransform: 'uppercase', color: eqColor.acento, textAlign: 'center', marginBottom: 4 }}>¿Quién anotó?</div>
                     <div style={{ fontSize: 12, color: TENUE, textAlign: 'center', marginBottom: 18 }}>Elige al jugador que recibió el pase y metió la canasta</div>
-                    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(jugadoresEq(asistPaso.equipo).filter((j) => j.id !== asistPaso.asistente.id).length || 1, 5)}, 1fr)`, gap: 8 }}>
-                      {jugadoresEq(asistPaso.equipo).filter((j) => j.id !== asistPaso.asistente.id).map((j) => (
+                    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(enCanchaEq(asistPaso.equipo).filter((j) => j.id !== asistPaso.asistente.id).length || 1, 5)}, 1fr)`, gap: 8 }}>
+                      {enCanchaEq(asistPaso.equipo).filter((j) => j.id !== asistPaso.asistente.id).map((j) => (
                         <button key={j.id} onClick={() => setAsistPaso({ ...asistPaso, fase: 'puntos', anotador: j })} style={{ border: `1.5px solid ${eqColor.borde}`, borderRadius: 14, cursor: 'pointer', background: VIDRIO_CLARO, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '16px 4px', minHeight: 96 }}>
-                          <span style={{ fontSize: 30, fontWeight: 800, lineHeight: 1, color: eqColor.acento }}>{j.numero || (j.nombre || '?').slice(0, 1).toUpperCase()}</span>
+                          <span style={{ fontFamily: DISP, fontSize: 32, fontWeight: 900, lineHeight: 1, color: eqColor.acento }}>{j.numero || (j.nombre || '?').slice(0, 1).toUpperCase()}</span>
                           <span style={{ fontSize: 11, fontWeight: 600, color: TEXTO, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', padding: '0 2px' }}>{j.nombre || ('#' + j.numero)}</span>
                         </button>
                       ))}
@@ -433,12 +498,12 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
                     <div style={{ textAlign: 'center', marginBottom: 6 }}>
                       <div style={{ fontSize: 13, color: '#7adfa6', fontWeight: 700 }}>↗ {asistPaso.asistente.etiqueta} → {asistPaso.anotador.etiqueta}</div>
                     </div>
-                    <div style={{ fontSize: 25, fontWeight: 800, color: eqColor.acento, textAlign: 'center', marginBottom: 4 }}>¿Cuántos puntos?</div>
+                    <div style={{ fontFamily: DISP, fontSize: 30, fontWeight: 900, textTransform: 'uppercase', color: eqColor.acento, textAlign: 'center', marginBottom: 4 }}>¿Cuántos puntos?</div>
                     <div style={{ fontSize: 12, color: TENUE, textAlign: 'center', marginBottom: 18 }}>La canasta de {asistPaso.anotador.etiqueta}</div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 11 }}>
                       {[2, 3].map((pts) => (
                         <button key={pts} onClick={() => completarAsistencia(asistPaso.anotador, pts)} style={{ border: `1.5px solid ${eqColor.borde}`, borderRadius: 16, padding: '30px 6px', cursor: 'pointer', background: VIDRIO_CLARO, color: TEXTO, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 9, minHeight: 130 }}>
-                          <span style={{ fontSize: 48, fontWeight: 800, color: VERDE }}>{pts}</span>
+                          <span style={{ fontFamily: DISP, fontSize: 50, fontWeight: 900, color: VERDE }}>{pts}</span>
                           <span style={{ fontSize: 13, fontWeight: 600 }}>{pts === 3 ? 'Triple' : 'Doble'}</span>
                         </button>
                       ))}
@@ -452,12 +517,57 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
         )
       })()}
 
-      {verPizarra && <ModalPizarra T={T} ORO={ORO} historial={historial} eq={EQ} onCerrar={() => setVerPizarra(false)} onDeshacer={deshacer} onSustituir={(h) => { setSustituyendo(h); setVerPizarra(false) }} />}
+      {subPaso && (() => {
+        const eqColor = EQ[subPaso.equipo]
+        const jug = subPaso.jug
+        const esFallo = subPaso.pregunta === 'fallo'
+        return (
+          <>
+            <div onClick={() => setSubPaso(null)} style={{ position: 'absolute', inset: 0, background: 'rgba(4,5,7,.78)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', zIndex: 22 }} />
+            <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 23, borderRadius: '24px 24px 0 0', padding: 2, background: eqColor.solido, maxWidth: 480, margin: '0 auto', boxShadow: '0 -12px 40px rgba(0,0,0,.55)' }}>
+              <div style={{ borderRadius: '22px 22px 0 0', background: 'linear-gradient(180deg, rgba(22,24,28,0.98), rgba(12,14,18,0.99))', padding: '16px 16px 30px', minHeight: '40vh' }}>
+                <div style={{ width: 44, height: 5, borderRadius: 3, background: 'rgba(255,255,255,.18)', margin: '0 auto 18px' }} />
+                <div style={{ textAlign: 'center', marginBottom: 6 }}>
+                  <div style={{ fontSize: 13, color: eqColor.acento, fontWeight: 700 }}>{esFallo ? '⊘ Tiro fallado' : '① Tiro libre'} · {jug.etiqueta}</div>
+                </div>
+                <div style={{ fontFamily: DISP, fontSize: 30, fontWeight: 900, textTransform: 'uppercase', color: eqColor.acento, textAlign: 'center', marginBottom: 4 }}>
+                  {esFallo ? '¿De dónde falló?' : '¿Encestó o falló?'}
+                </div>
+                <div style={{ fontSize: 12, color: TENUE, textAlign: 'center', marginBottom: 18 }}>
+                  {esFallo ? 'Para el porcentaje de tiro' : 'El tiro libre de ' + jug.etiqueta}
+                </div>
+                {esFallo ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 11 }}>
+                    {[2, 3].map((d) => (
+                      <button key={d} onClick={() => registrarSub(d === 3 ? { fa3: 1 } : { fa2: 1 }, 'fall', 'Tiro fallado', 'Falló de ' + d)} style={{ border: `1.5px solid ${ROJO}66`, borderRadius: 16, padding: '28px 6px', cursor: 'pointer', background: 'linear-gradient(160deg, rgba(226,75,74,.12), ' + VIDRIO_CLARO + ')', color: TEXTO, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 9, minHeight: 124 }}>
+                        <span style={{ fontFamily: DISP, fontSize: 50, fontWeight: 900, color: ROJO }}>{d}</span>
+                        <span style={{ fontSize: 13, fontWeight: 600 }}>Falló de {d === 3 ? 'tres' : 'dos'}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 11 }}>
+                    <button onClick={() => registrarSub({ pts: 1, tlm: 1 }, 'tl', 'Tiro libre', 'TL anotado')} style={{ border: `1.5px solid ${VERDE}88`, borderRadius: 16, padding: '28px 6px', cursor: 'pointer', background: 'linear-gradient(160deg, rgba(47,191,113,.16), ' + VIDRIO_CLARO + ')', color: TEXTO, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 9, minHeight: 124 }}>
+                      <span style={{ fontFamily: DISP, fontSize: 46, fontWeight: 900, color: VERDE }}>✓</span>
+                      <span style={{ fontSize: 13, fontWeight: 700 }}>Encestó (+1)</span>
+                    </button>
+                    <button onClick={() => registrarSub({ tlf: 1 }, 'tl', 'Tiro libre', 'TL fallado')} style={{ border: `1.5px solid ${ROJO}66`, borderRadius: 16, padding: '28px 6px', cursor: 'pointer', background: 'linear-gradient(160deg, rgba(226,75,74,.12), ' + VIDRIO_CLARO + ')', color: TEXTO, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 9, minHeight: 124 }}>
+                      <span style={{ fontFamily: DISP, fontSize: 46, fontWeight: 900, color: ROJO }}>✕</span>
+                      <span style={{ fontSize: 13, fontWeight: 700 }}>Falló</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
+        )
+      })()}
+      {verPizarra && <ModalPizarra T={T} ORO={ORO} historial={historial} eq={EQ} onCerrar={() => setVerPizarra(false)} onDeshacer={(h) => deshacer(h)} onSustituir={(h) => { setVerPizarra(false); setSustituyendo(h) }} onMomento={(h) => marcarMomento(h)} />}
       {sustituyendo && <ModalSustituir T={T} eq={EQ} jugada={sustituyendo} jugadores={jugadores} acciones={accionesTodas} onCancelar={() => setSustituyendo(null)} onConfirmar={(a, j) => sustituir(sustituyendo, a, j)} />}
-      {cambioEquipo !== null && <ModalCambio T={T} eq={EQ} equipo={cambioEquipo} nombreEquipo={cambioEquipo === 0 ? config?.nombreA : config?.nombreB} jugadores={jugadoresEq(cambioEquipo)} jugSel={jugASustituir} setJugSel={setJugASustituir} nombre={nuevoNombre} numero={nuevoNumero} setNombre={setNuevoNombre} setNumero={setNuevoNumero} onCancelar={() => { setCambioEquipo(null); setJugASustituir(null); setNuevoNombre(''); setNuevoNumero('') }} onConfirmar={aplicarCambio} />}
-      {confirmarFin && <ModalConfirmar T={T} titulo="¿Terminar el juego?" mensaje="Vas a cerrar el juego y ver el resultado. ¿Seguro?" textoSi="Sí, terminar" textoNo="No, seguir jugando" onSi={() => { vibrar([60, 30, 60, 30, 100]); onTerminar && onTerminar({ ...config, jugadores, historial }) }} onNo={() => setConfirmarFin(false)} />}
+      {cambioEquipo !== null && <ModalCambio T={T} eq={EQ} equipo={cambioEquipo} nombreEquipo={cambioEquipo === 0 ? config?.nombreA : config?.nombreB} enCancha={enCanchaEq(cambioEquipo)} banca={bancaEq(cambioEquipo)} jugSel={jugASustituir} setJugSel={setJugASustituir} nombre={nuevoNombre} numero={nuevoNumero} setNombre={setNuevoNombre} setNumero={setNuevoNumero} onCancelar={() => { setCambioEquipo(null); setJugASustituir(null); setNuevoNombre(''); setNuevoNumero('') }} onConfirmarRename={aplicarCambio} onConfirmarBanca={cambiarPorBanca} />}
+      {confirmarFin && <ModalConfirmar T={T} titulo="¿Terminar el juego?" mensaje="Vas a cerrar el juego y ver el resultado. ¿Seguro?" textoSi="Sí, terminar" textoNo="No, seguir jugando" onSi={() => { vibrar([60, 30, 60, 30, 100]); onTerminar && onTerminar({ ...config, jugadores, historial, momentos }) }} onNo={() => setConfirmarFin(false)} />}
       {avisoFin === 'cuarto' && <ModalConfirmar T={T} titulo={`Fin del ${cuartoActual}º cuarto`} mensaje={`Terminó el cuarto ${cuartoActual} de ${totalCuartos}. ¿Pasar al siguiente?`} textoSi={`▶ Cuarto ${cuartoActual + 1}`} textoNo="Esperar" onSi={() => { vibrar([40, 30, 40]); siguienteCuarto() }} onNo={() => setAvisoFin(null)} />}
-      {(avisoFin === 'reloj' || avisoFin === 'puntos') && <ModalConfirmar T={T} titulo={avisoFin === 'puntos' ? '¡Se llegó a la meta!' : '¡Se acabó el tiempo!'} mensaje={avisoFin === 'puntos' ? `Un equipo llegó a ${config.puntosMeta} puntos. ¿Terminar?` : 'El reloj llegó a cero. ¿Terminar?'} textoSi="Terminar juego" textoNo="Seguir jugando" onSi={() => { vibrar([60, 30, 60, 30, 100]); onTerminar && onTerminar({ ...config, jugadores, historial }) }} onNo={() => setAvisoFin(null)} />}
+      {(avisoFin === 'reloj' || avisoFin === 'puntos') && <ModalConfirmar T={T} titulo={avisoFin === 'puntos' ? '¡Se llegó a la meta!' : '¡Se acabó el tiempo!'} mensaje={avisoFin === 'puntos' ? `Un equipo llegó a ${config.puntosMeta} puntos. ¿Terminar?` : 'El reloj llegó a cero. ¿Terminar?'} textoSi="Terminar juego" textoNo="Seguir jugando" onSi={() => { vibrar([60, 30, 60, 30, 100]); onTerminar && onTerminar({ ...config, jugadores, historial, momentos }) }} onNo={() => setAvisoFin(null)} />}
     </div>
   )
 }
@@ -466,13 +576,13 @@ function fondoModal() { return { position: 'fixed', inset: 0, zIndex: 50, backgr
 function cajaModal(T) { return { width: '100%', maxWidth: 480, maxHeight: '82vh', overflowY: 'auto', borderRadius: '20px 20px 0 0', padding: 1.5, background: T.borde } }
 const TENUE2 = '#9aa7b2', TEXTO2 = '#eef3f6', ROJO2 = '#e0563f'
 
-function ModalPizarra({ T, ORO, historial, eq, onCerrar, onDeshacer, onSustituir }) {
+function ModalPizarra({ T, ORO, historial, eq, onCerrar, onDeshacer, onSustituir, onMomento }) {
   return (
     <div style={fondoModal()} onClick={onCerrar}>
       <div style={cajaModal(T)} onClick={(e) => e.stopPropagation()}>
         <div style={{ borderRadius: '19px 19px 0 0', background: 'linear-gradient(180deg, #14161a, #0c0e12)', padding: 18, minHeight: 200 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-            <span style={{ fontSize: 17, fontWeight: 800, ...ORO }}>Historial de jugadas</span>
+            <span style={{ fontSize: 17, fontWeight: 800, ...ORO }}>🎙️ Narración del juego</span>
             <span onClick={onCerrar} style={{ fontSize: 22, color: TENUE2, cursor: 'pointer', lineHeight: 1 }}>×</span>
           </div>
           {historial.length === 0 ? (
@@ -480,11 +590,12 @@ function ModalPizarra({ T, ORO, historial, eq, onCerrar, onDeshacer, onSustituir
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {[...historial].reverse().map((h, i) => (
-                <div key={h.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 11, background: 'rgba(255,255,255,.04)' }}>
-                  <span style={{ fontSize: 11, color: TENUE2, width: 22 }}>{historial.length - i}</span>
-                  <span style={{ flex: 1, fontSize: 14, color: TEXTO2 }}><b style={{ color: eq[h.equipo].acento, fontWeight: 800 }}>{h.etiquetaJug}</b> · {h.sub}{h.asistDe ? <span style={{ color: '#7adfa6', fontSize: 12 }}> (asist. {h.asistDe})</span> : ''}{h.asistA ? <span style={{ color: '#7adfa6', fontSize: 12 }}> → {h.asistA}</span> : ''} <span style={{ color: TENUE2, fontSize: 12.5 }}>({h.etiquetaAccion})</span></span>
-                  <button onClick={() => onSustituir(h)} style={{ fontSize: 11, fontWeight: 700, padding: '6px 10px', borderRadius: 8, border: `1px solid ${T.acento}`, background: 'transparent', color: T.acento, cursor: 'pointer' }}>Corregir</button>
-                  <button onClick={() => onDeshacer(h)} style={{ fontSize: 11, fontWeight: 700, padding: '6px 10px', borderRadius: 8, border: `1px solid ${ROJO2}`, background: 'transparent', color: ROJO2, cursor: 'pointer' }}>Deshacer</button>
+                <div key={h.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 11, background: h.tono === 'fuego' ? 'rgba(232,182,90,.10)' : 'rgba(255,255,255,.04)' }}>
+                  <span style={{ fontSize: 11, color: TENUE2, width: 22, flexShrink: 0 }}>{historial.length - i}</span>
+                  <span style={{ flex: 1, fontSize: 13.5, color: h.tono === 'fuego' ? T.acento : TEXTO2, fontWeight: h.tono === 'fuego' ? 700 : 400 }}>{h.narracion || (<><b style={{ color: eq[h.equipo].acento, fontWeight: 800 }}>{h.etiquetaJug}</b> · {h.sub}</>)}</span>
+                  <button onClick={() => onMomento && onMomento(h)} title="Momento" style={{ fontSize: 12, padding: '6px 8px', borderRadius: 8, border: `1px solid ${T.acento}`, background: 'transparent', color: T.acento, cursor: 'pointer', flexShrink: 0 }}>⭐</button>
+                  <button onClick={() => onSustituir(h)} style={{ fontSize: 11, fontWeight: 700, padding: '6px 9px', borderRadius: 8, border: `1px solid ${T.acento}`, background: 'transparent', color: T.acento, cursor: 'pointer', flexShrink: 0 }}>Corregir</button>
+                  <button onClick={() => onDeshacer(h)} style={{ fontSize: 11, fontWeight: 700, padding: '6px 9px', borderRadius: 8, border: `1px solid ${ROJO2}`, background: 'transparent', color: ROJO2, cursor: 'pointer', flexShrink: 0 }}>Deshacer</button>
                 </div>
               ))}
             </div>
@@ -522,9 +633,15 @@ function ModalSustituir({ T, eq, jugada, jugadores, acciones, onCancelar, onConf
   )
 }
 
-function ModalCambio({ T, eq, equipo, nombreEquipo, jugadores, jugSel, setJugSel, nombre, numero, setNombre, setNumero, onCancelar, onConfirmar }) {
+function ModalCambio({ T, eq, equipo, nombreEquipo, enCancha, banca, jugSel, setJugSel, nombre, numero, setNombre, setNumero, onCancelar, onConfirmarRename, onConfirmarBanca }) {
   const col = eq[equipo]
+  const [entraSel, setEntraSel] = useState(null)
   const input = { background: 'rgba(12,14,18,0.7)', border: '1px solid rgba(255,255,255,.12)', borderRadius: 10, padding: '12px 13px', color: TEXTO2, fontSize: 15, outline: 'none', boxSizing: 'border-box' }
+  const aceptar = () => {
+    if (entraSel) { onConfirmarBanca(jugSel, entraSel); return }
+    onConfirmarRename()
+  }
+  const listo = jugSel && (entraSel || nombre.trim() || numero.trim())
   return (
     <div style={fondoModal()} onClick={onCancelar}>
       <div style={cajaModal(T)} onClick={(e) => e.stopPropagation()}>
@@ -533,17 +650,23 @@ function ModalCambio({ T, eq, equipo, nombreEquipo, jugadores, jugSel, setJugSel
             <span style={{ fontSize: 17, fontWeight: 800, color: col.acento }}>Sustituir en {nombreEquipo}</span>
             <span onClick={onCancelar} style={{ fontSize: 22, color: TENUE2, cursor: 'pointer', lineHeight: 1 }}>×</span>
           </div>
-          <div style={{ fontSize: 12.5, color: TENUE2, marginBottom: 12 }}>1. ¿Quién SALE?</div>
+          <div style={{ fontSize: 12.5, color: TENUE2, marginBottom: 10 }}>1. ¿Quién SALE? (está en cancha)</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginBottom: 18 }}>
-            {jugadores.map((j) => (<button key={j.id} onClick={() => setJugSel(j)} style={{ borderRadius: 9, padding: '9px 14px', fontSize: 13.5, fontWeight: 700, cursor: 'pointer', border: jugSel?.id === j.id ? 'none' : `1px solid ${col.borde}`, background: jugSel?.id === j.id ? col.solido : 'transparent', color: jugSel?.id === j.id ? col.textoBoton : col.acento }}>{j.etiqueta}</button>))}
+            {enCancha.map((j) => (<button key={j.id} onClick={() => setJugSel(j)} style={{ borderRadius: 9, padding: '9px 14px', fontSize: 13.5, fontWeight: 700, cursor: 'pointer', border: jugSel?.id === j.id ? 'none' : `1px solid ${col.borde}`, background: jugSel?.id === j.id ? col.solido : 'transparent', color: jugSel?.id === j.id ? col.textoBoton : col.acento }}>{j.etiqueta}</button>))}
           </div>
           {jugSel && (<>
-            <div style={{ fontSize: 12.5, color: TENUE2, marginBottom: 10 }}>2. ¿Quién ENTRA? (nombre o número)</div>
+            {banca.length > 0 && (<>
+              <div style={{ fontSize: 12.5, color: TENUE2, marginBottom: 10 }}>2. ¿Quién ENTRA? (de la banca)</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginBottom: 16 }}>
+                {banca.map((j) => (<button key={j.id} onClick={() => { setEntraSel(j); setNombre(''); setNumero('') }} style={{ borderRadius: 9, padding: '9px 14px', fontSize: 13.5, fontWeight: 700, cursor: 'pointer', border: entraSel?.id === j.id ? 'none' : `1px solid ${col.borde}`, background: entraSel?.id === j.id ? col.solido : 'transparent', color: entraSel?.id === j.id ? col.textoBoton : col.acento }}>{j.etiqueta}</button>))}
+              </div>
+            </>)}
+            <div style={{ fontSize: 12.5, color: TENUE2, marginBottom: 10 }}>{banca.length > 0 ? 'o escribe a alguien nuevo' : '2. ¿Quién ENTRA? (nombre o número)'}</div>
             <div style={{ display: 'flex', gap: 8, marginBottom: 18 }}>
-              <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre del que entra" style={{ ...input, flex: 1, minWidth: 0 }} />
-              <input value={numero} onChange={(e) => setNumero(e.target.value.replace(/\D/g, '').slice(0, 2))} placeholder="#" inputMode="numeric" style={{ ...input, width: 56, textAlign: 'center' }} />
+              <input value={nombre} onChange={(e) => { setNombre(e.target.value); setEntraSel(null) }} placeholder="Nombre del que entra" style={{ ...input, flex: 1, minWidth: 0 }} />
+              <input value={numero} onChange={(e) => { setNumero(e.target.value.replace(/\D/g, '').slice(0, 2)); setEntraSel(null) }} placeholder="#" inputMode="numeric" style={{ ...input, width: 56, textAlign: 'center' }} />
             </div>
-            <button onClick={onConfirmar} style={{ width: '100%', border: 'none', borderRadius: 12, padding: 15, background: T.boton, color: '#1a1205', fontWeight: 800, fontSize: 15, cursor: 'pointer' }}>Aceptar cambio</button>
+            <button onClick={aceptar} disabled={!listo} style={{ width: '100%', border: 'none', borderRadius: 12, padding: 15, background: listo ? T.boton : 'rgba(255,255,255,.1)', color: '#1a1205', fontWeight: 800, fontSize: 15, cursor: listo ? 'pointer' : 'default', opacity: listo ? 1 : 0.5 }}>Aceptar cambio</button>
           </>)}
         </div>
       </div>

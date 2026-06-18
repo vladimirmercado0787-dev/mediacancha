@@ -42,26 +42,28 @@ const TEMAS = {
   },
 }
 
-const STATS_GRATIS = [
+// fuente deportiva condensada (igual que el resto del rediseño)
+const DISP = '"Arial Narrow", Impact, "Haettenschweiler", system-ui, sans-serif'
+
+// TODAS las estadísticas desbloqueadas (la app es gratis)
+const STATS = [
   { id: 'pts', nombre: 'Puntos', obligatorio: true },
   { id: 'reb', nombre: 'Rebote' },
   { id: 'ast', nombre: 'Asistencia' },
-]
-const STATS_PAGO = [
   { id: 'rob', nombre: 'Robo' },
   { id: 'tap', nombre: 'Bloqueo' },
   { id: 'fal', nombre: 'Falta' },
-  { id: 'tir', nombre: '% de tiro' },
   { id: 'min', nombre: 'Minutos' },
   { id: 'per', nombre: 'Pérdida' },
-  { id: 'fall', nombre: 'Tiros fallados' },
+  { id: 'fall', nombre: 'Tiros fallados (%)' },
   { id: 'tl', nombre: 'Tiros libres' },
 ]
+const RECOMENDADO_TEL = 6
 
 const FORMATOS = ['1v1', '2v2', '3v3', '4v4', '5v5']
 const PUNTOS_RAPIDOS = [11, 15, 21, 32]
 
-export default function PantallaJuegoConfig({ onListo, onVolver }) {
+export default function PantallaJuegoConfig({ onListo, onVolver, tipoInicial }) {
   const [tema, setTema] = useState(() => {
     const validos = ['dorado', 'azul', 'claro', 'larimar']
     if (typeof window !== 'undefined') {
@@ -82,32 +84,47 @@ export default function PantallaJuegoConfig({ onListo, onVolver }) {
     try { localStorage.setItem('mc_tema', nuevo) } catch (e) {}
   }
 
+  // tipo de juego: rápido (por puntos) o fogueo (por reloj, completo)
+  const [tipoJuego, setTipoJuego] = useState(() => {
+    if (tipoInicial === 'fogueo') return 'fogueo'
+    if (tipoInicial === 'rapido') return 'rapido'
+    try {
+      const g = localStorage.getItem('mc_tipo_juego')
+      if (g) localStorage.removeItem('mc_tipo_juego')
+      return g === 'fogueo' ? 'fogueo' : 'rapido'
+    } catch (e) { return 'rapido' }
+  })
+  const esFogueo = tipoJuego === 'fogueo'
+
   const [nombreJuego, setNombreJuego] = useState('')
+  // rápido
   const [formato, setFormato] = useState('5v5')
-  const [tipoFin, setTipoFin] = useState('reloj')
-  const [minutos, setMinutos] = useState(10)
-  const [cuartos, setCuartos] = useState(4)
   const [puntosMeta, setPuntosMeta] = useState(21)
   const [porDif2, setPorDif2] = useState(false)
+  // fogueo
+  const [cuartos, setCuartos] = useState(4)
+  const [minutos, setMinutos] = useState(10)
+  const [relojApp, setRelojApp] = useState(true)
+  const [jugadoresEquipo, setJugadoresEquipo] = useState(10)
+  const [reservas, setReservas] = useState(0)
+  // faltas (ambos modos)
+  const [llevarFaltas, setLlevarFaltas] = useState(false)
+  const [expulsionA, setExpulsionA] = useState(5)
+  const [bonusCada, setBonusCada] = useState(0)
+  // anotación + estadísticas
   const [modoAnotacion, setModoAnotacion] = useState('jugada')
   const [statsActivas, setStatsActivas] = useState(['pts'])
-  const [avisoPago, setAvisoPago] = useState('')
 
-  const jugadoresPorLado = parseInt(formato[0], 10)
-  const esCincoVcinco = formato === '5v5'
+  const jugadoresPorLado = esFogueo ? 5 : parseInt(formato[0], 10)
 
-  const cambiarFormato = (f) => {
-    setFormato(f)
-    if (f !== '5v5' && tipoFin === 'reloj') setTipoFin('puntos')
+  const cambiarTipo = (t) => {
+    setTipoJuego(t)
+    if (t === 'fogueo') setLlevarFaltas(true)
   }
 
   const toggleStat = (id) => {
     if (id === 'pts') return
     setStatsActivas((prev) => prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id])
-  }
-  const tocarPago = (nombre) => {
-    setAvisoPago(`"${nombre}" es de la versión completa. Suscríbete para usarla.`)
-    setTimeout(() => setAvisoPago(''), 3200)
   }
 
   const placa = (contenido, padding = 18) => (
@@ -136,21 +153,41 @@ export default function PantallaJuegoConfig({ onListo, onVolver }) {
     color: '#1a1205', fontSize: 24, fontWeight: 800, cursor: 'pointer', lineHeight: 1,
   }
 
-  const empezar = () => {
-    const config = {
-      nombreJuego: nombreJuego.trim() || 'Juego rápido',
-      formato, jugadoresPorLado, tipoFin,
-      minutos: tipoFin === 'reloj' ? minutos : null,
-      cuartos: tipoFin === 'reloj' ? cuartos : null,
-      puntosMeta: tipoFin === 'puntos' ? puntosMeta : null,
-      porDif2, modoAnotacion, statsActivas,
-    }
-    onListo && onListo(config)
-  }
+  // stepper compacto (− valor +) con mínimos y máximos
+  const stepper = (valor, set, min, max, sufijo) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <button onClick={() => set(Math.max(min, valor - 1))} style={btnMas}>−</button>
+      <div style={{ fontFamily: DISP, fontSize: 34, fontWeight: 900, minWidth: 70, textAlign: 'center', ...ORO }}>{valor}</div>
+      <button onClick={() => set(Math.min(max, valor + 1))} style={btnMas}>+</button>
+      {sufijo && <div style={{ fontSize: 12.5, color: C.tenue, marginLeft: 6 }}>{sufijo}</div>}
+    </div>
+  )
 
   const inputStyle = {
     width: '100%', background: T.inputBg, border: `1px solid ${T.inputBorde}`,
     borderRadius: 12, padding: '13px 14px', color: T.textoFuerte, fontSize: 15, outline: 'none', fontFamily: C.font, boxSizing: 'border-box',
+  }
+
+  const empezar = () => {
+    const config = {
+      tipo: tipoJuego,
+      nombreJuego: nombreJuego.trim() || (esFogueo ? 'Fogueo' : 'Juego rápido'),
+      formato: esFogueo ? '5v5' : formato,
+      jugadoresPorLado,
+      tipoFin: esFogueo ? 'reloj' : 'puntos',
+      minutos: esFogueo ? minutos : null,
+      cuartos: esFogueo ? cuartos : null,
+      relojApp: esFogueo ? relojApp : null,
+      rosterEquipo: esFogueo ? jugadoresEquipo : null,
+      reservas: esFogueo ? reservas : null,
+      puntosMeta: esFogueo ? null : puntosMeta,
+      porDif2: esFogueo ? false : porDif2,
+      llevarFaltas,
+      expulsionA: llevarFaltas ? expulsionA : null,
+      bonusCada: (llevarFaltas && esFogueo) ? bonusCada : null,
+      modoAnotacion, statsActivas,
+    }
+    onListo && onListo(config)
   }
 
   return (
@@ -159,7 +196,6 @@ export default function PantallaJuegoConfig({ onListo, onVolver }) {
       <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: T.veloGrad }} />
       <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: `radial-gradient(ellipse 60% 40% at 50% 15%, ${T.glow}, transparent 70%)` }} />
 
-      {/* selector de tema flotante */}
       <button onClick={cambiarTema} title={`Tema: ${T.nombre}`} style={{ position: 'fixed', top: 16, right: 16, zIndex: 5, display: 'flex', alignItems: 'center', gap: 7, background: T.esClaro ? 'rgba(255,255,255,.6)' : 'rgba(20,18,16,.7)', border: `1px solid ${T.acento}55`, color: T.acento, fontSize: 11.5, fontWeight: 700, padding: '7px 11px', borderRadius: 10, cursor: 'pointer', backdropFilter: 'blur(8px)' }}>
         <span style={{ width: 12, height: 12, borderRadius: '50%', background: T.boton, display: 'inline-block' }} />{T.nombre}
       </button>
@@ -168,11 +204,25 @@ export default function PantallaJuegoConfig({ onListo, onVolver }) {
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
           <span onClick={() => onVolver && onVolver()} style={{ color: C.tenue, fontSize: 14, cursor: 'pointer' }}>← Inicio</span>
-          <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1, textTransform: 'uppercase', ...ORO }}>Juego rápido · Gratis</span>
+          <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1, textTransform: 'uppercase', ...ORO }}>{esFogueo ? 'Fogueo' : 'Juego rápido'} · Gratis</span>
         </div>
 
-        <h1 style={{ fontSize: 24, fontWeight: 800, margin: '0 0 4px', color: T.textoFuerte }}>Arma tu juego</h1>
-        <p style={{ fontSize: 13.5, color: C.tenue, margin: '0 0 22px' }}>Configura las reglas y empieza a anotar. Nada se guarda — es un juego suelto.</p>
+        <h1 style={{ fontFamily: DISP, fontSize: 34, fontWeight: 900, textTransform: 'uppercase', margin: '0 0 4px', color: T.textoFuerte, lineHeight: 0.95 }}>Arma tu juego</h1>
+        <p style={{ fontSize: 13.5, color: C.tenue, margin: '0 0 18px' }}>{esFogueo ? 'Modo completo: roster, banca, reloj y faltas.' : 'Configura las reglas y empieza a anotar. Es un juego suelto.'}</p>
+
+        {/* TIPO DE JUEGO */}
+        <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+          {[{ id: 'rapido', e: '⚡', t: 'Juego rápido', d: 'Por puntos · de 1 a 5 por equipo' }, { id: 'fogueo', e: '🔥', t: 'Fogueo', d: 'Por reloj · roster, banca y faltas' }].map((x) => {
+            const on = tipoJuego === x.id
+            return (
+              <button key={x.id} onClick={() => cambiarTipo(x.id)} style={{ flex: 1, textAlign: 'left', borderRadius: 14, padding: '13px 14px', cursor: 'pointer', border: on ? 'none' : `1px solid ${T.lineaSuave}`, background: on ? T.boton : 'transparent', color: on ? '#1a1205' : T.subTexto }}>
+                <div style={{ fontSize: 20 }}>{x.e}</div>
+                <div style={{ fontFamily: DISP, fontSize: 18, fontWeight: 900, textTransform: 'uppercase', marginTop: 2 }}>{x.t}</div>
+                <div style={{ fontSize: 11, opacity: 0.85, marginTop: 1, lineHeight: 1.3 }}>{x.d}</div>
+              </button>
+            )
+          })}
+        </div>
 
         {placa(
           <>
@@ -181,72 +231,119 @@ export default function PantallaJuegoConfig({ onListo, onVolver }) {
           </>
         )}
 
-        {placa(
+        {/* RÁPIDO: formato + por puntos */}
+        {!esFogueo && placa(
           <>
             {tituloSeccion('Formato')}
             <div style={{ display: 'flex', gap: 8 }}>
-              {FORMATOS.map((f) => pastilla(formato === f, () => cambiarFormato(f), f, f))}
+              {FORMATOS.map((f) => pastilla(formato === f, () => setFormato(f), f, f))}
             </div>
             <div style={{ fontSize: 12, color: C.tenue, marginTop: 10 }}>{jugadoresPorLado} {jugadoresPorLado === 1 ? 'jugador' : 'jugadores'} por equipo.</div>
           </>
         )}
 
+        {!esFogueo && placa(
+          <>
+            {tituloSeccion('¿A cuántos puntos se gana?')}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+              <button onClick={() => setPuntosMeta((p) => Math.max(1, p - 1))} style={btnMas}>−</button>
+              <div style={{ fontFamily: DISP, fontSize: 34, fontWeight: 900, minWidth: 70, textAlign: 'center', ...ORO }}>{puntosMeta}</div>
+              <button onClick={() => setPuntosMeta((p) => Math.min(199, p + 1))} style={btnMas}>+</button>
+              <div style={{ display: 'flex', gap: 6, marginLeft: 'auto', flexWrap: 'wrap' }}>
+                {PUNTOS_RAPIDOS.map((p) => (
+                  <button key={p} onClick={() => setPuntosMeta(p)} style={{ border: `1px solid ${T.lineaSuave}`, background: puntosMeta === p ? T.wash : 'transparent', color: C.tenue, borderRadius: 8, padding: '6px 9px', fontSize: 12, cursor: 'pointer' }}>{p}</button>
+                ))}
+              </div>
+            </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 13.5, color: C.texto }}>
+              <span onClick={() => setPorDif2(!porDif2)} style={{ width: 44, height: 26, borderRadius: 13, background: porDif2 ? T.boton : T.lineaSuave, position: 'relative', transition: 'all .15s', flexShrink: 0 }}>
+                <span style={{ position: 'absolute', top: 3, left: porDif2 ? 21 : 3, width: 20, height: 20, borderRadius: '50%', background: '#fff', transition: 'all .15s' }} />
+              </span>
+              Ganar por diferencia de 2
+            </label>
+          </>
+        )}
+
+        {/* FOGUEO: reloj + roster */}
+        {esFogueo && placa(
+          <>
+            {tituloSeccion('Reloj')}
+            <div style={{ fontSize: 12.5, color: C.tenue, marginBottom: 8 }}>Cantidad de cuartos</div>
+            <div style={{ display: 'flex', gap: 6, marginBottom: 18, flexWrap: 'wrap' }}>
+              {[1, 2, 3, 4, 5, 6].map((c) => (
+                <button key={c} onClick={() => setCuartos(c)} style={{ flex: 1, minWidth: 42, border: cuartos === c ? `1.5px solid ${T.acento}` : `1px solid ${T.lineaSuave}`, background: cuartos === c ? `${T.acento}1a` : 'transparent', color: cuartos === c ? T.acento : C.tenue, borderRadius: 9, padding: '9px 0', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>{c}</button>
+              ))}
+            </div>
+            <div style={{ fontSize: 12.5, color: C.tenue, marginBottom: 8 }}>Minutos por cuarto</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <button onClick={() => setMinutos((m) => Math.max(1, m - 1))} style={btnMas}>−</button>
+              <div style={{ fontFamily: DISP, fontSize: 34, fontWeight: 900, minWidth: 70, textAlign: 'center', ...ORO }}>{minutos}</div>
+              <button onClick={() => setMinutos((m) => Math.min(99, m + 1))} style={btnMas}>+</button>
+              <div style={{ display: 'flex', gap: 6, marginLeft: 'auto' }}>
+                {[5, 10, 12, 20].map((m) => (
+                  <button key={m} onClick={() => setMinutos(m)} style={{ border: `1px solid ${T.lineaSuave}`, background: minutos === m ? T.wash : 'transparent', color: C.tenue, borderRadius: 8, padding: '6px 9px', fontSize: 12, cursor: 'pointer' }}>{m}</button>
+                ))}
+              </div>
+            </div>
+            <div style={{ fontSize: 11.5, color: C.tenue, marginTop: 12, fontStyle: 'italic' }}>
+              {cuartos} {cuartos === 1 ? 'cuarto' : 'cuartos'} de {minutos} min = {cuartos * minutos} min de juego
+            </div>
+            <div style={{ height: 1, background: T.lineaSuave, margin: '16px 0' }} />
+            <div style={{ fontSize: 12.5, color: C.tenue, marginBottom: 10 }}>¿Quién lleva el reloj?</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {pastilla(relojApp, () => setRelojApp(true), '⏱ La app', 'app')}
+              {pastilla(!relojApp, () => setRelojApp(false), '✋ Afuera (manual)', 'fuera')}
+            </div>
+            <div style={{ fontSize: 11.5, color: C.tenue, marginTop: 10, lineHeight: 1.5 }}>
+              {relojApp ? 'La aplicación corre el cronómetro del juego.' : 'El tiempo lo controlan en la mesa; tú solo anotas las jugadas.'}
+            </div>
+          </>
+        )}
+
+        {esFogueo && placa(
+          <>
+            {tituloSeccion('Roster del equipo')}
+            <div style={{ fontSize: 12.5, color: C.tenue, marginBottom: 10 }}>Jugadores por equipo (hasta 12)</div>
+            {stepper(jugadoresEquipo, setJugadoresEquipo, 5, 12, jugadoresEquipo === 1 ? 'jugador' : 'jugadores')}
+            <div style={{ height: 1, background: T.lineaSuave, margin: '16px 0' }} />
+            <div style={{ fontSize: 12.5, color: C.tenue, marginBottom: 10 }}>Reservas (opcional, hasta 3)</div>
+            {stepper(reservas, setReservas, 0, 3, reservas === 1 ? 'reserva' : 'reservas')}
+          </>
+        )}
+
+        {/* FALTAS — opcional en rápido, recomendado en fogueo */}
         {placa(
           <>
-            {tituloSeccion('¿Cómo se gana?')}
-            <div style={{ display: 'flex', gap: 8, marginBottom: esCincoVcinco ? 14 : 8 }}>
-              {esCincoVcinco && pastilla(tipoFin === 'reloj', () => setTipoFin('reloj'), '⏱ Por reloj', 'reloj')}
-              {pastilla(tipoFin === 'puntos', () => setTipoFin('puntos'), '🎯 Por puntos', 'puntos')}
-            </div>
-            {!esCincoVcinco && (
-              <div style={{ fontSize: 11.5, color: C.tenue, marginBottom: 14, fontStyle: 'italic', lineHeight: 1.5 }}>
-                ⏱ El reloj está disponible solo en 5 vs 5. Los demás formatos se juegan por puntos.
-              </div>
-            )}
-
-            {tipoFin === 'reloj' ? (
-              <div>
-                <div style={{ fontSize: 12.5, color: C.tenue, marginBottom: 8 }}>Cantidad de cuartos</div>
-                <div style={{ display: 'flex', gap: 6, marginBottom: 18, flexWrap: 'wrap' }}>
-                  {[1, 2, 3, 4, 5, 6].map((c) => (
-                    <button key={c} onClick={() => setCuartos(c)} style={{ flex: 1, minWidth: 42, border: cuartos === c ? `1.5px solid ${T.acento}` : `1px solid ${T.lineaSuave}`, background: cuartos === c ? `${T.acento}1a` : 'transparent', color: cuartos === c ? T.acento : C.tenue, borderRadius: 9, padding: '9px 0', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>{c}</button>
-                  ))}
+            {tituloSeccion('Faltas')}
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 13.5, color: C.texto, marginBottom: llevarFaltas ? 16 : 0 }}>
+              <span onClick={() => setLlevarFaltas(!llevarFaltas)} style={{ width: 44, height: 26, borderRadius: 13, background: llevarFaltas ? T.boton : T.lineaSuave, position: 'relative', transition: 'all .15s', flexShrink: 0 }}>
+                <span style={{ position: 'absolute', top: 3, left: llevarFaltas ? 21 : 3, width: 20, height: 20, borderRadius: '50%', background: '#fff', transition: 'all .15s' }} />
+              </span>
+              Llevar faltas en este juego
+            </label>
+            {llevarFaltas && (
+              <>
+                <div style={{ fontSize: 12.5, color: C.tenue, marginBottom: 8 }}>Expulsión por faltas</div>
+                <div style={{ display: 'flex', gap: 8, marginBottom: esFogueo ? 16 : 0 }}>
+                  {pastilla(expulsionA === 5, () => setExpulsionA(5), 'A las 5', 'e5')}
+                  {pastilla(expulsionA === 6, () => setExpulsionA(6), 'A las 6', 'e6')}
+                  {pastilla(expulsionA === 0, () => setExpulsionA(0), 'Sin expulsión', 'e0')}
                 </div>
-                <div style={{ fontSize: 12.5, color: C.tenue, marginBottom: 8 }}>Minutos por cuarto</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <button onClick={() => setMinutos((m) => Math.max(1, m - 1))} style={btnMas}>−</button>
-                  <div style={{ fontSize: 30, fontWeight: 800, minWidth: 70, textAlign: 'center', ...ORO }}>{minutos}</div>
-                  <button onClick={() => setMinutos((m) => Math.min(99, m + 1))} style={btnMas}>+</button>
-                  <div style={{ display: 'flex', gap: 6, marginLeft: 'auto' }}>
-                    {[5, 10, 12, 20].map((m) => (
-                      <button key={m} onClick={() => setMinutos(m)} style={{ border: `1px solid ${T.lineaSuave}`, background: minutos === m ? T.wash : 'transparent', color: C.tenue, borderRadius: 8, padding: '6px 9px', fontSize: 12, cursor: 'pointer' }}>{m}</button>
-                    ))}
-                  </div>
-                </div>
-                <div style={{ fontSize: 11.5, color: C.tenue, marginTop: 12, fontStyle: 'italic' }}>
-                  {cuartos} {cuartos === 1 ? 'cuarto' : 'cuartos'} de {minutos} min = {cuartos * minutos} min de juego
-                </div>
-              </div>
-            ) : (
-              <div>
-                <div style={{ fontSize: 12.5, color: C.tenue, marginBottom: 8 }}>Juega a... (gana el que llega primero)</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-                  <button onClick={() => setPuntosMeta((p) => Math.max(1, p - 1))} style={btnMas}>−</button>
-                  <div style={{ fontSize: 30, fontWeight: 800, minWidth: 70, textAlign: 'center', ...ORO }}>{puntosMeta}</div>
-                  <button onClick={() => setPuntosMeta((p) => Math.min(199, p + 1))} style={btnMas}>+</button>
-                  <div style={{ display: 'flex', gap: 6, marginLeft: 'auto', flexWrap: 'wrap' }}>
-                    {PUNTOS_RAPIDOS.map((p) => (
-                      <button key={p} onClick={() => setPuntosMeta(p)} style={{ border: `1px solid ${T.lineaSuave}`, background: puntosMeta === p ? T.wash : 'transparent', color: C.tenue, borderRadius: 8, padding: '6px 9px', fontSize: 12, cursor: 'pointer' }}>{p}</button>
-                    ))}
-                  </div>
-                </div>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 13.5, color: C.texto }}>
-                  <span onClick={() => setPorDif2(!porDif2)} style={{ width: 44, height: 26, borderRadius: 13, background: porDif2 ? T.boton : T.lineaSuave, position: 'relative', transition: 'all .15s', flexShrink: 0 }}>
-                    <span style={{ position: 'absolute', top: 3, left: porDif2 ? 21 : 3, width: 20, height: 20, borderRadius: '50%', background: '#fff', transition: 'all .15s' }} />
-                  </span>
-                  Ganar por diferencia de 2
-                </label>
-              </div>
+                {esFogueo && (
+                  <>
+                    <div style={{ fontSize: 12.5, color: C.tenue, marginBottom: 8 }}>Tiros libres por bonus (faltas de equipo por cuarto)</div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      {pastilla(bonusCada === 0, () => setBonusCada(0), 'Sin bonus', 'b0')}
+                      {pastilla(bonusCada === 4, () => setBonusCada(4), 'Cada 4', 'b4')}
+                      {pastilla(bonusCada === 5, () => setBonusCada(5), 'Cada 5', 'b5')}
+                      {pastilla(bonusCada === 7, () => setBonusCada(7), 'Cada 7', 'b7')}
+                    </div>
+                    <div style={{ fontSize: 11.5, color: C.tenue, marginTop: 10, lineHeight: 1.5 }}>
+                      {bonusCada === 0 ? 'No se cobran tiros libres por bonus.' : `Al llegar a ${bonusCada} faltas de equipo en el cuarto, el rival tira libres. Se reinicia cada cuarto.`}
+                    </div>
+                  </>
+                )}
+              </>
             )}
           </>
         )}
@@ -270,9 +367,9 @@ export default function PantallaJuegoConfig({ onListo, onVolver }) {
         {placa(
           <>
             {tituloSeccion('¿Qué estadísticas vas a llevar?')}
-            <div style={{ fontSize: 12, color: C.tenue, marginBottom: 12 }}>Puntos siempre va. Activa las que quieras seguir en vivo.</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
-              {STATS_GRATIS.map((s) => {
+            <div style={{ fontSize: 12, color: C.tenue, marginBottom: 12 }}>Puntos siempre va. Activa las que quieras seguir en vivo. Todas están libres.</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {STATS.map((s) => {
                 const activa = statsActivas.includes(s.id)
                 return (
                   <button key={s.id} onClick={() => toggleStat(s.id)} disabled={s.obligatorio} style={{
@@ -286,34 +383,25 @@ export default function PantallaJuegoConfig({ onListo, onVolver }) {
                 )
               })}
             </div>
-
-            <div style={{ fontSize: 11, color: C.tenue, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10, opacity: 0.8 }}>Versión completa 🔒</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {STATS_PAGO.map((s) => (
-                <button key={s.id} onClick={() => tocarPago(s.nombre)} style={{
-                  borderRadius: 10, padding: '9px 14px', fontSize: 13.5, fontWeight: 700, cursor: 'pointer',
-                  border: `1px dashed ${T.inputBorde}`, background: T.washTenue, color: T.tenue,
-                }}>
-                  🔒 {s.nombre}
-                </button>
-              ))}
-            </div>
-            {avisoPago && (
-              <div style={{ marginTop: 14, padding: '11px 14px', borderRadius: 11, background: T.glow, border: `1px solid ${T.acento}`, color: T.acento, fontSize: 13, fontWeight: 600 }}>
-                {avisoPago}
+            <div style={{ marginTop: 14, padding: '11px 13px', borderRadius: 11, background: statsActivas.length > RECOMENDADO_TEL ? T.glow : T.washTenue, border: `1px solid ${statsActivas.length > RECOMENDADO_TEL ? T.acento : T.lineaSuave}` }}>
+              <div style={{ fontSize: 12.5, color: statsActivas.length > RECOMENDADO_TEL ? T.acento : C.tenue, lineHeight: 1.5 }}>
+                Llevas <b>{statsActivas.length}</b> {statsActivas.length === 1 ? 'estadística' : 'estadísticas'}.{' '}
+                {statsActivas.length > RECOMENDADO_TEL
+                  ? 'Son bastantes para un teléfono. Para anotar cómodo con tantas, te recomendamos computadora o iPad.'
+                  : 'En el teléfono recomendamos hasta seis para anotar cómodo. Para llevar más, mejor desde computadora o iPad.'}
               </div>
-            )}
+            </div>
           </>
         )}
 
         <button onClick={empezar} style={{
           width: '100%', marginTop: 6, border: 'none', borderRadius: 14, padding: 17,
-          background: T.boton, color: '#1a1205', fontWeight: 800, fontSize: 17, cursor: 'pointer',
+          background: T.boton, color: '#1a1205', fontFamily: DISP, fontWeight: 900, fontSize: 20, letterSpacing: 0.5, textTransform: 'uppercase', cursor: 'pointer',
         }}>
           Empezar a anotar →
         </button>
         <div style={{ textAlign: 'center', fontSize: 12, color: C.tenue, marginTop: 12 }}>
-          Después pondrás los nombres de los jugadores.
+          Después pondrás los nombres de los jugadores{esFogueo ? ' y la banca' : ''}.
         </div>
 
       </div>

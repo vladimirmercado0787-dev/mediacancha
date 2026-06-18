@@ -65,10 +65,35 @@ export async function publicarJuego(resultado) {
     }
   }
 
-  // Guardar TODOS los jugadores con sus stats (para la ventana de detalle)
+  // Guardar TODOS los jugadores con TODAS sus stats (para la tabla completa y el % de tiro)
   const jugadoresGuardar = jugadores.map((j) => ({
-    nombre: j.nombre || ('#' + (j.numero || '')), equipo: j.equipo,
+    nombre: j.nombre || ('#' + (j.numero || '')), numero: j.numero || '', equipo: j.equipo,
+    perfilId: j.perfilId || null,
     pts: j.pts || 0, reb: j.reb || 0, ast: j.ast || 0, rob: j.rob || 0, tap: j.tap || 0,
+    fal: j.fal || 0, per: j.per || 0, min: j.min || 0,
+    m2: j.m2 || 0, m3: j.m3 || 0, fa2: j.fa2 || 0, fa3: j.fa3 || 0,
+    tlm: j.tlm || 0, tlf: j.tlf || 0,
+  }))
+
+  // Momentos destacados (rachas, parciales, hitos, manuales) capturados durante el juego
+  const momentos = (resultado.momentos || []).map((m) => ({
+    tipo: m.tipo || 'momento',
+    etiqueta: m.etiqueta || '',
+    jugId: m.jugId || null,
+    equipo: typeof m.equipo === 'number' ? m.equipo : null,
+    valor: m.valor || null,
+    manual: !!m.manual,
+  }))
+
+  // Historial narrado: guardamos las líneas de narración (jugada por jugada)
+  // Solo lo esencial para revivir el juego, sin pesar de más.
+  const historialNarrado = (resultado.historial || []).map((h) => ({
+    equipo: h.equipo,
+    sub: h.sub,
+    narracion: h.narracion || null,
+    tono: h.tono || null,
+    asistDe: h.asistDe || null,
+    asistA: h.asistA || null,
   }))
 
   const narracion = generarNarracion({ nombreA: resultado.nombreA, nombreB: resultado.nombreB, totalA, totalB, hayEmpate, jugadores: jugadoresGuardar, destacado })
@@ -90,9 +115,13 @@ export async function publicarJuego(resultado) {
       logoA: resultado.logoA || null, logoB: resultado.logoB || null,
       totalA, totalB, hayEmpate,
       jugadores: jugadoresGuardar,
+      momentos,
+      historialNarrado,
       narracion,
       plantilla: resultado.plantilla || 'estilo_tema',
       statsActivas: resultado.statsActivas || null,
+      tipoJuego: resultado.tipo || resultado.tipoJuego || null,
+      formato: resultado.jugadoresPorLado || null,
     },
     expira_en: expira,
   }).select().single()

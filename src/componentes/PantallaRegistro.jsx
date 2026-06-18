@@ -111,7 +111,7 @@ export default function PantallaRegistro({ onListo, onIrLogin, onVolver }) {
   }
 
   const [modo, setModo] = useState(null)
-  const [f, setF] = useState({ nombre: '', apellido: '', correo: '', clave: '', clave2: '', sexo: '', fechaNac: '', pais: 'rd', provincia: '', municipio: '', pies: '', pulgadas: '', posiciones: [] })
+  const [f, setF] = useState({ nombre: '', apellido: '', correo: '', clave: '', clave2: '', sexo: '', fechaNac: '', pais: 'rd', provincia: '', municipio: '', pies: '', pulgadas: '', posiciones: [], pin: '', pin2: '' })
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState('')
   const [ok, setOk] = useState(false)
@@ -140,6 +140,8 @@ export default function PantallaRegistro({ onListo, onIrLogin, onVolver }) {
     if (!f.correo.trim()) return setError('Escribe tu correo.')
     if (f.clave.length < 6) return setError('La clave debe tener al menos 6 caracteres.')
     if (f.clave !== f.clave2) return setError('Las dos contraseñas no son iguales. Revísalas.')
+    if (!/^[0-9]{4}$/.test(f.pin)) return setError('Crea tu código de jugador de cuatro dígitos.')
+    if (f.pin !== f.pin2) return setError('Los dos códigos de jugador no son iguales.')
     if (!f.sexo) return setError('Selecciona tu sexo.')
     if (!f.fechaNac) return setError('Pon tu fecha de nacimiento.')
     if (!f.provincia) return setError(`Selecciona tu ${paisActual.etiquetaRegion.toLowerCase()}.`)
@@ -162,6 +164,10 @@ export default function PantallaRegistro({ onListo, onIrLogin, onVolver }) {
       }
       const { error: errPerfil } = await supabase.from('perfiles').insert(perfil)
       if (errPerfil) throw errPerfil
+
+      // Guardar el código de jugador (PIN) encriptado vía función segura en Supabase
+      const { error: errPin } = await supabase.rpc('set_pin', { nuevo_pin: f.pin })
+      if (errPin) throw errPin
 
       setOk(true)
       setTimeout(() => onListo && onListo(), 1800)
@@ -288,7 +294,25 @@ export default function PantallaRegistro({ onListo, onIrLogin, onVolver }) {
             {f.clave2 && f.clave === f.clave2 && <div style={{ fontSize: 11.5, color: '#5bbd85', marginTop: 5 }}>✓ Las claves coinciden.</div>}
           </div>
 
-          <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
+          {/* CÓDIGO DE JUGADOR (PIN de 4 dígitos) */}
+          <div style={{ borderTop: `1px solid ${T.lineaSuave}`, paddingTop: 16, marginBottom: 4 }}>
+            <div style={{ fontSize: 12, color: T.acento, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>🔒 Tu código de jugador</div>
+            <div style={{ fontSize: 12, color: C.tenue, marginBottom: 14, lineHeight: 1.45 }}>Cuatro dígitos secretos. Con este código confirmas que jugaste un juego (como el PIN del cajero). Lo puedes cambiar después en Configuración.</div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <div style={{ flex: 1 }}>
+                <label style={label}>Código (4 dígitos) *</label>
+                <input style={{ ...inputStyle, letterSpacing: 6, textAlign: 'center', fontWeight: 800 }} type="password" inputMode="numeric" value={f.pin} onChange={(e) => set('pin', e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="••••" />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={label}>Repite el código *</label>
+                <input style={{ ...inputStyle, letterSpacing: 6, textAlign: 'center', fontWeight: 800, ...(f.pin2 && f.pin !== f.pin2 ? { border: '1px solid rgba(226,75,74,.5)' } : f.pin2 && f.pin === f.pin2 && f.pin.length === 4 ? { border: '1px solid rgba(47,191,113,.5)' } : {}) }} type="password" inputMode="numeric" value={f.pin2} onChange={(e) => set('pin2', e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="••••" />
+              </div>
+            </div>
+            {f.pin2 && f.pin !== f.pin2 && <div style={{ fontSize: 11.5, color: '#e0563f', marginTop: 6 }}>Los códigos no coinciden todavía.</div>}
+            {f.pin2 && f.pin === f.pin2 && f.pin.length === 4 && <div style={{ fontSize: 11.5, color: '#5bbd85', marginTop: 6 }}>✓ Código de jugador listo.</div>}
+          </div>
+
+          <div style={{ display: 'flex', gap: 10, marginTop: 14, marginBottom: 14 }}>
             <div style={{ flex: 1 }}>
               <label style={label}>Sexo *</label>
               <select style={inputStyle} value={f.sexo} onChange={(e) => set('sexo', e.target.value)}>
