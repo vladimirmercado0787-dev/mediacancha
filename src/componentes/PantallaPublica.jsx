@@ -1358,12 +1358,11 @@ export default function PantallaPublica({ onAccion, haySesion }) {
 
   // ===== VISTA MÓVIL =====
   return (
-    <div style={{ minHeight: '100vh', color: C.texto, fontFamily: C.font, position: 'relative', overflowX: 'clip', background: T.fondo }}>
+    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, height: '100dvh', color: C.texto, fontFamily: C.font, overflow: 'hidden', background: T.fondo, display: 'flex', flexDirection: 'column' }}>
       <Velo />
-      {/* tapa fija: el color del tema cubre el área del reloj / isla dinámica para que nada se asome por detrás al hacer scroll */}
-      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: 'calc(env(safe-area-inset-top) + 1px)', background: T.fondo, zIndex: 45, pointerEvents: 'none' }} />
-      <div style={{ position: 'relative', zIndex: 1, maxWidth: 480, margin: '0 auto', padding: '0 16px 90px' }}>
-        <div style={{ position: 'sticky', top: 0, zIndex: 40, background: T.fondo, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 2px 14px', paddingTop: 'calc(env(safe-area-inset-top) + 14px)' }}>
+      {/* BARRA FIJA inmóvil: cubre desde el reloj/isla y no se mueve nunca */}
+      <div style={{ position: 'relative', zIndex: 40, flexShrink: 0, background: T.fondo, paddingTop: 'env(safe-area-inset-top)' }}>
+        <div style={{ maxWidth: 480, margin: '0 auto', padding: '14px 18px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Logo chico />
           </div>
@@ -1387,6 +1386,11 @@ export default function PantallaPublica({ onAccion, haySesion }) {
             </div>
           )}
         </div>
+      </div>
+
+      {/* SOLO esta área hace scroll, por debajo de la barra fija */}
+      <div style={{ position: 'relative', zIndex: 1, flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
+        <div style={{ maxWidth: 480, margin: '0 auto', padding: '4px 16px 90px' }}>
         {!haySesion && <div style={{ marginTop: 14 }}><Bienvenida /></div>}
         <div style={{ marginTop: 22 }}><EnVivo /></div>
         {haySesion && <div style={{ marginTop: 16 }}>{Composer()}</div>}
@@ -1394,6 +1398,7 @@ export default function PantallaPublica({ onAccion, haySesion }) {
         <div style={{ marginTop: 22 }}><SecHead titulo="Torneos populares" accion={{ txt: 'Ver todos →', fn: () => click('torneos') }} /><ListaTorneos /></div>
         <div style={{ marginTop: 22 }}><SecHead titulo="Ranking nacional" accion={{ txt: 'Ver todo →', fn: () => click('rankings') }} /><ListaRanking n={5} /></div>
         {!haySesion && <CtaRegistro />}
+        </div>
       </div>
       <div style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: 480, display: 'flex', alignItems: 'flex-end', background: T.headerBg, backdropFilter: 'blur(12px)', borderTop: `1px solid ${T.navActivoBorde}`, padding: '8px 6px calc(8px + env(safe-area-inset-bottom))', zIndex: 40 }}>
         {[{ id: 'inicio', txt: 'Inicio', icono: '⌂' }, { id: 'torneos', txt: 'Torneos', icono: '🏆' }].map((n) => (

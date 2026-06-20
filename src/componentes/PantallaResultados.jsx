@@ -276,7 +276,7 @@ export default function PantallaResultados({ onVolver, onNuevoJuego, onAccion })
   )
 
   return (
-    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, height: '100%', fontFamily: font, color: T.textoBody, background: T.fondo, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, height: '100dvh', minHeight: '-webkit-fill-available', fontFamily: font, color: T.textoBody, background: T.fondo, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* fondo fijo: pegado a la pantalla, NUNCA se mueve, cubre hasta el borde */}
       <div style={{ position: 'absolute', top: -2, left: -2, right: -2, bottom: -2, zIndex: 0, backgroundImage: `url(${fondoCancha})`, backgroundSize: 'cover', backgroundPosition: 'center', pointerEvents: 'none' }} />
       <div style={{ position: 'absolute', top: -2, left: -2, right: -2, bottom: -2, zIndex: 0, background: T.veloGrad, pointerEvents: 'none' }} />
