@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
 import fondoCancha from '../assets/fondo-cancha.png'
 import { MUNICIPIOS_RD } from '../data/municipiosRD'
@@ -117,6 +117,24 @@ export default function PantallaRegistro({ onListo, onIrLogin, onVolver }) {
   const [ok, setOk] = useState(false)
   const [verClave, setVerClave] = useState(false)
 
+  // ===== CANDADO OFICIAL: congela el fondo para que no se mueva con el teclado =====
+  useEffect(() => {
+    const scrollY = window.scrollY
+    document.body.style.position = 'fixed'
+    document.body.style.top = `-${scrollY}px`
+    document.body.style.left = '0'
+    document.body.style.right = '0'
+    document.body.style.width = '100%'
+    return () => {
+      document.body.style.position = ''
+      document.body.style.top = ''
+      document.body.style.left = ''
+      document.body.style.right = ''
+      document.body.style.width = ''
+      window.scrollTo(0, scrollY)
+    }
+  }, [])
+
   const set = (k, v) => setF((p) => {
     const next = { ...p, [k]: v }
     if (k === 'provincia') next.municipio = ''
@@ -205,7 +223,7 @@ export default function PantallaRegistro({ onListo, onIrLogin, onVolver }) {
     <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: `radial-gradient(ellipse 60% 45% at 50% 40%, ${T.glow}, transparent 70%)` }} />
   </>)
 
-  const wrap = { minHeight: '100vh', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '28px 18px', fontFamily: C.font, background: T.fondo }
+  const wrap = { height: '100dvh', overflowY: 'auto', WebkitOverflowScrolling: 'touch', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '28px 18px', fontFamily: C.font, background: T.fondo }
 
   // PASO 1: elegir modo
   if (!modo) {

@@ -14,6 +14,8 @@ import PantallaBuscar from './componentes/PantallaBuscar'
 import PantallaPerfilAjeno from './componentes/PantallaPerfilAjeno'
 import PantallaChat from './componentes/PantallaChat'
 import PantallaPublicar from './componentes/PantallaPublicar'
+import PantallaTorneos from './componentes/PantallaTorneos'
+import PantallaCrearTorneo from './componentes/PantallaCrearTorneo'
 import { guardarJuegoDelDia } from './historialDia'
 
 function App() {
@@ -72,6 +74,35 @@ function App() {
         onVolver={() => setVista('publica')}
         onPublicado={() => setVista('publica')}
         onResultado={() => { setDestinoTrasLogin('juegoConfig'); setVista(sesion ? 'juegoConfig' : 'login') }}
+      />
+    )
+  }
+
+  if (vista === 'torneos') {
+    return (
+      <PantallaTorneos
+        esAdmin={false}
+        onVolver={() => setVista('publica')}
+        onAccion={(id) => { if (id === 'admin') setVista('torneosAdmin') }}
+      />
+    )
+  }
+
+  if (vista === 'torneosAdmin') {
+    return (
+      <PantallaTorneos
+        esAdmin={true}
+        onVolver={() => setVista('publica')}
+        onAccion={() => {}}
+      />
+    )
+  }
+
+  if (vista === 'crearTorneo') {
+    return (
+      <PantallaCrearTorneo
+        onVolver={() => setVista('publica')}
+        onCreado={(torneo) => setVista('torneosAdmin')}
       />
     )
   }
@@ -178,6 +209,12 @@ function App() {
           setVista(sesion ? 'juegoConfig' : 'login')
         } else if (id === 'resultados') {
           setVista('resultados')
+        } else if (id === 'torneos') {
+          setVista('torneosAdmin')
+        } else if (id === 'misTorneos' || id === 'dondeJuego') {
+          setVista('torneosAdmin')
+        } else if (id === 'crearTorneo') {
+          setVista(sesion ? 'crearTorneo' : 'login')
         } else if (id === 'publicar') {
           setDestinoTrasLogin('publicar')
           setVista(sesion ? 'publicar' : 'login')

@@ -636,6 +636,25 @@ function ModalSustituir({ T, eq, jugada, jugadores, acciones, onCancelar, onConf
 function ModalCambio({ T, eq, equipo, nombreEquipo, enCancha, banca, jugSel, setJugSel, nombre, numero, setNombre, setNumero, onCancelar, onConfirmarRename, onConfirmarBanca }) {
   const col = eq[equipo]
   const [entraSel, setEntraSel] = useState(null)
+
+  // ===== CANDADO OFICIAL: congela el fondo para que no se mueva con el teclado =====
+  useEffect(() => {
+    const scrollY = window.scrollY
+    document.body.style.position = 'fixed'
+    document.body.style.top = `-${scrollY}px`
+    document.body.style.left = '0'
+    document.body.style.right = '0'
+    document.body.style.width = '100%'
+    return () => {
+      document.body.style.position = ''
+      document.body.style.top = ''
+      document.body.style.left = ''
+      document.body.style.right = ''
+      document.body.style.width = ''
+      window.scrollTo(0, scrollY)
+    }
+  }, [])
+
   const input = { background: 'rgba(12,14,18,0.7)', border: '1px solid rgba(255,255,255,.12)', borderRadius: 10, padding: '12px 13px', color: TEXTO2, fontSize: 15, outline: 'none', boxSizing: 'border-box' }
   const aceptar = () => {
     if (entraSel) { onConfirmarBanca(jugSel, entraSel); return }

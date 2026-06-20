@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
 import fondoCancha from '../assets/fondo-cancha.png'
 
@@ -84,6 +84,24 @@ export default function PantallaLogin({ onListo, onIrRegistro, onVolver }) {
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState('')
 
+  // ===== CANDADO OFICIAL: congela el fondo para que no se mueva con el teclado =====
+  useEffect(() => {
+    const scrollY = window.scrollY
+    document.body.style.position = 'fixed'
+    document.body.style.top = `-${scrollY}px`
+    document.body.style.left = '0'
+    document.body.style.right = '0'
+    document.body.style.width = '100%'
+    return () => {
+      document.body.style.position = ''
+      document.body.style.top = ''
+      document.body.style.left = ''
+      document.body.style.right = ''
+      document.body.style.width = ''
+      window.scrollTo(0, scrollY)
+    }
+  }, [])
+
   const entrar = async () => {
     setError('')
     if (!correo.trim()) return setError('Escribe tu correo.')
@@ -109,7 +127,7 @@ export default function PantallaLogin({ onListo, onIrRegistro, onVolver }) {
   const label = { fontSize: 12, color: C.tenue, fontWeight: 600, marginBottom: 6, display: 'block' }
 
   return (
-    <div style={{ minHeight: '100vh', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '28px 18px', fontFamily: C.font, background: T.fondo }}>
+    <div style={{ height: '100dvh', overflowY: 'auto', WebkitOverflowScrolling: 'touch', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '28px 18px', fontFamily: C.font, background: T.fondo }}>
       <div style={{ position: 'fixed', inset: 0, zIndex: 0, backgroundImage: `url(${fondoCancha})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
       <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: T.veloGrad }} />
       <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: `radial-gradient(ellipse 60% 45% at 50% 40%, ${T.glow}, transparent 70%)` }} />

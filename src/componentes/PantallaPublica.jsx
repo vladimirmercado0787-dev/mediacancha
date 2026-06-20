@@ -270,6 +270,7 @@ export default function PantallaPublica({ onAccion, haySesion }) {
   const [anotarAbierto, setAnotarAbierto] = useState(false)
   const [statsSoc, setStatsSoc] = useState({ seguidores: 0, siguiendo: 0 })
   const [crearAbierto, setCrearAbierto] = useState(false)
+  const [torneosAbierto, setTorneosAbierto] = useState(false)
   const [likes, setLikes] = useState({})
   const [tema, setTema] = useState(() => {
     const validos = ['dorado', 'azul', 'claro', 'larimar']
@@ -332,11 +333,11 @@ export default function PantallaPublica({ onAccion, haySesion }) {
 
   // Cerrar los menús desplegables al hacer clic fuera
   useEffect(() => {
-    if (!masAbierto && !crearAbierto) return
-    const cerrar = () => { setMasAbierto(false); setCrearAbierto(false) }
+    if (!masAbierto && !crearAbierto && !torneosAbierto) return
+    const cerrar = () => { setMasAbierto(false); setCrearAbierto(false); setTorneosAbierto(false) }
     window.addEventListener('click', cerrar)
     return () => window.removeEventListener('click', cerrar)
-  }, [masAbierto, crearAbierto])
+  }, [masAbierto, crearAbierto, torneosAbierto])
 
   useEffect(() => {
     const hayModal = pubAbierta || verHistorialDia || juegoAPublicar
@@ -571,6 +572,30 @@ export default function PantallaPublica({ onAccion, haySesion }) {
         <div style={{ position: 'relative', zIndex: 2, display: 'flex', alignItems: 'center', gap: 2, padding: '5px 8px', background: T.navDorada, borderRadius: '0 0 16px 16px', flexWrap: 'wrap', boxShadow: '0 8px 22px rgba(156,101,24,.18)' }}>
           {NAV_PRINCIPAL.map((n) => {
             const activo = n.id === 'inicio'
+            if (n.id === 'torneos') {
+              return (
+                <div key={n.id} style={{ position: 'relative' }}>
+                  <button onClick={(e) => { e.stopPropagation(); setTorneosAbierto((v) => !v); setMasAbierto(false); setCrearAbierto(false) }} style={{ display: 'flex', alignItems: 'center', gap: 6, background: torneosAbierto ? 'linear-gradient(180deg,#1f1810,#120d07)' : 'transparent', color: torneosAbierto ? T.acento : '#3a2a10', fontSize: 12, fontWeight: 700, padding: '8px 13px', borderRadius: 9, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: 0.4, whiteSpace: 'nowrap', border: 'none', transition: 'all .15s ease' }}>
+                    <span style={{ fontSize: 14 }}>{n.icono}</span>{n.txt} <span style={{ fontSize: 10 }}>{torneosAbierto ? '▴' : '▾'}</span>
+                  </button>
+                  {torneosAbierto && (
+                    <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, minWidth: 230, background: T.esClaro ? 'rgba(252,250,245,.99)' : 'rgba(18,20,24,.98)', border: `1px solid ${T.navActivoBorde}`, borderRadius: 12, padding: 7, zIndex: 200, backdropFilter: 'blur(12px)', boxShadow: '0 10px 30px rgba(0,0,0,.4)' }}>
+                      {[
+                        { id: 'crearTorneo', icono: '＋', txt: 'Crear torneo', desc: 'Arma uno nuevo' },
+                        { id: 'misTorneos', icono: '🏆', txt: 'Mis torneos', desc: 'Los que organizas' },
+                        { id: 'dondeJuego', icono: '👥', txt: 'Donde juego', desc: 'Como jugador' },
+                        { id: 'torneos', icono: '🌐', txt: 'Explorar torneos', desc: 'Todos los públicos' },
+                      ].map((o) => (
+                        <button key={o.id} onClick={() => { setTorneosAbierto(false); click(o.id) }} style={{ display: 'flex', alignItems: 'center', gap: 11, width: '100%', textAlign: 'left', background: 'transparent', border: 'none', color: C.texto, fontSize: 13, fontWeight: 600, padding: '10px 11px', borderRadius: 8, cursor: 'pointer' }}>
+                          <span style={{ fontSize: 16, color: T.acento, width: 20, textAlign: 'center' }}>{o.icono}</span>
+                          <span style={{ flex: 1 }}>{o.txt}<div style={{ fontSize: 11, color: T.tenue, fontWeight: 400 }}>{o.desc}</div></span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            }
             return (
               <button key={n.id} onClick={() => click(n.id)} style={{ display: 'flex', alignItems: 'center', gap: 6, background: activo ? 'linear-gradient(180deg,#1f1810,#120d07)' : 'transparent', color: activo ? T.acento : '#3a2a10', fontSize: 12, fontWeight: 700, padding: '8px 13px', borderRadius: 9, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: 0.4, whiteSpace: 'nowrap', border: 'none', transition: 'all .15s ease' }}>
                 <span style={{ fontSize: 14, display: 'inline-flex' }}>{n.icono === 'techado' ? <IconoTechado size={14} cols={activo ? T.balon : ['#3a2a10', '#3a2a10', '#3a2a10']} /> : n.icono}</span>{n.txt}
@@ -826,7 +851,7 @@ export default function PantallaPublica({ onAccion, haySesion }) {
             <div style={{ position: 'relative' }}>
               {/* CABECERA: avatar + nombre/meta + tag */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '14px 16px 10px' }}>
-                <div style={{ width: 42, height: 42, borderRadius: '50%', flexShrink: 0, background: p.autor_foto ? `url(${p.autor_foto}) center/cover` : avBg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 700, color: '#fff' }}>
+                <div onClick={() => p.autor_id && onAccion && onAccion('verPerfil:' + p.autor_id)} style={{ width: 42, height: 42, borderRadius: '50%', flexShrink: 0, background: p.autor_foto ? `url(${p.autor_foto}) center/cover` : avBg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 700, color: '#fff', cursor: 'pointer' }}>
                   {!p.autor_foto && ((p.autor_nombre || '?').slice(0, 1).toUpperCase())}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -1290,6 +1315,28 @@ export default function PantallaPublica({ onAccion, haySesion }) {
               <nav style={{ display: 'flex', gap: 4 }}>
                 {[{ id: 'inicio', txt: 'Inicio' }, { id: 'techado', txt: 'El Techado' }, { id: 'torneos', txt: 'Torneos' }, { id: 'rankings', txt: 'Rankings' }, { id: 'mapa', txt: 'Mapa' }].map((n) => {
                   const on = n.id === 'inicio'
+                  if (n.id === 'torneos') {
+                    return (
+                      <div key={n.id} style={{ position: 'relative' }}>
+                        <button onClick={(e) => { e.stopPropagation(); setTorneosAbierto((v) => !v) }} style={{ fontSize: 13.5, fontWeight: 800, color: torneosAbierto ? T.acento : T.tenue, padding: '9px 15px', borderRadius: 11, cursor: 'pointer', border: torneosAbierto ? `1px solid ${T.navActivoBorde}` : '1px solid transparent', background: torneosAbierto ? T.navActivoBg : 'transparent', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 5 }}>{n.txt} <span style={{ fontSize: 10 }}>{torneosAbierto ? '▴' : '▾'}</span></button>
+                        {torneosAbierto && (
+                          <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, minWidth: 235, background: T.esClaro ? 'rgba(252,250,245,.99)' : 'rgba(18,20,24,.98)', border: `1px solid ${T.navActivoBorde}`, borderRadius: 12, padding: 7, zIndex: 200, backdropFilter: 'blur(12px)', boxShadow: '0 12px 32px rgba(0,0,0,.35)' }}>
+                            {[
+                              { id: 'crearTorneo', icono: '＋', txt: 'Crear torneo', desc: 'Arma uno nuevo' },
+                              { id: 'misTorneos', icono: '🏆', txt: 'Mis torneos', desc: 'Los que organizas' },
+                              { id: 'dondeJuego', icono: '👥', txt: 'Donde juego', desc: 'Como jugador' },
+                              { id: 'torneos', icono: '🌐', txt: 'Explorar torneos', desc: 'Todos los públicos' },
+                            ].map((o) => (
+                              <button key={o.id} onClick={() => { setTorneosAbierto(false); click(o.id) }} style={{ display: 'flex', alignItems: 'center', gap: 11, width: '100%', textAlign: 'left', background: 'transparent', border: 'none', color: C.texto, fontSize: 13, fontWeight: 600, padding: '10px 11px', borderRadius: 8, cursor: 'pointer' }}>
+                                <span style={{ fontSize: 16, color: T.acento, width: 20, textAlign: 'center' }}>{o.icono}</span>
+                                <span style={{ flex: 1 }}>{o.txt}<div style={{ fontSize: 11, color: T.tenue, fontWeight: 400 }}>{o.desc}</div></span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  }
                   return (
                     <button key={n.id} onClick={() => click(n.id)} style={{ fontSize: 13.5, fontWeight: 800, color: on ? T.acento : T.tenue, padding: '9px 15px', borderRadius: 11, cursor: 'pointer', border: on ? `1px solid ${T.navActivoBorde}` : '1px solid transparent', background: on ? T.navActivoBg : 'transparent', whiteSpace: 'nowrap' }}>{n.txt}</button>
                   )
@@ -1415,11 +1462,12 @@ export default function PantallaPublica({ onAccion, haySesion }) {
             <span style={{ fontSize: 7.5, fontWeight: 900, letterSpacing: 0.5, textTransform: 'uppercase', marginTop: 1 }}>Anotar</span>
           </button>
         </div>
-        {[{ id: 'rankings', txt: 'Ranking', icono: '★' }, { id: 'perfil', txt: 'Perfil', icono: '◉' }].map((n) => (
-          <button key={n.id} onClick={() => click(n.id)} style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', textAlign: 'center', color: C.tenue, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
-            <div style={{ fontSize: 18, marginBottom: 3, display: 'flex', justifyContent: 'center' }}>{n.icono}</div>{n.txt}
-          </button>
-        ))}
+        <button onClick={() => click('buscar')} style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', textAlign: 'center', color: C.tenue, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
+          <div style={{ fontSize: 18, marginBottom: 3, display: 'flex', justifyContent: 'center' }}>🔍</div>Buscar
+        </button>
+        <button onClick={() => click('perfil')} style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', textAlign: 'center', color: C.tenue, fontSize: 10, fontWeight: 700, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <div style={{ width: 26, height: 26, borderRadius: '50%', marginBottom: 3, background: miPerfil?.foto_url ? `url(${miPerfil.foto_url}) center/cover` : T.boton, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800, color: '#1a1205', boxShadow: `0 0 0 1.5px ${T.acento}` }}>{!miPerfil?.foto_url && ((miPerfil?.nombre || '?')[0] || '').toUpperCase()}</div>Perfil
+        </button>
         </div>
         </div>
       </div>

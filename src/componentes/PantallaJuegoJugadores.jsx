@@ -116,6 +116,13 @@ export default function PantallaJuegoJugadores({ config, onListo, onVolver }) {
     })()
   }, [])
 
+  const [esEscritorio, setEsEscritorio] = useState(typeof window !== 'undefined' ? window.innerWidth >= 900 : false)
+  useEffect(() => {
+    const onR = () => setEsEscritorio(window.innerWidth >= 900)
+    window.addEventListener('resize', onR)
+    return () => window.removeEventListener('resize', onR)
+  }, [])
+
   useEffect(() => {
     if (bq.trim().length < 2) { setBResultados([]); return }
     const t = setTimeout(async () => {
@@ -312,7 +319,7 @@ export default function PantallaJuegoJugadores({ config, onListo, onVolver }) {
 
       {/* Selector de logo/escudo */}
       {eligiendoLogo !== null && (
-        <div onClick={() => setEligiendoLogo(null)} style={{ position: 'fixed', inset: 0, zIndex: 80, background: T.esClaro ? 'rgba(30,26,18,0.5)' : 'rgba(4,5,7,0.84)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+        <div onClick={() => setEligiendoLogo(null)} style={{ position: 'fixed', inset: 0, zIndex: 80, background: T.esClaro ? 'rgba(30,26,18,0.5)' : 'rgba(4,5,7,0.84)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', display: 'flex', alignItems: esEscritorio ? 'center' : 'flex-end', justifyContent: 'center', padding: esEscritorio ? 20 : 0 }}>
           <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 560, maxHeight: '86vh', display: 'flex', flexDirection: 'column', borderRadius: '20px 20px 0 0', padding: 1.5, background: T.borde }}>
             <div style={{ borderRadius: '19px 19px 0 0', background: T.esClaro ? '#f3eee3' : 'linear-gradient(180deg, #14161a, #0c0e12)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '15px 16px 10px' }}>
@@ -341,9 +348,9 @@ export default function PantallaJuegoJugadores({ config, onListo, onVolver }) {
       )}
       {/* Buscar entre los que sigues (o cualquiera por nombre/MC-ID) */}
       {buscandoPara !== null && (
-        <div onClick={() => setBuscandoPara(null)} style={{ position: 'fixed', inset: 0, zIndex: 85, background: T.esClaro ? 'rgba(30,26,18,0.5)' : 'rgba(4,5,7,0.84)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 560, maxHeight: '86vh', display: 'flex', flexDirection: 'column', borderRadius: '20px 20px 0 0', padding: 1.5, background: T.borde }}>
-            <div style={{ borderRadius: '19px 19px 0 0', background: T.esClaro ? '#f3eee3' : 'linear-gradient(180deg, #14161a, #0c0e12)', display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
+        <div onClick={() => setBuscandoPara(null)} style={{ position: 'fixed', inset: 0, zIndex: 85, background: T.esClaro ? 'rgba(30,26,18,0.5)' : 'rgba(4,5,7,0.84)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', display: 'flex', alignItems: esEscritorio ? 'center' : 'flex-end', justifyContent: 'center', padding: esEscritorio ? 20 : 0 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 560, maxHeight: '86vh', display: 'flex', flexDirection: 'column', borderRadius: esEscritorio ? 20 : '20px 20px 0 0', padding: 1.5, background: T.borde }}>
+            <div style={{ borderRadius: esEscritorio ? '18.5px' : '19px 19px 0 0', background: T.esClaro ? '#f3eee3' : 'linear-gradient(180deg, #14161a, #0c0e12)', display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '15px 16px 8px' }}>
                 <span style={{ fontSize: 16, fontWeight: 800, color: T.textoFuerte }}>Agregar jugador</span>
                 <span onClick={() => setBuscandoPara(null)} style={{ fontSize: 24, color: C.tenue, cursor: 'pointer', lineHeight: 1 }}>×</span>
@@ -388,7 +395,7 @@ export default function PantallaJuegoJugadores({ config, onListo, onVolver }) {
       )}
       {/* Elegir quinteto abridor (sale solo cuando hay banca) */}
       {eligiendoQuinteto && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 90, background: T.esClaro ? 'rgba(30,26,18,0.55)' : 'rgba(4,5,7,0.88)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 90, background: T.esClaro ? 'rgba(30,26,18,0.55)' : 'rgba(4,5,7,0.88)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)', display: 'flex', alignItems: esEscritorio ? 'center' : 'flex-end', justifyContent: 'center', padding: esEscritorio ? 20 : 0 }}>
           <div style={{ width: '100%', maxWidth: 560, maxHeight: '90vh', display: 'flex', flexDirection: 'column', borderRadius: '20px 20px 0 0', padding: 1.5, background: T.borde }}>
             <div style={{ borderRadius: '19px 19px 0 0', background: T.esClaro ? '#f3eee3' : 'linear-gradient(180deg, #14161a, #0c0e12)', display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
               <div style={{ padding: '16px 18px 6px' }}>

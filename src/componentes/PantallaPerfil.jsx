@@ -1,5 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../supabaseClient'
+import { subirFotoPerfil } from '../fotos'
+import { statsSociales } from '../social'
 import fondoCancha from '../assets/fondo-cancha.png'
 import fondoTarjetaMiembro from '../assets/fondo-tarjeta-miembro.png'
 import texturaCuero from '../assets/textura-cuero.png'
@@ -114,6 +116,36 @@ export default function PantallaPerfil({ onSalir, onVolver, onAccion }) {
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState('')
   const [copiado, setCopiado] = useState(false)
+  const [subiendoFoto, setSubiendoFoto] = useState(false)
+  const [pestanaPerfil, setPestanaPerfil] = useState('datos')
+  const [statsSoc, setStatsSoc] = useState({ seguidores: 0, siguiendo: 0 })
+  const inputFotoRef = useRef(null)
+
+  // Sube la foto elegida, la guarda en el perfil y refresca la pantalla
+  const alElegirFoto = async (e) => {
+    const archivo = e.target.files && e.target.files[0]
+    if (!archivo) return
+    setSubiendoFoto(true)
+    try {
+      const { url, error: errFoto } = await subirFotoPerfil(archivo)
+      if (errFoto || !url) {
+        alert('No se pudo subir la foto: ' + (errFoto || 'intenta de nuevo'))
+      } else {
+        const { data: sesion } = await supabase.auth.getUser()
+        const uid = sesion?.user?.id
+        const { error: errGuardar } = await supabase.from('perfiles').update({ foto_url: url }).eq('id', uid)
+        if (errGuardar) {
+          alert('La foto subió pero no se pudo guardar: ' + errGuardar.message)
+        } else {
+          setPerfil((p) => ({ ...p, foto_url: url }))
+        }
+      }
+    } catch (err) {
+      alert('Error: ' + (err.message || err))
+    }
+    setSubiendoFoto(false)
+    if (inputFotoRef.current) inputFotoRef.current.value = ''
+  }
   const [esEscritorio, setEsEscritorio] = useState(typeof window !== 'undefined' ? window.innerWidth >= 900 : false)
   const [esTablet, setEsTablet] = useState(typeof window !== 'undefined' ? window.innerWidth >= 900 && window.innerWidth < 1180 : false)
 
@@ -143,6 +175,11 @@ export default function PantallaPerfil({ onSalir, onVolver, onAccion }) {
         const { data, error: err } = await supabase.from('perfiles').select('*').eq('id', user.id).single()
         if (err) throw err
         setPerfil({ ...data, correo: user.email })
+        // Cargar números sociales (seguidores / siguiendo)
+        try {
+          const s = await statsSociales(user.id)
+          setStatsSoc({ seguidores: s.seguidores || 0, siguiendo: s.siguiendo || 0 })
+        } catch (e) {}
       } catch (e) {
         setError(e.message || 'No se pudo cargar el perfil.')
       } finally {
@@ -223,31 +260,39 @@ export default function PantallaPerfil({ onSalir, onVolver, onAccion }) {
   const ubicacion = [perfil.municipio, perfil.provincia].filter(Boolean).join(', ')
   const posicion = posiciones[0] || null
 
-  // CARNET credencial (igual identidad que la pantalla principal)
+  // CARNET credencial — rediseñado con jerarquía limpia
   const Carnet = () => (
-    <div style={{ position: 'relative', borderRadius: 16, border: T.esClaro ? '1px solid #34291a' : `1px solid ${T.navActivoBorde}`, backgroundImage: `url(${T.barraImg})`, backgroundSize: 'cover', backgroundPosition: 'center right', boxShadow: T.esClaro ? '0 12px 34px rgba(18,14,8,.22)' : '0 12px 34px rgba(0,0,0,.4)' }}>
-      <div style={{ position: 'absolute', inset: 0, borderRadius: 16, background: T.scrimCarnet }} />
-      <div style={{ position: 'absolute', inset: 9, borderRadius: 9, border: `1.5px dashed ${T.esClaro ? 'rgba(234,182,79,.45)' : 'rgba(234,182,79,.32)'}`, pointerEvents: 'none', zIndex: 1 }} />
-      <div style={{ position: 'relative', zIndex: 2, padding: '15px 18px 13px', display: 'flex', alignItems: 'center', gap: 14 }}>
-        <div style={{ width: 62, height: 62, borderRadius: '50%', background: perfil.foto_url ? `url(${perfil.foto_url}) center/cover` : T.avatar, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 23, fontWeight: 800, color: T.avatarTexto, flexShrink: 0, boxShadow: `0 0 0 2px ${T.esClaro ? '#15110b' : '#0c0e12'}, 0 0 0 4px ${T.acento}` }}>{!perfil.foto_url && iniciales}</div>
+    <div style={{ position: 'relative', borderRadius: 18, border: T.esClaro ? '1px solid #34291a' : `1px solid ${T.navActivoBorde}`, backgroundImage: `url(${T.barraImg})`, backgroundSize: 'cover', backgroundPosition: 'center right', boxShadow: T.esClaro ? '0 12px 34px rgba(18,14,8,.22)' : '0 12px 34px rgba(0,0,0,.4)', overflow: 'hidden' }}>
+      <div style={{ position: 'absolute', inset: 0, background: T.scrimCarnet }} />
+
+      {/* Barra superior: volver (izq) + tema (der esquina) */}
+      <div style={{ position: 'relative', zIndex: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px 0' }}>
+        <button onClick={() => irA('inicio')} style={{ width: 36, height: 36, borderRadius: 10, border: 'none', background: 'rgba(0,0,0,.3)', color: '#fff', fontSize: 20, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(6px)' }}>‹</button>
+        <BotonTema />
+      </div>
+
+      {/* Identidad: foto grande arriba, nombre y datos centrados debajo */}
+      <div style={{ position: 'relative', zIndex: 2, padding: '8px 18px 16px', display: 'flex', alignItems: 'center', gap: 16 }}>
+        <div onClick={() => inputFotoRef.current && inputFotoRef.current.click()} style={{ position: 'relative', cursor: 'pointer', flexShrink: 0 }}>
+          <div style={{ width: 72, height: 72, borderRadius: '50%', background: perfil.foto_url ? `url(${perfil.foto_url}) center/cover` : T.avatar, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, fontWeight: 800, color: T.avatarTexto, boxShadow: `0 0 0 2px ${T.esClaro ? '#15110b' : '#0c0e12'}, 0 0 0 4px ${T.acento}`, opacity: subiendoFoto ? 0.5 : 1 }}>{!perfil.foto_url && iniciales}</div>
+          <div style={{ position: 'absolute', bottom: 0, right: 0, width: 24, height: 24, borderRadius: '50%', background: T.boton, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, boxShadow: `0 0 0 2px ${T.esClaro ? '#2a2014' : '#0c0e12'}` }}>{subiendoFoto ? '…' : '📷'}</div>
+          <input ref={inputFotoRef} type="file" accept="image/*" onChange={alElegirFoto} style={{ display: 'none' }} />
+        </div>
+
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 20, fontWeight: 800, color: '#fff', lineHeight: 1.05, textShadow: '0 1px 6px rgba(0,0,0,.7)', letterSpacing: 0.3, textTransform: 'uppercase' }}>{nombreCompleto}</div>
-          <div style={{ fontSize: 11.5, color: '#cdb98e', marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
+            <span style={{ fontSize: 21, fontWeight: 800, color: '#fff', lineHeight: 1.05, textShadow: '0 1px 6px rgba(0,0,0,.7)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nombreCompleto}</span>
+            <span style={{ flexShrink: 0, fontSize: 8.5, letterSpacing: 1, color: '#1c160d', background: T.boton, padding: '2px 8px', borderRadius: 10, fontWeight: 800, textTransform: 'uppercase' }}>{esJugador ? 'Jugador' : 'Fan'}</span>
+          </div>
+          <div style={{ fontSize: 12, color: '#d3c4a0', display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: 8 }}>
             {posicion && <span>{posicion}</span>}
             {posicion && ubicacion && <span style={{ width: 3, height: 3, borderRadius: '50%', background: '#7d6b49' }} />}
             {ubicacion && <span>{ubicacion}</span>}
             {edad != null && <span style={{ width: 3, height: 3, borderRadius: '50%', background: '#7d6b49' }} />}
             {edad != null && <span>{edad} años</span>}
-            <span onClick={copiarMC} style={{ fontSize: 10, fontWeight: 700, color: '#1c160d', background: T.boton, padding: '2px 8px', borderRadius: 6, fontFamily: 'monospace', letterSpacing: 1, cursor: 'pointer' }}>{copiado ? '✓ copiado' : (perfil.codigo_unico || 'MC------')}</span>
           </div>
+          <span onClick={copiarMC} style={{ display: 'inline-block', fontSize: 11, fontWeight: 700, color: '#1c160d', background: T.boton, padding: '4px 12px', borderRadius: 8, fontFamily: 'monospace', letterSpacing: 1.5, cursor: 'pointer' }}>{copiado ? '✓ copiado' : (perfil.codigo_unico || 'MC------')}</span>
         </div>
-        <div style={{ flexShrink: 0, textAlign: 'right' }}>
-          <div style={{ fontSize: 17, fontWeight: 800, lineHeight: 0.95, letterSpacing: 0.5, textTransform: 'uppercase' }}>
-            <span style={{ color: '#dfe2e6' }}>MEDIA</span><br /><span style={ORO}>CANCHA</span>
-          </div>
-          <span style={{ display: 'inline-block', marginTop: 5, fontSize: 8.5, letterSpacing: 1.5, color: '#1c160d', background: T.boton, padding: '2px 8px', borderRadius: 12, fontWeight: 800, textTransform: 'uppercase' }}>{esJugador ? 'Jugador' : 'Fanático'}</span>
-        </div>
-        <div style={{ flexShrink: 0 }}><BotonTema /></div>
       </div>
       {esJugador && (
         <div style={{ position: 'relative', zIndex: 2, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1, background: 'rgba(234,182,79,.16)', borderTop: '1px solid rgba(234,182,79,.18)' }}>
@@ -259,16 +304,19 @@ export default function PantallaPerfil({ onSalir, onVolver, onAccion }) {
           ))}
         </div>
       )}
-      <div style={{ position: 'relative', zIndex: 2, display: 'flex', alignItems: 'center', gap: 2, padding: '5px 8px', background: T.navDorada, borderRadius: '0 0 16px 16px', flexWrap: 'wrap', boxShadow: '0 8px 22px rgba(156,101,24,.18)' }}>
-        {NAV_PRINCIPAL.map((n) => {
-          const activo = n.id === 'perfil'
-          return (
-            <button key={n.id} onClick={() => irA(n.id)} style={{ display: 'flex', alignItems: 'center', gap: 6, background: activo ? 'linear-gradient(180deg,#1f1810,#120d07)' : 'transparent', color: activo ? T.acento : '#3a2a10', fontSize: 12, fontWeight: 700, padding: '8px 13px', borderRadius: 9, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: 0.4, whiteSpace: 'nowrap', border: 'none' }}>
-              <span style={{ fontSize: 14, display: 'inline-flex' }}>{n.icono === 'techado' ? <IconoTechado size={14} cols={activo ? T.balon : ['#3a2a10', '#3a2a10', '#3a2a10']} /> : n.icono}</span>{n.txt}
-            </button>
-          )
-        })}
-        <button onClick={salir} style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'transparent', border: 'none', color: '#3a2a10', fontSize: 12, fontWeight: 700, padding: '8px 13px', borderRadius: 9, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: 0.4, marginLeft: 'auto' }}>↩ Salir</button>
+
+      {/* Números sociales: Juegos · Siguiendo · Seguidores */}
+      <div style={{ position: 'relative', zIndex: 2, display: 'flex', background: T.esClaro ? 'rgba(21,17,11,.92)' : 'rgba(12,14,18,.9)', borderTop: '1px solid rgba(234,182,79,.18)', borderRadius: '0 0 16px 16px' }}>
+        {[
+          { v: perfil.juegos_jugados != null ? perfil.juegos_jugados : 0, l: 'Juegos' },
+          { v: statsSoc.siguiendo, l: 'Siguiendo' },
+          { v: statsSoc.seguidores, l: 'Seguidores' },
+        ].map((s, i) => (
+          <div key={s.l} style={{ flex: 1, textAlign: 'center', padding: '10px 6px', borderLeft: i > 0 ? '1px solid rgba(234,182,79,.14)' : 'none' }}>
+            <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', lineHeight: 1 }}>{s.v}</div>
+            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.6, color: T.acento, marginTop: 4, textTransform: 'uppercase' }}>{s.l}</div>
+          </div>
+        ))}
       </div>
     </div>
   )
@@ -343,7 +391,8 @@ export default function PantallaPerfil({ onSalir, onVolver, onAccion }) {
   const bCuenta = (
     <Tarjeta titulo="Cuenta">
       <div style={{ fontSize: 13, color: C.tenue, display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}><span>Correo</span><span style={{ color: T.textoFuerte }}>{perfil.correo}</span></div>
-      <div style={{ fontSize: 13, color: C.tenue, display: 'flex', justifyContent: 'space-between' }}><span>Plan</span><span style={{ color: T.acento, fontWeight: 700 }}>Gratis</span></div>
+      <div style={{ fontSize: 13, color: C.tenue, display: 'flex', justifyContent: 'space-between', marginBottom: 14 }}><span>Plan</span><span style={{ color: T.acento, fontWeight: 700 }}>Gratis</span></div>
+      <button onClick={salir} style={{ width: '100%', border: '1px solid rgba(224,86,63,.3)', borderRadius: 11, padding: 12, background: T.esClaro ? 'rgba(224,86,63,.08)' : 'rgba(224,86,63,.12)', color: '#e0563f', fontSize: 13.5, fontWeight: 700, cursor: 'pointer' }}>↩ Cerrar sesión</button>
     </Tarjeta>
   )
 
@@ -384,7 +433,29 @@ export default function PantallaPerfil({ onSalir, onVolver, onAccion }) {
       <Velo />
       <div style={{ position: 'relative', zIndex: 1, maxWidth: 560, margin: '0 auto', padding: '14px 16px 60px', display: 'flex', flexDirection: 'column', gap: 14 }}>
         <Carnet />
-        {bMcid}{bAtleta}{bRating}{bPromedios}{bTrofeos}{bTorneos}{bCuenta}
+
+        {/* Pestañas: Datos / Publicaciones */}
+        <div style={{ display: 'flex', background: T.esClaro ? 'rgba(0,0,0,.04)' : 'rgba(255,255,255,.04)', borderRadius: 12, padding: 4, gap: 4 }}>
+          {[{ id: 'datos', txt: 'Datos' }, { id: 'publicaciones', txt: 'Publicaciones' }].map((p) => {
+            const activa = p.id === pestanaPerfil
+            return (
+              <button key={p.id} onClick={() => setPestanaPerfil(p.id)} style={{ flex: 1, border: 'none', borderRadius: 9, padding: '10px 0', background: activa ? T.boton : 'transparent', color: activa ? '#1a1205' : C.tenue, fontSize: 13.5, fontWeight: 800, cursor: 'pointer', transition: 'all .15s' }}>{p.txt}</button>
+            )
+          })}
+        </div>
+
+        {/* Contenido según pestaña */}
+        {pestanaPerfil === 'datos' ? (
+          <>{bMcid}{bAtleta}{bRating}{bPromedios}{bTrofeos}{bTorneos}{bCuenta}</>
+        ) : (
+          <Tarjeta titulo="Publicaciones">
+            <div style={{ textAlign: 'center', padding: '30px 16px' }}>
+              <div style={{ fontSize: 42, marginBottom: 14 }}>📰</div>
+              <div style={{ color: T.textoFuerte, fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Publicaciones muy pronto 🏀</div>
+              <div style={{ color: C.tenue, fontSize: 13, lineHeight: 1.5 }}>Aquí van a aparecer todas las publicaciones de este perfil.</div>
+            </div>
+          </Tarjeta>
+        )}
       </div>
     </div>
   )

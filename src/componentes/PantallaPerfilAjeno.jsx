@@ -131,6 +131,8 @@ export default function PantallaPerfilAjeno({ usuarioId, onVolver, onMensaje }) 
 
             {/* contadores */}
             <div style={{ display: 'flex', alignItems: 'center', padding: '14px 0', borderTop: `1px solid ${T.tarjetaBorde}`, borderBottom: `1px solid ${T.tarjetaBorde}`, marginBottom: 16 }}>
+              <Stat valor={perfil?.juegos_jugados != null ? perfil.juegos_jugados : 0} etiqueta="Juegos" />
+              <div style={{ width: 1, height: 30, background: T.tarjetaBorde }} />
               <Stat valor={stats.seguidores} etiqueta="Seguidores" />
               <div style={{ width: 1, height: 30, background: T.tarjetaBorde }} />
               <Stat valor={stats.siguiendo} etiqueta="Siguiendo" />

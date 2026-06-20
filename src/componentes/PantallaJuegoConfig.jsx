@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import fondoJuego from '../assets/fondo-juego.png'
 
 const SUP_OSCURA = {
@@ -115,6 +115,24 @@ export default function PantallaJuegoConfig({ onListo, onVolver, tipoInicial }) 
   const [modoAnotacion, setModoAnotacion] = useState('jugada')
   const [statsActivas, setStatsActivas] = useState(['pts'])
 
+  // ===== CANDADO OFICIAL: congela el fondo para que no se mueva con el teclado =====
+  useEffect(() => {
+    const scrollY = window.scrollY
+    document.body.style.position = 'fixed'
+    document.body.style.top = `-${scrollY}px`
+    document.body.style.left = '0'
+    document.body.style.right = '0'
+    document.body.style.width = '100%'
+    return () => {
+      document.body.style.position = ''
+      document.body.style.top = ''
+      document.body.style.left = ''
+      document.body.style.right = ''
+      document.body.style.width = ''
+      window.scrollTo(0, scrollY)
+    }
+  }, [])
+
   const jugadoresPorLado = esFogueo ? 5 : parseInt(formato[0], 10)
 
   const cambiarTipo = (t) => {
@@ -191,7 +209,7 @@ export default function PantallaJuegoConfig({ onListo, onVolver, tipoInicial }) 
   }
 
   return (
-    <div style={{ minHeight: '100vh', position: 'relative', fontFamily: C.font, background: T.fondo, color: C.texto }}>
+    <div style={{ height: '100dvh', overflowY: 'auto', WebkitOverflowScrolling: 'touch', position: 'relative', fontFamily: C.font, background: T.fondo, color: C.texto }}>
       <div style={{ position: 'fixed', inset: 0, zIndex: 0, backgroundImage: `url(${fondoJuego})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
       <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: T.veloGrad }} />
       <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: `radial-gradient(ellipse 60% 40% at 50% 15%, ${T.glow}, transparent 70%)` }} />

@@ -131,6 +131,25 @@ export default function PantallaResultados({ onVolver, onNuevoJuego, onAccion })
     setJuegos(lista)
   }, [])
 
+  // ===== CANDADO OFICIAL: congela el fondo cuando el modal de publicar está abierto =====
+  useEffect(() => {
+    if (!juegoAPublicar) return
+    const scrollY = window.scrollY
+    document.body.style.position = 'fixed'
+    document.body.style.top = `-${scrollY}px`
+    document.body.style.left = '0'
+    document.body.style.right = '0'
+    document.body.style.width = '100%'
+    return () => {
+      document.body.style.position = ''
+      document.body.style.top = ''
+      document.body.style.left = ''
+      document.body.style.right = ''
+      document.body.style.width = ''
+      window.scrollTo(0, scrollY)
+    }
+  }, [juegoAPublicar])
+
   const eliminarJuego = (j) => {
     if (!window.confirm(`¿Eliminar este juego (${j.nombreA} vs ${j.nombreB})? No se puede deshacer.`)) return
     borrarJuegoDelDia(j.id)
