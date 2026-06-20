@@ -1390,7 +1390,7 @@ export default function PantallaPublica({ onAccion, haySesion }) {
 
       {/* SOLO esta área hace scroll, por debajo de la barra fija */}
       <div style={{ position: 'relative', zIndex: 1, flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
-        <div style={{ maxWidth: 480, margin: '0 auto', padding: '4px 16px 90px' }}>
+        <div style={{ maxWidth: 480, margin: '0 auto', padding: '4px 16px 24px' }}>
         {!haySesion && <div style={{ marginTop: 14 }}><Bienvenida /></div>}
         <div style={{ marginTop: 22 }}><EnVivo /></div>
         {haySesion && <div style={{ marginTop: 16 }}>{Composer()}</div>}
@@ -1400,7 +1400,7 @@ export default function PantallaPublica({ onAccion, haySesion }) {
         {!haySesion && <CtaRegistro />}
         </div>
       </div>
-      <div style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: 480, display: 'flex', alignItems: 'flex-end', background: T.headerBg, backdropFilter: 'blur(12px)', borderTop: `1px solid ${T.navActivoBorde}`, padding: '8px 6px calc(8px + env(safe-area-inset-bottom))', zIndex: 40 }}>
+      <div style={{ position: 'relative', zIndex: 40, flexShrink: 0, width: '100%', maxWidth: 480, margin: '0 auto', display: 'flex', alignItems: 'flex-end', background: T.headerBg, backdropFilter: 'blur(12px)', borderTop: `1px solid ${T.navActivoBorde}`, padding: '8px 6px calc(10px + env(safe-area-inset-bottom))', boxSizing: 'border-box' }}>
         {[{ id: 'inicio', txt: 'Inicio', icono: '⌂' }, { id: 'torneos', txt: 'Torneos', icono: '🏆' }].map((n) => (
           <button key={n.id} onClick={() => click(n.id)} style={{ flex: 1, background: 'transparent', border: 'none', textAlign: 'center', color: n.id === 'inicio' ? T.acento : C.tenue, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
             <div style={{ fontSize: 18, marginBottom: 3, display: 'flex', justifyContent: 'center' }}>{n.icono}</div>{n.txt}
