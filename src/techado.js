@@ -7,8 +7,8 @@ import { supabase } from './supabaseClient'
 // ---------- PUBLICAR ----------
 
 // Publica un texto normal en el Techado (publicación de la persona, no expira)
-// Más adelante: aceptará imagenUrl para publicar con foto.
-export async function publicarTexto({ texto, imagenUrl = null }) {
+// Acepta una plantilla de fondo opcional (publicaciones tipo Facebook con imagen).
+export async function publicarTexto({ texto, imagenUrl = null, fondo = null }) {
   const { data: userData } = await supabase.auth.getUser()
   const user = userData?.user
   if (!user) return { error: 'Debes iniciar sesión para publicar.' }
@@ -26,6 +26,7 @@ export async function publicarTexto({ texto, imagenUrl = null }) {
     datos: {
       plantilla: 'estilo_tema',
       imagen: imagenUrl || null,
+      fondo: fondo || null,
     },
     expira_en: null,
   }).select().single()

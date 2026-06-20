@@ -276,15 +276,15 @@ export default function PantallaResultados({ onVolver, onNuevoJuego, onAccion })
   )
 
   return (
-    <div style={{ minHeight: '100vh', fontFamily: font, color: T.textoBody, position: 'relative', background: T.fondo }}>
-      {/* fondo */}
-      <div style={{ position: 'fixed', inset: 0, zIndex: 0, backgroundImage: `url(${fondoCancha})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
-      <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: T.veloGrad }} />
-      <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: `radial-gradient(ellipse 55% 40% at 42% 55%, ${T.glow}, transparent 70%)` }} />
+    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, height: '100%', fontFamily: font, color: T.textoBody, background: T.fondo, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {/* fondo fijo: pegado a la pantalla, NUNCA se mueve, cubre hasta el borde */}
+      <div style={{ position: 'absolute', top: -2, left: -2, right: -2, bottom: -2, zIndex: 0, backgroundImage: `url(${fondoCancha})`, backgroundSize: 'cover', backgroundPosition: 'center', pointerEvents: 'none' }} />
+      <div style={{ position: 'absolute', top: -2, left: -2, right: -2, bottom: -2, zIndex: 0, background: T.veloGrad, pointerEvents: 'none' }} />
+      <div style={{ position: 'absolute', top: -2, left: -2, right: -2, bottom: -2, zIndex: 0, background: `radial-gradient(ellipse 55% 40% at 42% 55%, ${T.glow}, transparent 70%)`, pointerEvents: 'none' }} />
 
-      <div style={{ position: 'relative', zIndex: 1, maxWidth: 760, margin: '0 auto', padding: esEscritorio ? '20px 24px 60px' : '14px 14px 40px' }}>
-        {/* nav dorada */}
-        <div style={{ background: T.navDorada, borderRadius: 14, padding: '11px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 22, boxShadow: '0 6px 18px rgba(156,101,24,.3)' }}>
+      {/* barra dorada FIJA: cubre desde el reloj hasta abajo de la nav. No se mueve. */}
+      <div style={{ position: 'relative', zIndex: 30, flexShrink: 0, background: T.navDorada, paddingTop: esEscritorio ? 0 : 'env(safe-area-inset-top)', boxShadow: '0 6px 18px rgba(156,101,24,.3)' }}>
+        <div style={{ maxWidth: 760, margin: '0 auto', padding: esEscritorio ? '12px 24px' : '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#2a1c08', fontWeight: 800, fontSize: 14 }}>
             <span>🏀</span><span style={{ letterSpacing: 0.3 }}>MEDIA CANCHA</span>
           </div>
@@ -295,14 +295,19 @@ export default function PantallaResultados({ onVolver, onNuevoJuego, onAccion })
             <span onClick={cambiarTema} title={`Tema: ${T.nombre}`} style={{ width: 18, height: 18, borderRadius: '50%', background: T.boton, cursor: 'pointer', border: '1.5px solid rgba(42,28,8,.3)', flexShrink: 0 }} />
           </div>
         </div>
+      </div>
 
-        {Contenido()}
+      {/* SOLO esta área hace scroll, por debajo de la barra fija */}
+      <div style={{ position: 'relative', zIndex: 1, flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
+        <div style={{ maxWidth: 760, margin: '0 auto', padding: esEscritorio ? '18px 24px 60px' : '16px 14px calc(env(safe-area-inset-bottom) + 40px)' }}>
+          {Contenido()}
+        </div>
       </div>
 
       {/* Modal: publicar con comentario + vista previa profesional */}
       {juegoAPublicar && (
         <div onClick={() => { setJuegoAPublicar(null); setComentarioPub('') }} style={{ position: 'fixed', inset: 0, zIndex: 80, background: T.esClaro ? 'rgba(30,26,18,0.5)' : 'rgba(4,5,7,0.82)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', display: 'flex', alignItems: esEscritorio ? 'center' : 'flex-end', justifyContent: 'center', padding: esEscritorio ? 20 : 0 }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 480, maxHeight: '92vh', overflowY: 'auto', borderRadius: esEscritorio ? 18 : '18px 18px 0 0', background: T.esClaro ? '#f3eee3' : '#0c0e12', padding: 16 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 480, maxHeight: '92dvh', overflowY: 'auto', borderRadius: esEscritorio ? 18 : '18px 18px 0 0', background: T.esClaro ? '#f3eee3' : '#0c0e12', padding: 16, paddingBottom: esEscritorio ? 16 : 'calc(16px + env(safe-area-inset-bottom))' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
               <span style={{ fontSize: 17, fontWeight: 800, color: T.textoFuerte }}>Publicar resultado</span>
               <span onClick={() => { setJuegoAPublicar(null); setComentarioPub('') }} style={{ fontSize: 24, color: T.tenue, cursor: 'pointer', lineHeight: 1 }}>×</span>
@@ -314,7 +319,7 @@ export default function PantallaResultados({ onVolver, onNuevoJuego, onAccion })
               onChange={(e) => setComentarioPub(e.target.value.slice(0, 200))}
               placeholder="Escribe algo sobre el juego…"
               rows={2}
-              style={{ width: '100%', boxSizing: 'border-box', background: T.esClaro ? '#fff' : 'rgba(255,255,255,.05)', border: `1px solid ${T.tarjetaBorde}`, borderRadius: 10, padding: '10px 12px', color: T.textoFuerte, fontSize: 13.5, outline: 'none', resize: 'none', marginBottom: 14, fontFamily: 'inherit' }}
+              style={{ width: '100%', boxSizing: 'border-box', background: T.esClaro ? '#fff' : 'rgba(255,255,255,.05)', border: `1px solid ${T.tarjetaBorde}`, borderRadius: 10, padding: '10px 12px', color: T.textoFuerte, fontSize: 16, outline: 'none', resize: 'none', marginBottom: 14, fontFamily: 'inherit' }}
             />
 
             <div style={{ fontSize: 11.5, fontWeight: 700, color: T.tenue, marginBottom: 8 }}>Así se verá:</div>
