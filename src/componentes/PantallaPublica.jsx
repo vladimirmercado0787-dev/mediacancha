@@ -54,6 +54,8 @@ import { leerHistorialDia, haceCuanto as haceCuantoLocal, publicarEnTechado, qui
 import { leerTechado, misReacciones, reaccionar, leerComentarios, comentar, borrarComentario, haceCuanto, borrarPublicacion, miUsuarioId, miPerfilCompleto } from '../techado'
 import { plantillaPorId, PLANTILLA_DEFAULT, PLANTILLAS, puedeUsar } from '../plantillas'
 import TarjetaResultado from './TarjetaResultado'
+import RecortadorFoto from './RecortadorFoto'
+import CompartirAlChat from './CompartirAlChat'
 import { supabase } from '../supabaseClient'
 import { alternarSeguir, idsQueSigo, statsSociales } from '../social'
 import { contarNoLeidos } from '../mensajes'
@@ -291,12 +293,15 @@ export default function PantallaPublica({ onAccion, haySesion }) {
   const [copiadoMC, setCopiadoMC] = useState(false)
   const [navHover, setNavHover] = useState(null)
   const [pubAbierta, setPubAbierta] = useState(null)
+  const [visorFotos, setVisorFotos] = useState(null)  // { fotos: [...], inicio: 0 }
+  const [compartirResultado, setCompartirResultado] = useState(null)  // datos del juego a compartir al chat
   const [comentariosDe, setComentariosDe] = useState(null)
   const [juegoAPublicar, setJuegoAPublicar] = useState(null)
   const [textoComposer, setTextoComposer] = useState('')
   const [fondoComposer, setFondoComposer] = useState(0)
   const [publicandoTexto, setPublicandoTexto] = useState(false)
   const [composerAbierto, setComposerAbierto] = useState(false)
+  const [fotosComposer, setFotosComposer] = useState([])  // [{ blob, previa }] fotos elegidas para publicar
 
   const recargarTechado = async () => {
     const res = await leerTechado()
@@ -407,19 +412,34 @@ export default function PantallaPublica({ onAccion, haySesion }) {
 
   const enviarPublicacionTexto = async () => {
     const txt = textoComposer.trim()
-    if (!txt || publicandoTexto) return
+    const hayFotos = fotosComposer.length > 0
+    if ((!txt && !hayFotos) || publicandoTexto) return
     setPublicandoTexto(true)
     try {
       const { publicarTexto } = await import('../techado')
+      const { subirFotoPublicacion } = await import('../fotos')
       // Mapeo del índice de plantilla al identificador que se guarda
       const NOMBRES_FONDO = [null, 'balon_dorado', 'aro_atardecer', 'cancha_barrio_noche', 'cancha_madera', 'monumento_santiago']
       const fondoElegido = fondoComposer > 0 ? NOMBRES_FONDO[fondoComposer] : null
-      const res = await publicarTexto({ texto: txt, fondo: fondoElegido })
+
+      // Subir las fotos elegidas (si hay)
+      let urls = []
+      if (hayFotos) {
+        for (const f of fotosComposer) {
+          const r = await subirFotoPublicacion(f.blob)
+          if (r && r.url) urls.push(r.url)
+        }
+      }
+
+      const res = await publicarTexto({ texto: txt, imagenes: urls.length ? urls : null, fondo: urls.length ? null : fondoElegido })
       if (res.error) {
         alert('No se pudo publicar: ' + res.error)
       } else {
         setTextoComposer('')
         setFondoComposer(0)
+        // liberar las previas y limpiar
+        fotosComposer.forEach((f) => { try { URL.revokeObjectURL(f.previa) } catch (e) {} })
+        setFotosComposer([])
         setComposerAbierto(false)
         await recargarTechado()
       }
@@ -811,7 +831,7 @@ export default function PantallaPublica({ onAccion, haySesion }) {
               <button onClick={() => onReaccionar(p.id, 'like')} style={accionBtn(misReacc[p.id] === 'like' ? T.acento : (T.esClaro ? '#565c66' : '#aeb6c0'))}><span style={{ fontSize: 16 }}>{misReacc[p.id] === 'like' ? '❤️' : '🤍'}</span> {p.likes || 0}</button>
               <button onClick={() => onReaccionar(p.id, 'dislike')} style={accionBtn(misReacc[p.id] === 'dislike' ? '#e0563f' : (T.esClaro ? '#565c66' : '#aeb6c0'))}><span style={{ fontSize: 15 }}>👎</span> {p.dislikes || 0}</button>
               <button onClick={() => setComentariosDe(p)} style={accionBtn(T.esClaro ? '#565c66' : '#aeb6c0')}><span style={{ fontSize: 15 }}>💬</span> {p.num_comentarios || 0}</button>
-              <button onClick={() => setPubAbierta(p)} style={accionBtn(T.esClaro ? '#565c66' : '#aeb6c0')}><span style={{ fontSize: 14 }}>↗</span> Compartir</button>
+              <button onClick={() => setCompartirResultado(datos)} style={accionBtn(T.esClaro ? '#565c66' : '#aeb6c0')}><span style={{ fontSize: 14 }}>↗</span> Compartir</button>
               {esMio && <button onClick={() => onBorrarPublicacion(p.id)} title="Eliminar de la pantalla principal" style={accionBtn('#e0563f')}><span style={{ fontSize: 15 }}>🗑️</span></button>}
             </div>
           )
@@ -823,6 +843,8 @@ export default function PantallaPublica({ onAccion, haySesion }) {
                 tiempo={haceCuanto(p.creado_en)}
                 autorNombre={`${p.autor_nombre || 'Usuario'}${p.autor_apellido ? ' ' + p.autor_apellido : ''}`}
                 autorFoto={p.autor_foto}
+                autorId={p.autor_id}
+                onIrPerfil={(id) => onAccion && onAccion('verPerfil:' + id)}
                 comentario={p.texto && !p.texto.startsWith('Ganaron') && !p.texto.startsWith('Quedaron') ? p.texto.split('\n')[0] : null}
                 temaForzado={tema}
                 pie={barraReacciones}
@@ -835,6 +857,7 @@ export default function PantallaPublica({ onAccion, haySesion }) {
         const esCuero = plant && plant.esCuero
         const acentoTag = p.tag_color || '#2f9e6e'
         const fotoPub = datos.imagen || p.imagen_url || null
+        const fotosPub = (Array.isArray(datos.imagenes) && datos.imagenes.length) ? datos.imagenes : (fotoPub ? [fotoPub] : [])
         // colores tipo mockup (tarjeta blanca)
         const cardBg = esCuero ? T.barraImg : (T.esClaro ? '#ffffff' : 'rgba(20,22,26,.96)')
         const inkName = T.esClaro ? '#16181c' : '#f4f7f9'
@@ -877,11 +900,9 @@ export default function PantallaPublica({ onAccion, haySesion }) {
                 </div>
               )}
 
-              {/* FOTO de la publicación (si hay) */}
-              {fotoPub && (
-                <div onClick={() => setPubAbierta(p)} style={{ margin: '0 0 4px', cursor: 'pointer', background: '#000' }}>
-                  <img src={fotoPub} alt="" style={{ width: '100%', maxHeight: 460, objectFit: 'cover', display: 'block' }} />
-                </div>
+              {/* FOTO(S) de la publicación (si hay) */}
+              {fotosPub.length > 0 && (
+                <CarruselFotos fotos={fotosPub} onAbrir={(i) => setVisorFotos({ fotos: fotosPub, inicio: i || 0 })} />
               )}
 
               {/* BARRA DE ACCIONES: me gusta · no me gusta · comentar · compartir */}
@@ -1015,6 +1036,16 @@ export default function PantallaPublica({ onAccion, haySesion }) {
           onCambioComentarios={recargarTechado}
         />
       )}
+      {visorFotos && (
+        <VisorFotos fotos={visorFotos.fotos} inicio={visorFotos.inicio} onCerrar={() => setVisorFotos(null)} />
+      )}
+      {compartirResultado && (
+        <CompartirAlChat
+          datos={compartirResultado}
+          tema={{ acento: T.acento, boton: T.boton }}
+          onCerrar={() => setCompartirResultado(null)}
+        />
+      )}
       {comentariosDe && (
         <HojaComentarios
           pub={comentariosDe}
@@ -1023,6 +1054,7 @@ export default function PantallaPublica({ onAccion, haySesion }) {
           onCerrar={() => setComentariosDe(null)}
           onPedirLogin={() => { setComentariosDe(null); click('entrar') }}
           onCambio={recargarTechado}
+          onAccion={onAccion}
         />
       )}
       {verHistorialDia && (
@@ -1241,6 +1273,9 @@ export default function PantallaPublica({ onAccion, haySesion }) {
       setFondoSel={setFondoComposer}
       publicando={publicandoTexto}
       onPublicar={enviarPublicacionTexto}
+      fotos={fotosComposer}
+      setFotos={setFotosComposer}
+      maxFotos={2}
       onResultado={() => click('resultados')}
       onAbrir={() => click('publicar')}
     />
@@ -1485,11 +1520,117 @@ const EMOJIS_MC = {
   'Banderas': ['🇩🇴', '🇺🇸', '🇵🇷', '🇲🇽', '🇨🇴', '🇻🇪', '🇪🇸', '🇨🇺', '🇦🇷', '🇧🇷', '🇨🇱', '🇵🇪', '🇪🇨', '🇬🇹', '🇭🇳', '🇳🇮', '🇨🇷', '🇵🇦', '🏳️', '🏁'],
 }
 
-function ComposerTechado({ T, miPerfil, abierto, setAbierto, texto, setTexto, fondoSel, setFondoSel, publicando, onPublicar, onResultado, onAbrir }) {
+// ---- Visor de fotos a pantalla completa (profesional, estilo Instagram/WhatsApp) ----
+function VisorFotos({ fotos, inicio = 0, onCerrar }) {
+  const [idx, setIdx] = useState(inicio)
+  const refScroll = useRef(null)
+
+  // Posicionar en la foto inicial al abrir
+  useEffect(() => {
+    const el = refScroll.current
+    if (el) el.scrollLeft = inicio * el.clientWidth
+  }, [inicio])
+
+  // Bloquear el scroll del fondo mientras el visor está abierto
+  useEffect(() => {
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = prev }
+  }, [])
+
+  const alScroll = () => {
+    const el = refScroll.current
+    if (!el) return
+    const i = Math.round(el.scrollLeft / el.clientWidth)
+    if (i !== idx) setIdx(i)
+  }
+
+  const unaSola = fotos.length === 1
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 400, background: 'rgba(0,0,0,.96)', display: 'flex', flexDirection: 'column', animation: 'visorFade .2s ease' }}>
+      <style>{`@keyframes visorFade{from{opacity:0}to{opacity:1}}`}</style>
+
+      {/* Barra superior */}
+      <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 'calc(env(safe-area-inset-top) + 12px) 16px 12px', position: 'relative', zIndex: 2 }}>
+        <span onClick={onCerrar} style={{ color: '#fff', fontSize: 30, lineHeight: 1, cursor: 'pointer', fontWeight: 300, padding: '0 4px' }}>✕</span>
+        {!unaSola && <span style={{ color: '#fff', fontSize: 14, fontWeight: 700 }}>{idx + 1} / {fotos.length}</span>}
+        <span style={{ width: 30 }} />
+      </div>
+
+      {/* Fotos (deslizables si son varias), centradas, tamaño real */}
+      <div ref={refScroll} onScroll={alScroll} style={{ flex: 1, minHeight: 0, display: 'flex', overflowX: unaSola ? 'hidden' : 'auto', overflowY: 'hidden', scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch' }}>
+        {fotos.map((src, i) => (
+          <div key={i} onClick={onCerrar} style={{ flex: '0 0 100%', width: '100%', height: '100%', scrollSnapAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 0 40px' }}>
+            <img src={src} alt="" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' }} />
+          </div>
+        ))}
+      </div>
+
+      {/* Puntitos abajo */}
+      {!unaSola && (
+        <div style={{ flexShrink: 0, display: 'flex', justifyContent: 'center', gap: 6, padding: 'calc(env(safe-area-inset-bottom) + 14px) 0' }}>
+          {fotos.map((_, i) => (
+            <div key={i} style={{ width: i === idx ? 8 : 6, height: i === idx ? 8 : 6, borderRadius: '50%', background: i === idx ? '#fff' : 'rgba(255,255,255,.45)', transition: 'all .2s' }} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ---- Carrusel de fotos de una publicación (1 = cuadrada estilo IG, varias = deslizable) ----
+function CarruselFotos({ fotos, onAbrir }) {
+  const [idx, setIdx] = useState(0)
+  const refScroll = useRef(null)
+  const unaSola = fotos.length === 1
+
+  const alScroll = () => {
+    const el = refScroll.current
+    if (!el) return
+    const i = Math.round(el.scrollLeft / el.clientWidth)
+    if (i !== idx) setIdx(i)
+  }
+
+  if (unaSola) {
+    // Una sola: completa, sin cortar (respeta su forma), con límite de alto
+    return (
+      <div onClick={() => onAbrir && onAbrir(0)} style={{ width: '100%', maxHeight: 560, cursor: 'pointer', background: '#000', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <img src={fotos[0]} alt="" style={{ width: '100%', maxHeight: 560, objectFit: 'contain', display: 'block' }} />
+      </div>
+    )
+  }
+
+  // Varias: carrusel deslizable, cada foto completa sin cortar
+  return (
+    <div style={{ position: 'relative' }}>
+      <div ref={refScroll} onScroll={alScroll} style={{ display: 'flex', overflowX: 'auto', scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch', background: '#000' }}>
+        {fotos.map((src, i) => (
+          <div key={i} onClick={() => onAbrir && onAbrir(i)} style={{ flex: '0 0 100%', width: '100%', height: 460, scrollSnapAlign: 'center', cursor: 'pointer', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <img src={src} alt="" style={{ maxWidth: '100%', maxHeight: 460, objectFit: 'contain', display: 'block' }} />
+          </div>
+        ))}
+      </div>
+      {/* Contador 1/3 */}
+      <div style={{ position: 'absolute', top: 10, right: 10, background: 'rgba(0,0,0,.6)', color: '#fff', fontSize: 11.5, fontWeight: 800, borderRadius: 11, padding: '3px 9px' }}>{idx + 1}/{fotos.length}</div>
+      {/* Puntitos */}
+      <div style={{ position: 'absolute', bottom: 8, left: 0, right: 0, display: 'flex', justifyContent: 'center', gap: 5 }}>
+        {fotos.map((_, i) => (
+          <div key={i} style={{ width: i === idx ? 7 : 5, height: i === idx ? 7 : 5, borderRadius: '50%', background: i === idx ? '#fff' : 'rgba(255,255,255,.5)', transition: 'all .2s' }} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function ComposerTechado({ T, miPerfil, abierto, setAbierto, texto, setTexto, fondoSel, setFondoSel, publicando, onPublicar, onResultado, onAbrir, fotos = [], setFotos, maxFotos = 2 }) {
   const p = miPerfil
   const [panelEmoji, setPanelEmoji] = useState(false)
   const [catEmoji, setCatEmoji] = useState('Básquet')
   const areaRef = useRef(null)
+  const inputFotosRef = useRef(null)
+  const [fotoARecortar, setFotoARecortar] = useState(null)   // foto pendiente de recortar
+  const [editandoIdx, setEditandoIdx] = useState(-1)          // índice de la foto que se está editando
   // Menú de menciones (@): cuando escribes @ sale la lista de gente para etiquetar
   const [menciones, setMenciones] = useState([])
   const [buscandoMencion, setBuscandoMencion] = useState(false)
@@ -1549,9 +1690,56 @@ function ComposerTechado({ T, miPerfil, abierto, setAbierto, texto, setTexto, fo
     }
   }, [abierto])
 
+  // ----- Manejo de fotos de la publicación -----
+  const alElegirFotos = (e) => {
+    const archivos = Array.from(e.target.files || [])
+    if (inputFotosRef.current) inputFotosRef.current.value = ''
+    if (!archivos.length) return
+    const espacio = maxFotos - fotos.length
+    if (espacio <= 0) { alert(`Puedes subir hasta ${maxFotos} fotos por publicación.`); return }
+    const aUsar = archivos.slice(0, espacio)
+
+    // Si es UNA sola foto en total → pasa por el recortador
+    if (aUsar.length === 1 && fotos.length === 0 && maxFotos >= 1) {
+      setEditandoIdx(-1)
+      setFotoARecortar(aUsar[0])
+      return
+    }
+    // Varias → entran directo (con opción de editar luego)
+    const nuevas = aUsar.map((a) => ({ blob: a, previa: URL.createObjectURL(a) }))
+    setFotos((prev) => [...prev, ...nuevas])
+  }
+
+  const alRecortarComposer = (blob) => {
+    const previa = URL.createObjectURL(blob)
+    if (editandoIdx >= 0) {
+      setFotos((prev) => prev.map((f, i) => i === editandoIdx ? { blob, previa } : f))
+    } else {
+      setFotos((prev) => [...prev, { blob, previa }])
+    }
+    setFotoARecortar(null)
+    setEditandoIdx(-1)
+  }
+
+  const editarFotoComposer = async (idx) => {
+    const f = fotos[idx]
+    if (!f) return
+    setEditandoIdx(idx)
+    setFotoARecortar(f.blob)
+  }
+
+  const quitarFoto = (idx) => {
+    setFotos((prev) => {
+      const f = prev[idx]
+      if (f) { try { URL.revokeObjectURL(f.previa) } catch (e) {} }
+      return prev.filter((_, i) => i !== idx)
+    })
+  }
+
   if (!p) return null
   const iniciales = `${(p.nombre || '?')[0] || ''}${(p.apellido || '')[0] || ''}`.toUpperCase()
   const hayTexto = texto.trim().length > 0
+  const puedePublicar = hayTexto || fotos.length > 0
   const nombreCompleto = `${p.nombre || 'Usuario'}${p.apellido ? ' ' + p.apellido : ''}`
 
   // Plantillas de imagen para publicaciones de texto corto (estilo Facebook/IG).
@@ -1638,7 +1826,7 @@ function ComposerTechado({ T, miPerfil, abierto, setAbierto, texto, setTexto, fo
   ]
   // Adjuntos de abajo. Foto/Resultado conectan; el resto pronto.
   const adjuntos = [
-    { id: 'foto', icono: '📷', txt: 'Foto', activo: false },
+    { id: 'foto', icono: '📷', txt: 'Foto', activo: true },
     { id: 'video', icono: '🎥', txt: 'Video', activo: false },
     { id: 'resultado', icono: '📊', txt: 'Resultado', activo: true },
     { id: 'encuesta', icono: '🗳️', txt: 'Encuesta', activo: false },
@@ -1710,11 +1898,11 @@ function ComposerTechado({ T, miPerfil, abierto, setAbierto, texto, setTexto, fo
       }}>
         <span onClick={cerrar} style={{ fontSize: 26, lineHeight: 1, color: T.textoFuerte, cursor: 'pointer', padding: '0 4px', fontWeight: 300 }}>✕</span>
         <span style={{ flex: 1, textAlign: 'center', fontSize: 16, fontWeight: 800, color: T.textoFuerte }}>Publicación nueva</span>
-        <button onClick={onPublicar} disabled={!hayTexto || publicando} style={{
+        <button onClick={onPublicar} disabled={!puedePublicar || publicando} style={{
           border: 'none', borderRadius: 20, padding: '8px 18px',
-          background: hayTexto ? T.boton : (T.esClaro ? '#e0e3e8' : 'rgba(255,255,255,.1)'),
-          color: hayTexto ? '#1a1205' : T.tenue, fontWeight: 800, fontSize: 13.5,
-          cursor: hayTexto ? 'pointer' : 'default', opacity: publicando ? 0.6 : 1,
+          background: puedePublicar ? T.boton : (T.esClaro ? '#e0e3e8' : 'rgba(255,255,255,.1)'),
+          color: puedePublicar ? '#1a1205' : T.tenue, fontWeight: 800, fontSize: 13.5,
+          cursor: puedePublicar ? 'pointer' : 'default', opacity: publicando ? 0.6 : 1,
         }}>{publicando ? 'Publicando…' : 'Publicar'}</button>
       </div>
 
@@ -1756,6 +1944,22 @@ function ComposerTechado({ T, miPerfil, abierto, setAbierto, texto, setTexto, fo
             placeholder="¿Qué está pasando en la cancha?"
             style={{ flex: 1, width: '100%', boxSizing: 'border-box', background: 'transparent', border: 'none', color: T.textoFuerte, fontSize: 18, outline: 'none', resize: 'none', fontFamily: 'inherit', lineHeight: 1.5, padding: '6px 18px 18px' }}
           />
+        )}
+
+        {/* Fotos elegidas para la publicación */}
+        {fotos.length > 0 && (
+          <div style={{ flexShrink: 0, display: 'flex', gap: 10, overflowX: 'auto', padding: '4px 16px 12px', WebkitOverflowScrolling: 'touch' }}>
+            {fotos.map((f, i) => (
+              <div key={i} style={{ position: 'relative', flexShrink: 0, width: 96, height: 96, borderRadius: 12, overflow: 'hidden', border: `1.5px solid ${T.acento}55` }}>
+                <img src={f.previa} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                <button onClick={() => quitarFoto(i)} style={{ position: 'absolute', top: 4, right: 4, width: 24, height: 24, borderRadius: '50%', border: 'none', background: 'rgba(0,0,0,.6)', color: '#fff', fontSize: 14, cursor: 'pointer', display: 'grid', placeItems: 'center', lineHeight: 1 }}>✕</button>
+                <button onClick={() => editarFotoComposer(i)} style={{ position: 'absolute', bottom: 4, right: 4, border: 'none', background: 'rgba(0,0,0,.6)', color: '#fff', fontSize: 10.5, fontWeight: 800, cursor: 'pointer', borderRadius: 7, padding: '3px 7px' }}>✎ Editar</button>
+              </div>
+            ))}
+            {fotos.length < maxFotos && (
+              <button onClick={() => inputFotosRef.current && inputFotosRef.current.click()} style={{ flexShrink: 0, width: 96, height: 96, borderRadius: 12, border: `1.5px dashed ${T.acento}77`, background: 'transparent', color: T.acento, fontSize: 28, cursor: 'pointer' }}>＋</button>
+            )}
+          </div>
         )}
 
         {/* Selector de PLANTILLAS (miniaturas reales) */}
@@ -1819,7 +2023,11 @@ function ComposerTechado({ T, miPerfil, abierto, setAbierto, texto, setTexto, fo
       }}>
         <button onClick={() => setPanelEmoji((v) => !v)} style={{ flexShrink: 0, border: 'none', background: panelEmoji ? (T.esClaro ? '#f0e6cf' : 'rgba(234,182,79,.15)') : 'transparent', borderRadius: 10, padding: '6px 10px', fontSize: 22, cursor: 'pointer', lineHeight: 1 }}>😊</button>
         {adjuntos.map((a) => (
-          <button key={a.id} onClick={a.id === 'resultado' && a.activo ? () => { cerrar(); onResultado && onResultado() } : avisarPronto} style={{
+          <button key={a.id} onClick={
+            a.id === 'resultado' && a.activo ? () => { cerrar(); onResultado && onResultado() }
+            : a.id === 'foto' && a.activo ? () => { if (fotos.length >= maxFotos) { alert(`Puedes subir hasta ${maxFotos} fotos por publicación.`) } else { inputFotosRef.current && inputFotosRef.current.click() } }
+            : avisarPronto
+          } style={{
             flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6,
             border: `1px solid ${T.esClaro ? '#e0e3e8' : 'rgba(255,255,255,.1)'}`,
             background: T.esClaro ? '#fff' : 'rgba(255,255,255,.04)',
@@ -1831,12 +2039,27 @@ function ComposerTechado({ T, miPerfil, abierto, setAbierto, texto, setTexto, fo
           </button>
         ))}
       </div>
+
+      {/* Input oculto para elegir fotos */}
+      <input ref={inputFotosRef} type="file" accept="image/*" multiple={maxFotos > 1} onChange={alElegirFotos} style={{ display: 'none' }} />
+
+      {/* Recortador (para 1 foto, o al editar una) */}
+      {fotoARecortar && (
+        <RecortadorFoto
+          archivo={fotoARecortar}
+          forma="cuadrado"
+          elegirForma={true}
+          tema={{ acento: T.acento, boton: T.boton, botonTexto: '#1a1205', panel: 'rgba(12,14,18,.98)', texto: '#f4f7f9', tenue: '#9aa7b2' }}
+          onListo={alRecortarComposer}
+          onCancelar={() => { setFotoARecortar(null); setEditandoIdx(-1) }}
+        />
+      )}
     </div>
   )
 }
 
 // ---- Lista de comentarios (solo la lista; la caja de escribir va anclada en DetallePublicacion) ----
-function Comentarios({ lista, cargando, T, C }) {
+function Comentarios({ lista, cargando, T, C, onAccion }) {
   return (
     <div style={{ marginTop: 4, paddingTop: 12, borderTop: `1px solid ${T.esClaro ? 'rgba(0,0,0,.07)' : 'rgba(255,255,255,.06)'}` }}>
       {cargando ? (
@@ -1847,13 +2070,14 @@ function Comentarios({ lista, cargando, T, C }) {
           {lista.map((c) => {
             const perf = c.perfiles || {}
             const nombre = perf.nombre ? `${perf.nombre}${perf.apellido ? ' ' + perf.apellido : ''}` : 'Usuario'
+            const irPerfil = () => c.autor_id && onAccion && onAccion('verPerfil:' + c.autor_id)
             return (
               <div key={c.id} style={{ display: 'flex', gap: 9, marginBottom: 10 }}>
-                <div style={{ width: 28, height: 28, borderRadius: '50%', background: perf.foto_url ? `url(${perf.foto_url}) center/cover` : T.avatar, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: T.avatarTexto, flexShrink: 0 }}>
+                <div onClick={irPerfil} style={{ width: 28, height: 28, borderRadius: '50%', cursor: 'pointer', background: perf.foto_url ? `url(${perf.foto_url}) center/cover` : T.avatar, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: T.avatarTexto, flexShrink: 0 }}>
                   {!perf.foto_url && nombre.slice(0, 1).toUpperCase()}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 700, color: C.texto }}>{nombre} <span style={{ fontSize: 10.5, fontWeight: 400, color: C.tenue }}>· {haceCuanto(c.creado_en)}</span></div>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: C.texto }}><span onClick={irPerfil} style={{ cursor: 'pointer' }}>{nombre}</span> <span style={{ fontSize: 10.5, fontWeight: 400, color: C.tenue }}>· {haceCuanto(c.creado_en)}</span></div>
                   <div style={{ fontSize: 13, color: T.subTexto || C.texto, marginTop: 2, lineHeight: 1.4, wordBreak: 'break-word' }}>{c.texto}</div>
                 </div>
               </div>
@@ -1866,7 +2090,7 @@ function Comentarios({ lista, cargando, T, C }) {
 }
 
 // ---- Hoja de comentarios (estilo Instagram: solo comentarios) ----
-function HojaComentarios({ pub, T, C, haySesion, onCerrar, onPedirLogin, onCambio }) {
+function HojaComentarios({ pub, T, C, haySesion, onCerrar, onPedirLogin, onCambio, onAccion }) {
   const esEscritorio = typeof window !== 'undefined' && window.innerWidth >= 900
   const [comentarios, setComentarios] = useState([])
   const [texto, setTexto] = useState('')
@@ -1962,13 +2186,14 @@ function HojaComentarios({ pub, T, C, haySesion, onCerrar, onPedirLogin, onCambi
           comentarios.map((c) => {
             const perf = c.perfiles || {}
             const nombre = perf.nombre ? `${perf.nombre}${perf.apellido ? ' ' + perf.apellido : ''}` : 'Usuario'
+            const irPerfil = () => { if (c.autor_id && onAccion) { onCerrar && onCerrar(); onAccion('verPerfil:' + c.autor_id) } }
             return (
               <div key={c.id} style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
-                <div style={{ width: 34, height: 34, borderRadius: '50%', background: perf.foto_url ? `url(${perf.foto_url}) center/cover` : D.avatar, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: D.avatarTexto, flexShrink: 0 }}>
+                <div onClick={irPerfil} style={{ width: 34, height: 34, borderRadius: '50%', cursor: 'pointer', background: perf.foto_url ? `url(${perf.foto_url}) center/cover` : D.avatar, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: D.avatarTexto, flexShrink: 0 }}>
                   {!perf.foto_url && nombre.slice(0, 1).toUpperCase()}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: D.textoBody }}>{nombre} <span style={{ fontSize: 11, fontWeight: 400, color: D.tenue }}>· {haceCuanto(c.creado_en)}</span></div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: D.textoBody }}><span onClick={irPerfil} style={{ cursor: 'pointer' }}>{nombre}</span> <span style={{ fontSize: 11, fontWeight: 400, color: D.tenue }}>· {haceCuanto(c.creado_en)}</span></div>
                   <div style={{ fontSize: 14, color: D.subTexto, marginTop: 2, lineHeight: 1.45, wordBreak: 'break-word' }}>{c.texto}</div>
                 </div>
               </div>
@@ -2063,6 +2288,8 @@ function DetallePublicacion({ pub, T, C, ORO_TEXTO, haySesion, esMia, onCerrar, 
                   tiempo={haceCuanto(pub.creado_en)}
                   autorNombre={`${pub.autor_nombre || 'Usuario'}${pub.autor_apellido ? ' ' + pub.autor_apellido : ''}`}
                   autorFoto={pub.autor_foto}
+                  autorId={pub.autor_id}
+                  onIrPerfil={(id) => onAccion && onAccion('verPerfil:' + id)}
                   comentario={pub.texto && !pub.texto.startsWith('Ganaron') && !pub.texto.startsWith('Quedaron') ? pub.texto.split('\n')[0] : null}
                   temaForzado={tema}
                 />
@@ -2070,11 +2297,11 @@ function DetallePublicacion({ pub, T, C, ORO_TEXTO, haySesion, esMia, onCerrar, 
             ) : (
               <>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 12 }}>
-                  <div style={{ width: 36, height: 36, borderRadius: '50%', background: pub.autor_foto ? `url(${pub.autor_foto}) center/cover` : T.avatar, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: T.avatarTexto, flexShrink: 0 }}>
+                  <div onClick={() => pub.autor_id && onAccion && onAccion('verPerfil:' + pub.autor_id)} style={{ width: 36, height: 36, borderRadius: '50%', cursor: 'pointer', background: pub.autor_foto ? `url(${pub.autor_foto}) center/cover` : T.avatar, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: T.avatarTexto, flexShrink: 0 }}>
                     {!pub.autor_foto && ((pub.autor_nombre || '?').slice(0, 1).toUpperCase())}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13.5, fontWeight: 700, color: modalTexto }}>{pub.autor_nombre || 'Usuario'}{pub.autor_apellido ? ` ${pub.autor_apellido}` : ''}</div>
+                    <div onClick={() => pub.autor_id && onAccion && onAccion('verPerfil:' + pub.autor_id)} style={{ fontSize: 13.5, fontWeight: 700, color: modalTexto, cursor: 'pointer' }}>{pub.autor_nombre || 'Usuario'}{pub.autor_apellido ? ` ${pub.autor_apellido}` : ''}</div>
                     <div style={{ fontSize: 11, color: modalTenue }}>{haceCuanto(pub.creado_en)}</div>
                   </div>
                 </div>
@@ -2107,7 +2334,7 @@ function DetallePublicacion({ pub, T, C, ORO_TEXTO, haySesion, esMia, onCerrar, 
             </div>
 
             {/* lista de comentarios (la caja de escribir va anclada abajo, fuera del scroll) */}
-            <Comentarios lista={comentarios} cargando={cargandoComentarios} T={T} C={C} />
+            <Comentarios lista={comentarios} cargando={cargandoComentarios} T={T} C={C} onAccion={onAccion} />
           </div>
 
           {/* CAJA DE COMENTAR (ANCLADA abajo; sube con el teclado) */}

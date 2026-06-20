@@ -6,6 +6,7 @@ import plBalonDorado from '../assets/plantillas/plantilla_balon_dorado.png'
 import plCanchaBarrioNoche from '../assets/plantillas/plantilla_cancha_barrio_noche.png'
 import plCanchaMadera from '../assets/plantillas/plantilla_cancha_madera.png'
 import plMonumentoSantiago from '../assets/plantillas/plantilla_monumento_santiago.png'
+import RecortadorFoto from './RecortadorFoto'
 
 const TEMAS = {
   dorado: { esClaro: false, acento: '#e8b65a', fondo: '#08090c', panel: 'rgba(18,20,25,.96)', textoFuerte: '#f4f7f9', textoBody: '#eef3f6', tenue: '#9aa7b2', boton: 'linear-gradient(150deg, #f3cf63, #c8842e)', botonTexto: '#1a1205', avatar: 'linear-gradient(150deg, #e0b057, #9a6420)', avatarTexto: '#241a07', glow: 'rgba(190,135,55,0.22)', borde: 'rgba(234,182,79,.2)' },
@@ -34,6 +35,11 @@ export default function PantallaPublicar({ miPerfil, onVolver, onPublicado, onRe
   const [panelEmoji, setPanelEmoji] = useState(false)
   const [perfilCargado, setPerfilCargado] = useState(miPerfil || null)
   const areaRef = useRef(null)
+  const inputFotosRef = useRef(null)
+  const [fotos, setFotos] = useState([])              // [{ blob, previa }]
+  const [fotoARecortar, setFotoARecortar] = useState(null)
+  const [editandoIdx, setEditandoIdx] = useState(-1)
+  const maxFotos = 2                                   // usuario: 2 (torneo 5, liga 4 cuando se construyan)
   const p = perfilCargado || miPerfil || {}
 
   // Si no llega el perfil por props, lo carga solo (como hace el Chat)
@@ -106,6 +112,7 @@ export default function PantallaPublicar({ miPerfil, onVolver, onPublicado, onRe
 
   const iniciales = `${(p.nombre || '?')[0] || ''}${(p.apellido || '')[0] || ''}`.toUpperCase()
   const hayTexto = texto.trim().length > 0
+  const puedePublicar = hayTexto || fotos.length > 0
   const nombreCompleto = `${p.nombre || 'Usuario'}${p.apellido ? ' ' + p.apellido : ''}`
 
   const PLANTILLAS = [
@@ -126,7 +133,7 @@ export default function PantallaPublicar({ miPerfil, onVolver, onPublicado, onRe
     { id: 'sentimiento', emoji: '😊', txt: 'Sentimiento', fn: () => avisarPronto('Sentimiento') },
   ]
   const ACCIONES = [
-    { id: 'foto', emoji: '📷', txt: 'Foto', fn: () => avisarPronto('Subir foto') },
+    { id: 'foto', emoji: '📷', txt: 'Foto', fn: () => { if (fotos.length >= maxFotos) { alert(`Puedes subir hasta ${maxFotos} fotos por publicación.`) } else { inputFotosRef.current && inputFotosRef.current.click() } } },
     { id: 'video', emoji: '🎥', txt: 'Video', fn: () => avisarPronto('Subir video') },
     { id: 'resultado', emoji: '📊', txt: 'Resultado', fn: () => { onResultado && onResultado() } },
     { id: 'encuesta', emoji: '🗳️', txt: 'Encuesta', fn: () => avisarPronto('Crear encuesta') },
@@ -135,18 +142,58 @@ export default function PantallaPublicar({ miPerfil, onVolver, onPublicado, onRe
   const EMOJIS = ['🏀', '🔥', '💪', '🏆', '🥇', '⛹️', '🎯', '💥', '⚡', '🌟', '👑', '🚀', '💯', '🙌', '😤', '😎', '👏', '🤝', '😅', '😱', '💀', '😈', '🗣️', '👀']
   const insertarEmoji = (e) => setTexto((t) => (t || '') + e)
 
+  // ----- Manejo de fotos -----
+  const alElegirFotos = (e) => {
+    const archivos = Array.from(e.target.files || [])
+    if (inputFotosRef.current) inputFotosRef.current.value = ''
+    if (!archivos.length) return
+    const espacio = maxFotos - fotos.length
+    if (espacio <= 0) { alert(`Puedes subir hasta ${maxFotos} fotos por publicación.`); return }
+    const aUsar = archivos.slice(0, espacio)
+    // Una sola foto en total → recortador
+    if (aUsar.length === 1 && fotos.length === 0) {
+      setEditandoIdx(-1)
+      setFotoARecortar(aUsar[0])
+      return
+    }
+    // Varias → directo (con opción de editar)
+    const nuevas = aUsar.map((a) => ({ blob: a, previa: URL.createObjectURL(a) }))
+    setFotos((prev) => [...prev, ...nuevas])
+  }
+
+  const alRecortar = (blob) => {
+    const previa = URL.createObjectURL(blob)
+    if (editandoIdx >= 0) setFotos((prev) => prev.map((f, i) => i === editandoIdx ? { blob, previa } : f))
+    else setFotos((prev) => [...prev, { blob, previa }])
+    setFotoARecortar(null); setEditandoIdx(-1)
+  }
+
+  const editarFoto = (idx) => { const f = fotos[idx]; if (!f) return; setEditandoIdx(idx); setFotoARecortar(f.blob) }
+  const quitarFoto = (idx) => setFotos((prev) => { const f = prev[idx]; if (f) { try { URL.revokeObjectURL(f.previa) } catch (e) {} } return prev.filter((_, i) => i !== idx) })
+
   const publicar = async () => {
     const txt = texto.trim()
-    if (!txt || publicando) return
+    const hayFotos = fotos.length > 0
+    if ((!txt && !hayFotos) || publicando) return
     setPublicando(true)
     try {
       const { publicarTexto } = await import('../techado')
+      const { subirFotoPublicacion } = await import('../fotos')
       const fondoElegido = fondoSel > 0 ? NOMBRES_FONDO[fondoSel] : null
-      const res = await publicarTexto({ texto: txt, fondo: fondoElegido })
+      let urls = []
+      if (hayFotos) {
+        for (const f of fotos) {
+          const r = await subirFotoPublicacion(f.blob)
+          if (r && r.url) urls.push(r.url)
+        }
+      }
+      const res = await publicarTexto({ texto: txt, imagenes: urls.length ? urls : null, fondo: urls.length ? null : fondoElegido })
       if (res && res.error) {
         alert('No se pudo publicar: ' + res.error)
       } else {
         setTexto(''); setFondoSel(0)
+        fotos.forEach((f) => { try { URL.revokeObjectURL(f.previa) } catch (e) {} })
+        setFotos([])
         onPublicado && onPublicado()
         onVolver && onVolver()
       }
@@ -180,7 +227,7 @@ export default function PantallaPublicar({ miPerfil, onVolver, onPublicado, onRe
             <span style={{ fontSize: 15.5, fontWeight: 900, color: T.textoFuerte, letterSpacing: 0.3 }}>Nueva jugada</span>
             <span style={{ fontSize: 10, fontWeight: 700, color: T.acento, textTransform: 'uppercase', letterSpacing: 1 }}>al techado</span>
           </div>
-          <button onClick={publicar} disabled={!hayTexto || publicando} style={{ flexShrink: 0, border: 'none', borderRadius: 22, padding: '10px 20px', background: hayTexto ? T.boton : (T.esClaro ? 'rgba(0,0,0,.08)' : 'rgba(255,255,255,.08)'), color: hayTexto ? T.botonTexto : T.tenue, fontWeight: 900, fontSize: 14, letterSpacing: 0.3, cursor: hayTexto ? 'pointer' : 'default', opacity: publicando ? 0.6 : 1, boxShadow: hayTexto ? `0 6px 18px ${T.glow}` : 'none', transition: 'all .2s' }}>{publicando ? 'Enviando…' : 'Publicar'}</button>
+          <button onClick={publicar} disabled={!puedePublicar || publicando} style={{ flexShrink: 0, border: 'none', borderRadius: 22, padding: '10px 20px', background: puedePublicar ? T.boton : (T.esClaro ? 'rgba(0,0,0,.08)' : 'rgba(255,255,255,.08)'), color: puedePublicar ? T.botonTexto : T.tenue, fontWeight: 900, fontSize: 14, letterSpacing: 0.3, cursor: puedePublicar ? 'pointer' : 'default', opacity: publicando ? 0.6 : 1, boxShadow: puedePublicar ? `0 6px 18px ${T.glow}` : 'none', transition: 'all .2s' }}>{publicando ? 'Enviando…' : 'Publicar'}</button>
         </div>
       </div>
 
@@ -216,6 +263,22 @@ export default function PantallaPublicar({ miPerfil, onVolver, onPublicado, onRe
         ) : (
           <div style={{ flex: 1, minHeight: 140, padding: '2px 18px 14px', display: 'flex' }}>
             <textarea ref={areaRef} value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="¿Qué está pasando en la cancha?" style={{ width: '100%', boxSizing: 'border-box', background: 'transparent', border: 'none', color: T.textoFuerte, fontSize: 20, fontWeight: 500, outline: 'none', resize: 'none', fontFamily: 'inherit', lineHeight: 1.5, minHeight: 130 }} />
+          </div>
+        )}
+
+        {/* Fotos elegidas para la publicación */}
+        {fotos.length > 0 && (
+          <div style={{ flexShrink: 0, display: 'flex', gap: 10, overflowX: 'auto', padding: '0 16px 14px', WebkitOverflowScrolling: 'touch' }}>
+            {fotos.map((f, i) => (
+              <div key={i} style={{ position: 'relative', flexShrink: 0, width: 96, height: 96, borderRadius: 12, overflow: 'hidden', border: `1.5px solid ${T.acento}55` }}>
+                <img src={f.previa} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                <button onClick={() => quitarFoto(i)} style={{ position: 'absolute', top: 4, right: 4, width: 24, height: 24, borderRadius: '50%', border: 'none', background: 'rgba(0,0,0,.6)', color: '#fff', fontSize: 14, cursor: 'pointer', display: 'grid', placeItems: 'center', lineHeight: 1 }}>✕</button>
+                <button onClick={() => editarFoto(i)} style={{ position: 'absolute', bottom: 4, right: 4, border: 'none', background: 'rgba(0,0,0,.6)', color: '#fff', fontSize: 10.5, fontWeight: 800, cursor: 'pointer', borderRadius: 7, padding: '3px 7px' }}>✎ Editar</button>
+              </div>
+            ))}
+            {fotos.length < maxFotos && (
+              <button onClick={() => inputFotosRef.current && inputFotosRef.current.click()} style={{ flexShrink: 0, width: 96, height: 96, borderRadius: 12, border: `1.5px dashed ${T.acento}77`, background: 'transparent', color: T.acento, fontSize: 28, cursor: 'pointer' }}>＋</button>
+            )}
           </div>
         )}
 
@@ -259,6 +322,21 @@ export default function PantallaPublicar({ miPerfil, onVolver, onPublicado, onRe
           ))}
         </div>
       </div>
+
+      {/* Input oculto para elegir fotos */}
+      <input ref={inputFotosRef} type="file" accept="image/*" multiple={maxFotos > 1} onChange={alElegirFotos} style={{ display: 'none' }} />
+
+      {/* Recortador (1 foto o al editar) */}
+      {fotoARecortar && (
+        <RecortadorFoto
+          archivo={fotoARecortar}
+          forma="cuadrado"
+          elegirForma={true}
+          tema={{ acento: T.acento, boton: T.boton, botonTexto: T.botonTexto, panel: 'rgba(12,14,18,.98)', texto: '#f4f7f9', tenue: '#9aa7b2' }}
+          onListo={alRecortar}
+          onCancelar={() => { setFotoARecortar(null); setEditandoIdx(-1) }}
+        />
+      )}
     </div>
   )
 }

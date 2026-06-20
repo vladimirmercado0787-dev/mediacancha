@@ -54,7 +54,7 @@ function App() {
     return (
       <PantallaBuscar
         onVolver={() => setVista('publica')}
-        onVerPerfil={(id) => { setPerfilViendo(id); setVista('perfilAjeno') }}
+        onVerPerfil={(id) => { if (id && sesion?.user?.id === id) { setVista('perfil') } else { setPerfilViendo(id); setVista('perfilAjeno') } }}
       />
     )
   }
@@ -64,6 +64,7 @@ function App() {
       <PantallaChat
         abrirCon={chatCon}
         onVolver={() => { setChatCon(null); setVista('publica') }}
+        onVerPerfil={(id) => { if (id && sesion?.user?.id === id) { setVista('perfil') } else { setPerfilViendo(id); setVista('perfilAjeno') } }}
       />
     )
   }
@@ -226,8 +227,14 @@ function App() {
           setChatCon(id.slice('chatCon:'.length))
           setVista(sesion ? 'chat' : 'login')
         } else if (id.startsWith && id.startsWith('verPerfil:')) {
-          setPerfilViendo(id.slice('verPerfil:'.length))
-          setVista('perfilAjeno')
+          const idPerfil = id.slice('verPerfil:'.length)
+          if (idPerfil && sesion?.user?.id === idPerfil) {
+            // Es mi propia foto → mi perfil propio (no el ajeno, así no me sigo a mí mismo)
+            setVista('perfil')
+          } else {
+            setPerfilViendo(idPerfil)
+            setVista('perfilAjeno')
+          }
         } else {
           alert('Módulo "' + id + '" — aquí irá su pantalla (próximamente)')
         }

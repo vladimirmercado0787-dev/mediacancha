@@ -65,7 +65,7 @@ function generarTitular(d, totalA, totalB) {
   return { antes: ganador, verbo: 'venció', despues: 'a ' + perdedor, gancho: 'Se llevó un buen duelo de canchas.' }
 }
 
-export default function TarjetaResultado({ datos, fuente = 'rapido', tiempo, autorNombre, autorFoto, comentario, acciones, pie, temaForzado }) {
+export default function TarjetaResultado({ datos, fuente = 'rapido', tiempo, autorNombre, autorFoto, autorId, onIrPerfil, comentario, acciones, pie, temaForzado }) {
   const [abierto, setAbierto] = useState(false)
   const [esAncho, setEsAncho] = useState(typeof window !== 'undefined' ? window.innerWidth >= 768 : false)
   useEffect(() => {
@@ -176,10 +176,10 @@ export default function TarjetaResultado({ datos, fuente = 'rapido', tiempo, aut
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 16px 9px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
           {autorNombre && (
-            <div style={{ width: 26, height: 26, borderRadius: '50%', flexShrink: 0, background: autorFoto ? `url(${autorFoto}) center/cover` : colorEquipo(autorNombre), display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 800, color: '#fff' }}>{!autorFoto && autorNombre.slice(0, 1).toUpperCase()}</div>
+            <div onClick={() => autorId && onIrPerfil && onIrPerfil(autorId)} style={{ width: 26, height: 26, borderRadius: '50%', flexShrink: 0, cursor: autorId && onIrPerfil ? 'pointer' : 'default', background: autorFoto ? `url(${autorFoto}) center/cover` : colorEquipo(autorNombre), display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 800, color: '#fff' }}>{!autorFoto && autorNombre.slice(0, 1).toUpperCase()}</div>
           )}
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 12.5, fontWeight: 700, color: T.textoFuerte, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{autorNombre || d.nombreJuego || 'Juego'}</div>
+            <div onClick={() => autorId && onIrPerfil && onIrPerfil(autorId)} style={{ fontSize: 12.5, fontWeight: 700, color: T.textoFuerte, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: autorId && onIrPerfil ? 'pointer' : 'default' }}>{autorNombre || d.nombreJuego || 'Juego'}</div>
             <div style={{ fontSize: 10, color: T.tenue }}>{F.etiqueta}{tiempo ? ` · ${tiempo}` : ''}</div>
           </div>
         </div>

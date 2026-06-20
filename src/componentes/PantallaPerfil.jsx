@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../supabaseClient'
 import { subirFotoPerfil } from '../fotos'
 import { statsSociales } from '../social'
+import RecortadorFoto from './RecortadorFoto'
 import fondoCancha from '../assets/fondo-cancha.png'
 import fondoTarjetaMiembro from '../assets/fondo-tarjeta-miembro.png'
 import texturaCuero from '../assets/textura-cuero.png'
@@ -117,17 +118,40 @@ export default function PantallaPerfil({ onSalir, onVolver, onAccion }) {
   const [error, setError] = useState('')
   const [copiado, setCopiado] = useState(false)
   const [subiendoFoto, setSubiendoFoto] = useState(false)
+  const [fotoARecortar, setFotoARecortar] = useState(null)
+  const [visorAbierto, setVisorAbierto] = useState(false)
+  const [menuFotoAbierto, setMenuFotoAbierto] = useState(false)
   const [pestanaPerfil, setPestanaPerfil] = useState('datos')
   const [statsSoc, setStatsSoc] = useState({ seguidores: 0, siguiendo: 0 })
   const inputFotoRef = useRef(null)
 
   // Sube la foto elegida, la guarda en el perfil y refresca la pantalla
-  const alElegirFoto = async (e) => {
+  const alElegirFoto = (e) => {
     const archivo = e.target.files && e.target.files[0]
+    if (inputFotoRef.current) inputFotoRef.current.value = ''
     if (!archivo) return
+    setFotoARecortar(archivo)
+  }
+
+  // Editar la foto actual: la baja como blob y abre el recortador
+  const editarFotoActual = async () => {
+    setMenuFotoAbierto(false)
+    setVisorAbierto(false)
+    if (!perfil.foto_url) return
+    try {
+      const resp = await fetch(perfil.foto_url)
+      const blob = await resp.blob()
+      setFotoARecortar(blob)
+    } catch (e) {
+      alert('No se pudo cargar la foto para editar.')
+    }
+  }
+
+  const alRecortarFoto = async (blob) => {
+    setFotoARecortar(null)
     setSubiendoFoto(true)
     try {
-      const { url, error: errFoto } = await subirFotoPerfil(archivo)
+      const { url, error: errFoto } = await subirFotoPerfil(blob)
       if (errFoto || !url) {
         alert('No se pudo subir la foto: ' + (errFoto || 'intenta de nuevo'))
       } else {
@@ -144,7 +168,6 @@ export default function PantallaPerfil({ onSalir, onVolver, onAccion }) {
       alert('Error: ' + (err.message || err))
     }
     setSubiendoFoto(false)
-    if (inputFotoRef.current) inputFotoRef.current.value = ''
   }
   const [esEscritorio, setEsEscritorio] = useState(typeof window !== 'undefined' ? window.innerWidth >= 900 : false)
   const [esTablet, setEsTablet] = useState(typeof window !== 'undefined' ? window.innerWidth >= 900 && window.innerWidth < 1180 : false)
@@ -233,7 +256,8 @@ export default function PantallaPerfil({ onSalir, onVolver, onAccion }) {
     </button>
   )
 
-  const wrap = { minHeight: '100vh', position: 'relative', fontFamily: C.font, background: T.fondo, color: C.texto }
+  const wrap = { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, height: '100dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: C.font, background: T.fondo, color: C.texto }
+  const scrollArea = { flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch', position: 'relative', zIndex: 1 }
 
   if (cargando) {
     return (<div style={{ ...wrap, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Velo /><div style={{ position: 'relative', zIndex: 1, color: C.tenue }}>Cargando tu perfil...</div></div>)
@@ -273,7 +297,7 @@ export default function PantallaPerfil({ onSalir, onVolver, onAccion }) {
 
       {/* Identidad: foto grande arriba, nombre y datos centrados debajo */}
       <div style={{ position: 'relative', zIndex: 2, padding: '8px 18px 16px', display: 'flex', alignItems: 'center', gap: 16 }}>
-        <div onClick={() => inputFotoRef.current && inputFotoRef.current.click()} style={{ position: 'relative', cursor: 'pointer', flexShrink: 0 }}>
+        <div onClick={() => perfil.foto_url ? setVisorAbierto(true) : (inputFotoRef.current && inputFotoRef.current.click())} style={{ position: 'relative', cursor: 'pointer', flexShrink: 0 }}>
           <div style={{ width: 72, height: 72, borderRadius: '50%', background: perfil.foto_url ? `url(${perfil.foto_url}) center/cover` : T.avatar, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, fontWeight: 800, color: T.avatarTexto, boxShadow: `0 0 0 2px ${T.esClaro ? '#15110b' : '#0c0e12'}, 0 0 0 4px ${T.acento}`, opacity: subiendoFoto ? 0.5 : 1 }}>{!perfil.foto_url && iniciales}</div>
           <div style={{ position: 'absolute', bottom: 0, right: 0, width: 24, height: 24, borderRadius: '50%', background: T.boton, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, boxShadow: `0 0 0 2px ${T.esClaro ? '#2a2014' : '#0c0e12'}` }}>{subiendoFoto ? '…' : '📷'}</div>
           <input ref={inputFotoRef} type="file" accept="image/*" onChange={alElegirFoto} style={{ display: 'none' }} />
@@ -397,32 +421,56 @@ export default function PantallaPerfil({ onSalir, onVolver, onAccion }) {
   )
 
   // ===== ESCRITORIO: carnet arriba + 3 columnas =====
+  const recortadorUI = fotoARecortar ? (
+    <RecortadorFoto archivo={fotoARecortar} forma="circulo" tema={{ acento: T.acento, boton: T.boton, botonTexto: '#1a1205', panel: 'rgba(12,14,18,.98)', texto: '#f4f7f9', tenue: '#9aa7b2' }} onListo={alRecortarFoto} onCancelar={() => setFotoARecortar(null)} />
+  ) : null
+
+  // Visor: foto grande + botón Editar pequeño + menú chiquito (Mover / Cambiar)
+  const visorUI = visorAbierto && perfil.foto_url ? (
+    <div onClick={() => { setVisorAbierto(false); setMenuFotoAbierto(false) }} style={{ position: 'fixed', inset: 0, zIndex: 250, background: 'rgba(4,5,7,.92)', backdropFilter: 'blur(8px)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: 'min(78vw, 320px)', height: 'min(78vw, 320px)', borderRadius: '50%', background: `url(${perfil.foto_url}) center/cover`, boxShadow: `0 0 0 4px ${T.acento}, 0 20px 50px rgba(0,0,0,.5)` }} />
+      <div onClick={(e) => e.stopPropagation()} style={{ position: 'relative', marginTop: 26 }}>
+        <button onClick={() => setMenuFotoAbierto((v) => !v)} style={{ border: `1px solid rgba(255,255,255,.2)`, borderRadius: 12, padding: '10px 22px', background: 'rgba(255,255,255,.08)', color: '#f4f7f9', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>✎ Editar</button>
+        {menuFotoAbierto && (
+          <div style={{ position: 'absolute', bottom: 'calc(100% + 8px)', left: '50%', transform: 'translateX(-50%)', minWidth: 180, background: 'rgba(18,20,24,.99)', border: '1px solid rgba(232,182,79,.25)', borderRadius: 13, padding: 6, boxShadow: '0 10px 30px rgba(0,0,0,.5)' }}>
+            <button onClick={editarFotoActual} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', background: 'transparent', border: 'none', color: '#f4f7f9', fontSize: 13.5, fontWeight: 600, padding: '11px 12px', borderRadius: 9, cursor: 'pointer' }}><span>↔️</span> Mover / ajustar</button>
+            <button onClick={() => { setMenuFotoAbierto(false); setVisorAbierto(false); inputFotoRef.current && inputFotoRef.current.click() }} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', background: 'transparent', border: 'none', color: '#f4f7f9', fontSize: 13.5, fontWeight: 600, padding: '11px 12px', borderRadius: 9, cursor: 'pointer' }}><span>🖼️</span> Cambiar foto</button>
+          </div>
+        )}
+      </div>
+      <button onClick={() => { setVisorAbierto(false); setMenuFotoAbierto(false) }} style={{ marginTop: 16, border: 'none', background: 'transparent', color: '#9aa7b2', fontSize: 13, cursor: 'pointer' }}>Cerrar</button>
+    </div>
+  ) : null
+
   if (esEscritorio) {
     return (
       <div style={wrap}>
         <Velo />
-        <div style={{ position: 'sticky', top: 0, zIndex: 15, padding: '14px 24px 0', background: T.headerBg, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)' }}>
-          <div style={{ maxWidth: 1280, margin: '0 auto' }}><Carnet /></div>
-        </div>
-        <div style={{ position: 'relative', zIndex: 1, maxWidth: 1280, margin: '0 auto', width: '100%', display: 'grid', gridTemplateColumns: esTablet ? '1fr 1fr' : '300px 1fr 300px', gap: 16, alignItems: 'start', padding: '18px 24px 50px' }}>
-          {/* izquierda */}
-          {!esTablet && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {bMcid}{bAtleta}{bCuenta}
+        <div style={scrollArea}>
+          <div style={{ position: 'sticky', top: 0, zIndex: 15, padding: '14px 24px 0', background: T.headerBg, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)' }}>
+            <div style={{ maxWidth: 1280, margin: '0 auto' }}><Carnet /></div>
+          </div>
+          <div style={{ position: 'relative', zIndex: 1, maxWidth: 1280, margin: '0 auto', width: '100%', display: 'grid', gridTemplateColumns: esTablet ? '1fr 1fr' : '300px 1fr 300px', gap: 16, alignItems: 'start', padding: '18px 24px 50px' }}>
+            {/* izquierda */}
+            {!esTablet && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {bMcid}{bAtleta}{bCuenta}
+              </div>
+            )}
+            {/* centro */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
+              {esTablet && bMcid}
+              {bRating}{bPromedios}
+              {esTablet && bAtleta}
             </div>
-          )}
-          {/* centro */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
-            {esTablet && bMcid}
-            {bRating}{bPromedios}
-            {esTablet && bAtleta}
-          </div>
-          {/* derecha */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {bTrofeos}{bTorneos}
-            {esTablet && bCuenta}
+            {/* derecha */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {bTrofeos}{bTorneos}
+              {esTablet && bCuenta}
+            </div>
           </div>
         </div>
+        {recortadorUI}{visorUI}
       </div>
     )
   }
@@ -431,7 +479,8 @@ export default function PantallaPerfil({ onSalir, onVolver, onAccion }) {
   return (
     <div style={wrap}>
       <Velo />
-      <div style={{ position: 'relative', zIndex: 1, maxWidth: 560, margin: '0 auto', padding: '14px 16px 60px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={scrollArea}>
+        <div style={{ position: 'relative', zIndex: 1, maxWidth: 560, margin: '0 auto', padding: '14px 16px 60px', display: 'flex', flexDirection: 'column', gap: 14 }}>
         <Carnet />
 
         {/* Pestañas: Datos / Publicaciones */}
@@ -456,7 +505,9 @@ export default function PantallaPerfil({ onSalir, onVolver, onAccion }) {
             </div>
           </Tarjeta>
         )}
+        </div>
       </div>
+      {recortadorUI}{visorUI}
     </div>
   )
 }

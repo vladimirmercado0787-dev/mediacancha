@@ -3,6 +3,7 @@ import { Capacitor } from '@capacitor/core'
 import { Keyboard, KeyboardResize } from '@capacitor/keyboard'
 import { crearTorneo } from '../torneos'
 import { subirFotoTorneo } from '../fotos'
+import RecortadorFoto from './RecortadorFoto'
 
 const TEMAS = {
   dorado: { esClaro: false, acento: '#e8b65a', fondo: '#08090c', panel: 'rgba(18,20,25,.92)', tarjeta: 'rgba(20,22,26,.72)', textoFuerte: '#f4f7f9', textoBody: '#eef3f6', tenue: '#9aa7b2', muyTenue: '#6b7682', boton: 'linear-gradient(150deg, #f3cf63, #c8842e)', botonTexto: '#1a1205', glow: 'rgba(190,135,55,0.2)', borde: 'rgba(232,182,79,.2)', bordeSuave: 'rgba(255,255,255,.08)', input: 'rgba(255,255,255,.05)' },
@@ -67,6 +68,7 @@ export default function PantallaCrearTorneo({ onVolver, onCreado }) {
   const [emoji, setEmoji] = useState('🏆')
   const [logoUrl, setLogoUrl] = useState(null)
   const [subiendoLogo, setSubiendoLogo] = useState(false)
+  const [fotoARecortar, setFotoARecortar] = useState(null)
   const inputLogoRef = useRef(null)
   const [lugar, setLugar] = useState('')
   const [nivel, setNivel] = useState('libre')
@@ -119,19 +121,25 @@ export default function PantallaCrearTorneo({ onVolver, onCreado }) {
   const avanzar = () => { if (paso < TOTAL_PASOS) setPaso(paso + 1) }
   const retroceder = () => { if (paso > 1) setPaso(paso - 1); else onVolver && onVolver() }
 
-  const alElegirLogo = async (e) => {
+  const alElegirLogo = (e) => {
     const archivo = e.target.files && e.target.files[0]
+    if (inputLogoRef.current) inputLogoRef.current.value = ''
     if (!archivo) return
+    setFotoARecortar(archivo)  // abre el recortador
+  }
+
+  // El recortador devuelve el recorte ya listo (blob). Eso se sube.
+  const alRecortar = async (blob) => {
+    setFotoARecortar(null)
     setSubiendoLogo(true)
     try {
-      const { url, error } = await subirFotoTorneo(archivo)
+      const { url, error } = await subirFotoTorneo(blob)
       if (error || !url) alert('No se pudo subir el logo: ' + (error || 'intenta de nuevo'))
       else setLogoUrl(url)
     } catch (err) {
       alert('Error: ' + (err.message || err))
     }
     setSubiendoLogo(false)
-    if (inputLogoRef.current) inputLogoRef.current.value = ''
   }
 
   const finalizar = async () => {
@@ -171,17 +179,26 @@ export default function PantallaCrearTorneo({ onVolver, onCreado }) {
           <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej: Copa Jícome 2026" style={{ ...inputStyle, marginBottom: 20 }} />
 
           <label style={label}>Logo oficial del torneo</label>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 20 }}>
-            <div onClick={() => inputLogoRef.current && inputLogoRef.current.click()} style={{ width: 72, height: 72, borderRadius: 16, flexShrink: 0, cursor: 'pointer', background: logoUrl ? `url(${logoUrl}) center/cover` : T.input, border: `1.5px dashed ${T.borde}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: logoUrl ? 0 : 26, color: T.tenue, position: 'relative', opacity: subiendoLogo ? 0.5 : 1 }}>
-              {!logoUrl && (subiendoLogo ? '…' : '📷')}
+          {logoUrl ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 20 }}>
+              <div style={{ width: 150, height: 150, borderRadius: 20, background: `url(${logoUrl}) center/cover`, border: `2px solid ${T.acento}`, boxShadow: `0 8px 24px rgba(0,0,0,.3)`, opacity: subiendoLogo ? 0.5 : 1 }} />
+              <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
+                <button onClick={() => inputLogoRef.current && inputLogoRef.current.click()} style={{ border: `1px solid ${T.borde}`, borderRadius: 11, padding: '9px 18px', background: 'transparent', color: T.acento, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Cambiar logo</button>
+                <button onClick={() => setLogoUrl(null)} style={{ border: 'none', borderRadius: 11, padding: '9px 14px', background: 'transparent', color: T.muyTenue, fontSize: 13, cursor: 'pointer' }}>Quitar</button>
+              </div>
             </div>
-            <div style={{ flex: 1 }}>
-              <button onClick={() => inputLogoRef.current && inputLogoRef.current.click()} style={{ border: `1px solid ${T.borde}`, borderRadius: 11, padding: '10px 16px', background: 'transparent', color: T.acento, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>{logoUrl ? 'Cambiar logo' : 'Subir logo'}</button>
-              {logoUrl && <button onClick={() => setLogoUrl(null)} style={{ border: 'none', borderRadius: 11, padding: '10px 12px', marginLeft: 8, background: 'transparent', color: T.muyTenue, fontSize: 13, cursor: 'pointer' }}>Quitar</button>}
-              <div style={{ color: T.muyTenue, fontSize: 11.5, marginTop: 6 }}>Sube tu logo o elige un emoji abajo.</div>
+          ) : (
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 20 }}>
+              <div onClick={() => inputLogoRef.current && inputLogoRef.current.click()} style={{ width: 72, height: 72, borderRadius: 16, flexShrink: 0, cursor: 'pointer', background: T.input, border: `1.5px dashed ${T.borde}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, color: T.tenue, opacity: subiendoLogo ? 0.5 : 1 }}>
+                {subiendoLogo ? '…' : '📷'}
+              </div>
+              <div style={{ flex: 1 }}>
+                <button onClick={() => inputLogoRef.current && inputLogoRef.current.click()} style={{ border: `1px solid ${T.borde}`, borderRadius: 11, padding: '10px 16px', background: 'transparent', color: T.acento, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Subir logo</button>
+                <div style={{ color: T.muyTenue, fontSize: 11.5, marginTop: 6 }}>Sube tu logo o elige un emoji abajo.</div>
+              </div>
             </div>
-            <input ref={inputLogoRef} type="file" accept="image/*" onChange={alElegirLogo} style={{ display: 'none' }} />
-          </div>
+          )}
+          <input ref={inputLogoRef} type="file" accept="image/*" onChange={alElegirLogo} style={{ display: 'none' }} />
 
           <label style={label}>{logoUrl ? 'O usa un emoji' : 'Elige un emoji'}</label>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20, opacity: logoUrl ? 0.5 : 1 }}>
@@ -364,6 +381,16 @@ export default function PantallaCrearTorneo({ onVolver, onCreado }) {
           <button onClick={finalizar} disabled={guardando} style={{ width: '100%', border: 'none', borderRadius: 14, padding: 15, background: T.boton, color: T.botonTexto, fontSize: 15, fontWeight: 800, cursor: 'pointer', opacity: guardando ? 0.6 : 1 }}>{guardando ? 'Creando…' : '🏆 Crear torneo'}</button>
         )}
       </div>
+
+      {fotoARecortar && (
+        <RecortadorFoto
+          archivo={fotoARecortar}
+          forma="cuadrado"
+          tema={T}
+          onListo={alRecortar}
+          onCancelar={() => setFotoARecortar(null)}
+        />
+      )}
     </div>
   )
 }

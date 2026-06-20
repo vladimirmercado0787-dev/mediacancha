@@ -73,7 +73,8 @@ export default function PantallaPerfilAjeno({ usuarioId, onVolver, onMensaje }) 
     setProcesando(false)
   }
 
-  const wrap = { minHeight: '100vh', fontFamily: font, color: T.textoBody, position: 'relative', background: T.fondo }
+  const wrap = { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, height: '100dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: font, color: T.textoBody, background: T.fondo }
+  const scrollArea = { flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch', position: 'relative', zIndex: 1 }
   const Velo = () => (
     <>
       <div style={{ position: 'fixed', inset: 0, zIndex: 0, backgroundImage: `url(${fondoCancha})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
@@ -110,7 +111,8 @@ export default function PantallaPerfilAjeno({ usuarioId, onVolver, onMensaje }) 
   return (
     <div style={wrap}>
       <Velo />
-      <div style={{ position: 'relative', zIndex: 1, maxWidth: 560, margin: '0 auto', padding: '16px 16px 50px' }}>
+      <div style={scrollArea}>
+        <div style={{ position: 'relative', zIndex: 1, maxWidth: 560, margin: '0 auto', padding: '16px 16px 50px' }}>
         {/* nav */}
         <div style={{ background: T.navDorada, borderRadius: 14, padding: '11px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, boxShadow: '0 6px 18px rgba(156,101,24,.3)' }}>
           <span onClick={() => onVolver && onVolver()} style={{ color: '#2a1c08', fontWeight: 800, fontSize: 13, cursor: 'pointer' }}>← Volver</span>
@@ -202,6 +204,7 @@ export default function PantallaPerfilAjeno({ usuarioId, onVolver, onMensaje }) 
               )
             })
           )}
+        </div>
         </div>
       </div>
     </div>

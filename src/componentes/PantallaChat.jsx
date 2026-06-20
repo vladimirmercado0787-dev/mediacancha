@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../supabaseClient'
 import { miUsuarioId } from '../social'
 import { leerConversacion, marcarLeido, listaConversaciones, perfilesDe } from '../mensajes'
+import ResultadoEnChat from './ResultadoEnChat'
 import fondoCancha from '../assets/fondo-cancha.png'
 import { Capacitor } from '@capacitor/core'
 import { Keyboard, KeyboardResize } from '@capacitor/keyboard'
@@ -48,6 +49,14 @@ function diaLabel(iso) {
 function resumenMsg(m) {
   if (!m) return ''
   if (m.tipo === 'foto') return '📷 Foto'
+  if (m.tipo === 'resultado') {
+    let d = m.adjunto_meta
+    if (typeof d === 'string') { try { d = JSON.parse(d) } catch (e) { d = null } }
+    if (d && d.nombreA && d.nombreB) {
+      return `🏀 ${d.nombreA} ${d.totalA != null ? d.totalA : ''}-${d.totalB != null ? d.totalB : ''} ${d.nombreB}`
+    }
+    return '🏀 Resultado de juego'
+  }
   if (m.tipo === 'voz') return '🎤 Nota de voz'
   if (m.tipo === 'ubicacion') return '📍 Ubicación'
   return m.texto || 'Mensaje'
@@ -115,7 +124,7 @@ function ReproductorVoz({ src, dur, mio, id, activa, siguienteId, onActivar, onT
 }
 
 
-export default function PantallaChat({ abrirCon, onVolver }) {
+export default function PantallaChat({ abrirCon, onVolver, onVerPerfil }) {
   const [tema] = useState(() => {
     const validos = ['dorado', 'azul', 'claro', 'larimar']
     if (typeof window !== 'undefined') {
@@ -356,6 +365,15 @@ export default function PantallaChat({ abrirCon, onVolver }) {
   // ===== ACCIONES DE TOQUE =====
   const handlersPresion = (m) => ({
     onClick: () => setSelMsg(m),
+    onContextMenu: (e) => { e.preventDefault(); setSelMsg(m) },
+    onTouchStart: () => { presionTimer.current = setTimeout(() => setSelMsg(m), 420) },
+    onTouchEnd: () => clearTimeout(presionTimer.current),
+    onTouchMove: () => clearTimeout(presionTimer.current),
+  })
+
+  // Para tarjetas (resultado): el toque NO abre el menú (la tarjeta lo usa para desplegar).
+  // El menú sale SOLO al dejar pisado (long-press).
+  const handlersSoloPresion = (m) => ({
     onContextMenu: (e) => { e.preventDefault(); setSelMsg(m) },
     onTouchStart: () => { presionTimer.current = setTimeout(() => setSelMsg(m), 420) },
     onTouchEnd: () => clearTimeout(presionTimer.current),
@@ -627,7 +645,8 @@ export default function PantallaChat({ abrirCon, onVolver }) {
       if (m.borrado_todos) {
         const radio = mio ? '16px 16px 5px 16px' : '16px 16px 16px 5px'
         return (
-          <div className="mc-msg" style={{ display: 'flex', justifyContent: mio ? 'flex-end' : 'flex-start', marginTop: primero ? 7 : 2 }}>
+          <div className="mc-msg" style={{ display: 'flex', justifyContent: mio ? 'flex-end' : 'flex-start', alignItems: 'flex-end', gap: 6, marginTop: primero ? 7 : 2 }}>
+            {!mio && <div style={{ width: 28, flexShrink: 0 }} />}
             <div {...handlersPresion(m)} style={{ cursor: 'pointer', maxWidth: '78%', padding: '8px 12px', borderRadius: radio, background: mio ? T.burbujaMia : T.burbujaOtro, opacity: 0.65, color: mio ? T.burbujaMiaTexto : T.burbujaOtroTexto, border: !mio && T.esClaro ? `1px solid ${T.tarjetaBorde}` : 'none', display: 'flex', alignItems: 'center', gap: 7, fontStyle: 'italic', fontSize: 13.5 }}>
               🚫 Este mensaje fue eliminado
             </div>
@@ -638,9 +657,33 @@ export default function PantallaChat({ abrirCon, onVolver }) {
       const reacs = m.reacciones || {}
       const listaReacs = Object.values(reacs)
       const radio = mio ? `16px 16px ${ultimo ? '5px' : '16px'} 16px` : `16px 16px 16px ${ultimo ? '5px' : '16px'}`
-      
+
+      // ----- TIPO RESULTADO: tarjeta especial (sin burbuja de color) -----
+      if (m.tipo === 'resultado' && m.adjunto_meta) {
+        let datosJuego = m.adjunto_meta
+        if (typeof datosJuego === 'string') { try { datosJuego = JSON.parse(datosJuego) } catch (e) { datosJuego = null } }
+        return (
+          <div className="mc-msg" style={{ display: 'flex', justifyContent: mio ? 'flex-end' : 'flex-start', alignItems: 'flex-end', gap: 6, marginTop: primero ? 7 : 2, marginBottom: 4 }}>
+            {!mio && (ultimo ? (
+              <div onClick={() => onVerPerfil && perfilOtro?.id && onVerPerfil(perfilOtro.id)} style={{ width: 28, height: 28, borderRadius: '50%', flexShrink: 0, cursor: 'pointer', background: perfilOtro?.foto_url ? `url(${perfilOtro.foto_url}) center/cover` : T.avatar, display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 800, color: T.avatarTexto, marginBottom: 2 }}>{!perfilOtro?.foto_url && nombreDe(perfilOtro).slice(0, 1).toUpperCase()}</div>
+            ) : <div style={{ width: 28, flexShrink: 0 }} />)}
+            <div id={`msg-${m.id}`} {...handlersSoloPresion(m)} style={{ maxWidth: '82%', WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none' }}>
+              <ResultadoEnChat datos={datosJuego} mio={mio} onVerJuego={null} onFijar={() => fijar(m, !m.fijado)} fijado={m.fijado} />
+              <div style={{ fontSize: 9.5, opacity: 0.6, textAlign: 'right', marginTop: 3, color: T.tenue }}>{horaCorta(m.creado_en)}{mio ? (m.leido ? ' ✓✓' : ' ✓') : ''}</div>
+            </div>
+          </div>
+        )
+      }
+
       return (
-        <div className="mc-msg" style={{ display: 'flex', justifyContent: mio ? 'flex-end' : 'flex-start', marginTop: primero ? 7 : 2, marginBottom: listaReacs.length ? 12 : 0 }}>
+        <div className="mc-msg" style={{ display: 'flex', justifyContent: mio ? 'flex-end' : 'flex-start', alignItems: 'flex-end', gap: 6, marginTop: primero ? 7 : 2, marginBottom: listaReacs.length ? 12 : 0 }}>
+          {!mio && (
+            ultimo ? (
+              <div onClick={() => onVerPerfil && perfilOtro?.id && onVerPerfil(perfilOtro.id)} style={{ width: 28, height: 28, borderRadius: '50%', flexShrink: 0, cursor: 'pointer', background: perfilOtro?.foto_url ? `url(${perfilOtro.foto_url}) center/cover` : T.avatar, display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 800, color: T.avatarTexto, marginBottom: 2 }}>{!perfilOtro?.foto_url && nombreDe(perfilOtro).slice(0, 1).toUpperCase()}</div>
+            ) : (
+              <div style={{ width: 28, flexShrink: 0 }} />
+            )
+          )}
           <div style={{ position: 'relative', maxWidth: '78%' }}>
             <div id={`msg-${m.id}`} {...handlersPresion(m)} className={`${mio ? 'mc-b-me' : 'mc-b-you'}${ultimo ? (mio ? ' mc-tail-me' : ' mc-tail-you') : ''}`} style={{ position: 'relative', cursor: 'pointer', WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none', padding: m.tipo === 'foto' ? 4 : '8px 12px', borderRadius: radio }}>
               {orig && (
@@ -696,7 +739,7 @@ export default function PantallaChat({ abrirCon, onVolver }) {
         {/* header (FIJO arriba) */}
         <div style={{ position: 'relative', zIndex: 2, flexShrink: 0, background: 'linear-gradient(180deg,#15171c,#0c0e12)', borderBottom: '1px solid rgba(232,182,79,.28)', padding: '10px 14px', paddingTop: 'calc(env(safe-area-inset-top) + 10px)', display: 'flex', alignItems: 'center', gap: 11, boxShadow: '0 4px 18px rgba(0,0,0,.5)' }}>
           <span onClick={() => { setVistaChat(null); setMensajes([]); setPerfilOtro(null) }} style={{ color: '#e8b65a', fontWeight: 800, fontSize: 22, cursor: 'pointer', lineHeight: 1, flexShrink: 0 }}>‹</span>
-          <div style={{ width: 40, height: 40, borderRadius: '50%', background: perfilOtro?.foto_url ? `url(${perfilOtro.foto_url}) center/cover` : 'rgba(255,255,255,.08)', display: 'grid', placeItems: 'center', fontSize: 16, fontWeight: 800, color: '#e8b65a', flexShrink: 0, border: '1.5px solid rgba(232,182,79,.6)' }}>{!perfilOtro?.foto_url && nombreDe(perfilOtro).slice(0, 1).toUpperCase()}</div>
+          <div onClick={() => onVerPerfil && perfilOtro?.id && onVerPerfil(perfilOtro.id)} style={{ width: 40, height: 40, borderRadius: '50%', cursor: 'pointer', background: perfilOtro?.foto_url ? `url(${perfilOtro.foto_url}) center/cover` : 'rgba(255,255,255,.08)', display: 'grid', placeItems: 'center', fontSize: 16, fontWeight: 800, color: '#e8b65a', flexShrink: 0, border: '1.5px solid rgba(232,182,79,.6)' }}>{!perfilOtro?.foto_url && nombreDe(perfilOtro).slice(0, 1).toUpperCase()}</div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 15.5, fontWeight: 800, color: '#f4f7f9', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nombreDe(perfilOtro)}</div>
             <div style={{ fontSize: 11.5, color: '#e8b65a', fontWeight: 600, height: 14 }}>
@@ -731,7 +774,7 @@ export default function PantallaChat({ abrirCon, onVolver }) {
           return (
             <div style={{ position: 'relative', zIndex: 2, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', background: T.esClaro ? 'rgba(255,255,255,.92)' : 'rgba(18,20,24,.96)', borderBottom: `1px solid ${T.tarjetaBorde}` }}>
               <span style={{ fontSize: 15 }}>📌</span>
-              <div onClick={() => document.getElementById(`msg-${fijo.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })} style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}>
+              <div onClick={() => { const el = document.getElementById(`msg-${fijo.id}`); if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.style.transition = 'box-shadow .3s'; el.style.boxShadow = `0 0 0 2px ${T.acento}`; setTimeout(() => { el.style.boxShadow = 'none' }, 1200) } }} style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}>
                 <div style={{ fontSize: 10.5, fontWeight: 800, color: T.acento, textTransform: 'uppercase', letterSpacing: 0.4 }}>Mensaje fijado</div>
                 <div style={{ fontSize: 12.5, color: T.textoBody, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{resumenMsg(fijo)}</div>
               </div>
@@ -980,7 +1023,7 @@ export default function PantallaChat({ abrirCon, onVolver }) {
             const prev = c.ultimo.tipo && c.ultimo.tipo !== 'texto' ? resumenMsg(c.ultimo) : c.ultimo.texto
             return (
               <div key={c.otroId} onClick={() => setVistaChat(c.otroId)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: T.tarjetaBg, border: `1px solid ${T.tarjetaBorde}`, borderRadius: 14, marginBottom: 10, cursor: 'pointer' }}>
-                <div style={{ width: 50, height: 50, borderRadius: '50%', flexShrink: 0, background: p?.foto_url ? `url(${p.foto_url}) center/cover` : T.avatar, display: 'grid', placeItems: 'center', fontSize: 19, fontWeight: 800, color: T.avatarTexto }}>{!p?.foto_url && nom.slice(0, 1).toUpperCase()}</div>
+                <div onClick={(e) => { e.stopPropagation(); onVerPerfil && p?.id && onVerPerfil(p.id) }} style={{ width: 50, height: 50, borderRadius: '50%', flexShrink: 0, cursor: 'pointer', background: p?.foto_url ? `url(${p.foto_url}) center/cover` : T.avatar, display: 'grid', placeItems: 'center', fontSize: 19, fontWeight: 800, color: T.avatarTexto }}>{!p?.foto_url && nom.slice(0, 1).toUpperCase()}</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                     <span style={{ fontSize: 14.5, fontWeight: 700, color: T.textoFuerte, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nom}</span>

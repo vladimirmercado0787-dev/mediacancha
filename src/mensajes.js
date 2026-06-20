@@ -17,6 +17,22 @@ export async function enviarMensaje(paraId, texto) {
   return { ok: true, mensaje: data }
 }
 
+// Enviar un RESULTADO de juego al chat (tarjeta especial). datosJuego = el `datos` de la publicación.
+export async function enviarResultado(paraId, datosJuego, textoOpcional = '') {
+  const yo = await miUsuarioId()
+  if (!yo) return { error: 'Inicia sesión' }
+  if (yo === paraId) return { error: 'No puedes enviarte mensajes a ti mismo' }
+  // La columna texto no admite null: usamos un resumen corto como respaldo (también sirve de vista previa)
+  const resumen = (textoOpcional || '').trim() || '🏀 Resultado de juego'
+  const { data, error } = await supabase
+    .from('mensajes')
+    .insert({ de_id: yo, para_id: paraId, texto: resumen, tipo: 'resultado', adjunto_meta: datosJuego })
+    .select()
+    .single()
+  if (error) return { error: error.message }
+  return { ok: true, mensaje: data }
+}
+
 // Leer toda la conversación con una persona (ordenada por fecha)
 export async function leerConversacion(otroId) {
   const yo = await miUsuarioId()
