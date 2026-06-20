@@ -1358,11 +1358,11 @@ export default function PantallaPublica({ onAccion, haySesion }) {
 
   // ===== VISTA MÓVIL =====
   return (
-    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, height: '100dvh', color: C.texto, fontFamily: C.font, overflow: 'hidden', background: T.fondo, display: 'flex', flexDirection: 'column' }}>
+    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, height: '100dvh', color: C.texto, fontFamily: C.font, background: T.fondo, display: 'flex', flexDirection: 'column' }}>
       <Velo />
       {/* BARRA FIJA inmóvil: cubre desde el reloj/isla y no se mueve nunca */}
-      <div style={{ position: 'relative', zIndex: 40, flexShrink: 0, background: T.fondo, paddingTop: 'env(safe-area-inset-top)' }}>
-        <div style={{ maxWidth: 480, margin: '0 auto', padding: '14px 18px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ position: 'relative', zIndex: 40, flexShrink: 0, background: T.fondo, paddingTop: 'calc(env(safe-area-inset-top) - 4px)' }}>
+        <div style={{ maxWidth: 480, margin: '0 auto', padding: '6px 18px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Logo chico />
           </div>
@@ -1380,7 +1380,7 @@ export default function PantallaPublica({ onAccion, haySesion }) {
           </div>
           {menuAbierto && (
             <div style={{ position: 'absolute', top: 'calc(env(safe-area-inset-top) + 56px)', right: 2, zIndex: 30, width: 230, background: T.esClaro ? 'rgba(248,243,233,.97)' : 'rgba(20,18,16,.95)', border: `1px solid ${T.navActivoBorde}`, borderRadius: 14, padding: 8, boxShadow: '0 10px 30px rgba(0,0,0,.6)', backdropFilter: 'blur(12px)' }}>
-              {[...ACCIONES_CREAR, ...ACCIONES_MIAS, ...(haySesion ? [{ id: 'cerrarSesion', txt: '↩ Cerrar sesión' }] : [{ id: 'registro', txt: '✦ Crear mi cuenta gratis' }, { id: 'entrar', txt: '→ Iniciar sesión' }])].map((a) => (
+              {[{ id: 'buscar', txt: '🔍 Buscar personas' }, { id: 'perfil', txt: '◉ Mi perfil' }, ...ACCIONES_CREAR, ...ACCIONES_MIAS, ...(haySesion ? [{ id: 'cerrarSesion', txt: '↩ Cerrar sesión' }] : [{ id: 'registro', txt: '✦ Crear mi cuenta gratis' }, { id: 'entrar', txt: '→ Iniciar sesión' }])].map((a) => (
                 <button key={a.id} onClick={() => click(a.id)} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'transparent', border: 'none', color: C.texto, fontSize: 14, fontWeight: 600, padding: '12px', borderRadius: 9, cursor: 'pointer' }}>{a.txt}</button>
               ))}
             </div>
@@ -1390,7 +1390,7 @@ export default function PantallaPublica({ onAccion, haySesion }) {
 
       {/* SOLO esta área hace scroll, por debajo de la barra fija */}
       <div style={{ position: 'relative', zIndex: 1, flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
-        <div style={{ maxWidth: 480, margin: '0 auto', padding: '4px 16px 24px' }}>
+        <div style={{ maxWidth: 480, margin: '0 auto', padding: '4px 16px 130px' }}>
         {!haySesion && <div style={{ marginTop: 14 }}><Bienvenida /></div>}
         <div style={{ marginTop: 22 }}><EnVivo /></div>
         {haySesion && <div style={{ marginTop: 16 }}>{Composer()}</div>}
@@ -1400,23 +1400,27 @@ export default function PantallaPublica({ onAccion, haySesion }) {
         {!haySesion && <CtaRegistro />}
         </div>
       </div>
-      <div style={{ position: 'relative', zIndex: 40, flexShrink: 0, width: '100%', maxWidth: 480, margin: '0 auto', display: 'flex', alignItems: 'flex-end', background: T.headerBg, backdropFilter: 'blur(12px)', borderTop: `1px solid ${T.navActivoBorde}`, padding: '8px 6px calc(10px + env(safe-area-inset-bottom))', boxSizing: 'border-box' }}>
+      <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 40, background: T.headerBg, backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', borderTop: `1px solid ${T.navActivoBorde}`, boxShadow: '0 -5px 25px rgba(0,0,0,.1)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', paddingTop: 8, paddingBottom: 4 }}>
+        <div style={{ width: '100%', maxWidth: 480, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px' }}>
         {[{ id: 'inicio', txt: 'Inicio', icono: '⌂' }, { id: 'torneos', txt: 'Torneos', icono: '🏆' }].map((n) => (
-          <button key={n.id} onClick={() => click(n.id)} style={{ flex: 1, background: 'transparent', border: 'none', textAlign: 'center', color: n.id === 'inicio' ? T.acento : C.tenue, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
+          <button key={n.id} onClick={() => click(n.id)} style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', textAlign: 'center', color: n.id === 'inicio' ? T.acento : C.tenue, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
             <div style={{ fontSize: 18, marginBottom: 3, display: 'flex', justifyContent: 'center' }}>{n.icono}</div>{n.txt}
           </button>
         ))}
-        <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
-          <button onClick={() => setAnotarAbierto(true)} style={{ width: 58, height: 58, borderRadius: '50%', background: T.boton, border: 'none', cursor: 'pointer', marginTop: -26, boxShadow: `0 8px 22px ${T.esClaro ? 'rgba(176,122,38,.4)' : 'rgba(232,182,79,.45)'}, 0 0 0 4px ${T.fondo}`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#1a1205' }}>
-            <span style={{ fontSize: 24, fontWeight: 900, lineHeight: 0.8 }}>＋</span>
-            <span style={{ fontSize: 8, fontWeight: 900, letterSpacing: 0.5, textTransform: 'uppercase', marginTop: 1 }}>Anotar</span>
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', justifyContent: 'center' }}>
+          <button onClick={() => setAnotarAbierto(true)} style={{ width: 52, height: 52, borderRadius: '50%', background: T.boton, border: 'none', cursor: 'pointer', boxShadow: `0 4px 14px ${T.esClaro ? 'rgba(176,122,38,.4)' : 'rgba(232,182,79,.45)'}`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#1a1205' }}>
+            <span style={{ fontSize: 22, fontWeight: 900, lineHeight: 0.8 }}>＋</span>
+            <span style={{ fontSize: 7.5, fontWeight: 900, letterSpacing: 0.5, textTransform: 'uppercase', marginTop: 1 }}>Anotar</span>
           </button>
         </div>
         {[{ id: 'rankings', txt: 'Ranking', icono: '★' }, { id: 'perfil', txt: 'Perfil', icono: '◉' }].map((n) => (
-          <button key={n.id} onClick={() => click(n.id)} style={{ flex: 1, background: 'transparent', border: 'none', textAlign: 'center', color: C.tenue, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
+          <button key={n.id} onClick={() => click(n.id)} style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', textAlign: 'center', color: C.tenue, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
             <div style={{ fontSize: 18, marginBottom: 3, display: 'flex', justifyContent: 'center' }}>{n.icono}</div>{n.txt}
           </button>
         ))}
+        </div>
+        </div>
       </div>
       {Modales()}{HojaAnotar()}
     </div>
@@ -1641,7 +1645,7 @@ function ComposerTechado({ T, miPerfil, abierto, setAbierto, texto, setTexto, fo
 
   return (
     <div style={{
-      position: 'fixed', inset: 0, zIndex: 80,
+      position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 200,
       background: T.fondo || (T.esClaro ? '#f3eee3' : '#0a0b0e'),
       display: 'flex', flexDirection: 'column',
       height: alturaPantalla,
@@ -1652,7 +1656,7 @@ function ComposerTechado({ T, miPerfil, abierto, setAbierto, texto, setTexto, fo
       {/* Header */}
       <div style={{
         flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10,
-        padding: 'calc(env(safe-area-inset-top) + 10px) 14px 12px',
+        padding: 'calc(env(safe-area-inset-top) + 16px) 14px 12px',
         borderBottom: `1px solid ${T.esClaro ? '#e8e3d8' : 'rgba(232,182,79,.18)'}`,
       }}>
         <span onClick={cerrar} style={{ fontSize: 26, lineHeight: 1, color: T.textoFuerte, cursor: 'pointer', padding: '0 4px', fontWeight: 300 }}>✕</span>
