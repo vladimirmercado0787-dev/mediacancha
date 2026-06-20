@@ -1217,6 +1217,7 @@ export default function PantallaPublica({ onAccion, haySesion }) {
       publicando={publicandoTexto}
       onPublicar={enviarPublicacionTexto}
       onResultado={() => click('resultados')}
+      onAbrir={() => click('publicar')}
     />
   )
 
@@ -1436,7 +1437,7 @@ const EMOJIS_MC = {
   'Banderas': ['🇩🇴', '🇺🇸', '🇵🇷', '🇲🇽', '🇨🇴', '🇻🇪', '🇪🇸', '🇨🇺', '🇦🇷', '🇧🇷', '🇨🇱', '🇵🇪', '🇪🇨', '🇬🇹', '🇭🇳', '🇳🇮', '🇨🇷', '🇵🇦', '🏳️', '🏁'],
 }
 
-function ComposerTechado({ T, miPerfil, abierto, setAbierto, texto, setTexto, fondoSel, setFondoSel, publicando, onPublicar, onResultado }) {
+function ComposerTechado({ T, miPerfil, abierto, setAbierto, texto, setTexto, fondoSel, setFondoSel, publicando, onPublicar, onResultado, onAbrir }) {
   const p = miPerfil
   const [panelEmoji, setPanelEmoji] = useState(false)
   const [catEmoji, setCatEmoji] = useState('Básquet')
@@ -1617,16 +1618,16 @@ function ComposerTechado({ T, miPerfil, abierto, setAbierto, texto, setTexto, fo
         <div style={{ padding: '14px 16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
             <div style={{ width: 40, height: 40, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: p.foto_url ? `url(${p.foto_url}) center/cover` : T.avatar, color: T.avatarTexto, fontWeight: 700, boxShadow: `0 0 0 2px ${T.acento}` }}>{!p.foto_url && iniciales}</div>
-            <div onClick={() => setAbierto(true)} style={{ flex: 1, background: T.esClaro ? '#f5f6f8' : 'rgba(255,255,255,.05)', border: `1px solid ${T.esClaro ? '#e0e3e8' : 'rgba(255,255,255,.08)'}`, borderRadius: 22, padding: '11px 16px', color: T.tenue, fontSize: 14, cursor: 'text' }}>¿Qué está pasando en la cancha?</div>
+            <div onClick={() => onAbrir && onAbrir()} style={{ flex: 1, background: T.esClaro ? '#f5f6f8' : 'rgba(255,255,255,.05)', border: `1px solid ${T.esClaro ? '#e0e3e8' : 'rgba(255,255,255,.08)'}`, borderRadius: 22, padding: '11px 16px', color: T.tenue, fontSize: 14, cursor: 'text' }}>¿Qué está pasando en la cancha?</div>
           </div>
           <div style={{ display: 'flex', gap: 6, marginTop: 12, paddingTop: 12, borderTop: `1px solid ${T.esClaro ? '#eceef1' : 'rgba(255,255,255,.06)'}` }}>
-            <button onClick={() => setAbierto(true)} style={{ flex: 1, border: 'none', background: 'transparent', borderRadius: 10, padding: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, fontSize: 12.5, fontWeight: 700, color: T.subTexto, cursor: 'pointer' }}>
+            <button onClick={() => onAbrir && onAbrir()} style={{ flex: 1, border: 'none', background: 'transparent', borderRadius: 10, padding: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, fontSize: 12.5, fontWeight: 700, color: T.subTexto, cursor: 'pointer' }}>
               <span style={{ fontSize: 15 }}>📷</span>Foto
             </button>
             <button onClick={onResultado} style={{ flex: 1, border: 'none', background: 'transparent', borderRadius: 10, padding: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, fontSize: 12.5, fontWeight: 700, color: T.subTexto, cursor: 'pointer' }}>
               <span style={{ fontSize: 15 }}>📊</span>Resultado
             </button>
-            <button onClick={() => setAbierto(true)} style={{ flex: 1, border: 'none', background: 'transparent', borderRadius: 10, padding: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, fontSize: 12.5, fontWeight: 700, color: T.subTexto, cursor: 'pointer' }}>
+            <button onClick={() => onAbrir && onAbrir()} style={{ flex: 1, border: 'none', background: 'transparent', borderRadius: 10, padding: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, fontSize: 12.5, fontWeight: 700, color: T.subTexto, cursor: 'pointer' }}>
               <span style={{ fontSize: 15 }}>🗳️</span>Encuesta
             </button>
           </div>

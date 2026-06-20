@@ -13,6 +13,7 @@ import PantallaResultados from './componentes/PantallaResultados'
 import PantallaBuscar from './componentes/PantallaBuscar'
 import PantallaPerfilAjeno from './componentes/PantallaPerfilAjeno'
 import PantallaChat from './componentes/PantallaChat'
+import PantallaPublicar from './componentes/PantallaPublicar'
 import { guardarJuegoDelDia } from './historialDia'
 
 function App() {
@@ -61,6 +62,16 @@ function App() {
       <PantallaChat
         abrirCon={chatCon}
         onVolver={() => { setChatCon(null); setVista('publica') }}
+      />
+    )
+  }
+
+  if (vista === 'publicar') {
+    return (
+      <PantallaPublicar
+        onVolver={() => setVista('publica')}
+        onPublicado={() => setVista('publica')}
+        onResultado={() => { setDestinoTrasLogin('juegoConfig'); setVista(sesion ? 'juegoConfig' : 'login') }}
       />
     )
   }
@@ -167,6 +178,9 @@ function App() {
           setVista(sesion ? 'juegoConfig' : 'login')
         } else if (id === 'resultados') {
           setVista('resultados')
+        } else if (id === 'publicar') {
+          setDestinoTrasLogin('publicar')
+          setVista(sesion ? 'publicar' : 'login')
         } else if (id === 'buscar') {
           setVista(sesion ? 'buscar' : 'login')
         } else if (id === 'mensajes') {
