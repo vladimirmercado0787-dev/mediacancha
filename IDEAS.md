@@ -237,17 +237,115 @@ Al poner los equipos, botón para **subir el logo del equipo** — opcional. Sol
 
 El día a día del fan es en celular, pero las **anotaciones y la organización** se harán en iPad/computadora (pantalla grande, el organizador en la mesa de la cancha). Por eso el responsive de torneos es clave. Futuro: menú lateral vertical en pantalla ancha en vez de pestañas arriba.
 
+**Idea T-009 — Rating del torneo (algoritmo de calificación, escala 0–100)** · `PENDIENTE`
+
+El torneo se califica solo con un **número de 0 a 100**. Como la app sabe en qué nivel juega cada jugador, el dato ya está pa' calcularlo.
+
+**DECISIÓN (formato): número 0–100, NO estrellas ni solo categoría.** Razón de Vladimir: el número **diferencia fino**. Con estrellas, dos torneos de 5 estrellas se ven iguales aunque uno sea mucho mejor. Con el rating, un 95 al lado de un 88 dice al instante cuál es superior. (La categoría tipo "Élite/A/B" se puede mostrar ADEMÁS, como etiqueta encima del número, pero el corazón es el número.)
+
+**El algoritmo NO es un promedio pelao.** Es una mezcla de tres cosas:
+1. **Base por nivel declarado del torneo** — un Superior arranca más alto que un Interbarrial.
+2. **Nivel promedio de los que de verdad participaron.**
+3. **Bono por estrellas (la salsa)** — mientras más jugadores de alto nivel haya y más alto el techo, más sube. Así un solo jugador de Superior entre interbarriales SÍ mueve la aguja (no se diluye), y diez de Superior la mueven muchísimo. La presencia de alto nivel tiene que NOTARSE.
+
+**Dependencia / orden de construcción:** este rating se apoya en el rating de los jugadores, que depende de contar los juegos por jugador (`juegos_jugados` existe pero no se llena todavía). Orden: (1) contar juegos → (2) rating de jugadores → (3) rating del torneo. **Versión de arranque:** usar la clasificación con que entra cada jugador (su nivel declarado) como atajo, y afinar cuando el rating fino esté listo.
+
+**Dónde vive:** en el perfil del torneo, como parte de la inteligencia de T-001.
+
+**Idea T-010 — Ediciones / temporadas con reactivación** · `PENDIENTE`
+
+Un torneo **no muere cuando termina**: queda **congelado** con todo registrado (juegos terminados, stats, todo), pero se puede **reactivar** pal próximo año o dentro de unos meses, **manteniendo la configuración** y dejando hacer cambios (reasignar equipos, jugadores, directiva, etc.).
+
+Esto significa que un torneo en realidad tiene **ediciones (temporadas)**. Implicaciones:
+- **Rating por edición:** cada edición tiene su propio rating según quién jugó esa vez (se conecta con T-009).
+- **Prestigio histórico:** el torneo como tal va acumulando reputación con el tiempo. Muchas ediciones fuertes = torneo de renombre. Si una edición viene más floja, el rating de ESA edición baja, pero la historia muestra que el año pasado estuvo fuerte. **Nada se pierde — todo queda guardado por edición.**
+- Se conecta con T-001 (vive en el perfil/inteligencia del torneo).
+
+*Por definir:* cómo se muestra la línea de ediciones (timeline de años), y si el "rating del torneo" que se ve por fuera es el de la última edición o un promedio histórico ponderado.
+
+**Idea T-011 — Popularidad del torneo (por tráfico)** · `PENDIENTE`
+
+Métrica **SEPARADA del rating**. El **rating** mide NIVEL/calidad (qué tan fuerte es). La **popularidad** mide ATENCIÓN/tráfico (cuánta gente lo mira). Son dos ejes distintos y se muestran **distinto** pa' no confundirlos.
+
+**Base:** el tráfico de la página del torneo. Más tráfico = más popular.
+
+**Cómo se mide bien (que no se pueda inflar):**
+- **Visitantes únicos** al perfil del torneo — NO visitas crudas (pa' que uno refrescando 100 veces no infle un torneo falso). Las visitas repetidas se usan aparte como señal de engagement.
+- Señales que la hacen más real y difícil de fingir: **seguidores del torneo** (si se pueden seguir) y **compartidas** (cuántas veces se compartió el torneo o sus resultados a chats — eso es viralidad pura).
+
+**Dos tipos de popularidad:**
+- **En racha (trending):** tráfico de los **últimos 7 días** — lo que está caliente AHORA.
+- **Histórica:** tráfico de toda la vida. Un torneo viejo puede tener muchas visitas acumuladas pero no estar caliente hoy; uno nuevo puede estar ardiendo.
+
+**Cómo se muestra:** diferente al rating. El rating es número 0–100 (calidad). La popularidad = conteo de visitas/seguidores + un **badge de "en racha"** (llama) cuando está trending. Sirve pa' ordenar el **"Explorar"** y subir arriba los torneos calientes.
+
+**Mecánica (Supabase):** tabla tipo `torneo_visitas` (`torneo_id`, `usuario_id`, `fecha`). Únicos = distinct `usuario_id`; en racha = visitas de los últimos 7 días. (O un contador + log.)
+
+*Por definir:* pesos si se mezclan (visitas + seguidores + compartidas), y si la "popularidad" que se ve por fuera es el número crudo o un índice.
+
 ---
 
 ### 3.2 LIGAS
-*(Sin ideas guardadas todavía. Aquí van las ideas de ligas.)*
+
+**Idea L-001 — Integración de la LNB (robot de datos, GRATIS)** · `FASE 1 HECHA ✅ (faltan fases 2 y 3)`
+
+Meta: traer la **LNB** (la liga pro dominicana, la más importante del país) dentro de Media Cancha — calendario, resultados, standing, estadísticas y noticias. Un **robot que hace al menos 2 consultas al día** y refresca todo (ej.: una en la mañana, con los juegos de la noche anterior ya finales, y una de noche tras los partidos del día). Flexible: en noches de muchos juegos se le puede subir la frecuencia cambiando solo el reloj.
+
+**HALLAZGO CLAVE (investigado):** el sitio oficial `lnb.do` está hecho en **Next.js**, renderiza la data en el HTML (no es JS pesado escondido), y tiene URLs predecibles → **se puede leer GRATIS, sin API de pago.**
+- URLs: `/calendario`, `/estadisticas`, `/blog` (noticias), `/jugador/{Nombre}/{id}`, `/equipo/{Nombre}/{id}`.
+- Equipos (con ID): Soles(1), Metros(2), Leones(3), Reales(4), Marineros(5), Cañeros(6), Gigantes(7), Titanes(8), Heroes(9).
+- Estadísticas disponibles (top 10 c/u): Puntos, Asistencias, Rebotes, Bloqueos, Robos, Triples, Eficiencia.
+- Temporadas: 2022–2026, fases Regular / Playoff / Final.
+- Fotos de jugadores en CDN (DigitalOcean Spaces).
+
+**Arquitectura:** temporizador Supabase (al menos 2x/día) → robot lee las páginas de `lnb.do` → extrae y organiza → (para NOTICIAS, una IA reescribe el titular en español con crédito) → guarda en tablas Supabase (`lnb_calendario`, `lnb_estadisticas`, `lnb_equipos`, `lnb_jugadores`, `lnb_noticias`) → la app lo muestra en su sección LNB / El Techado.
+
+**Investigar primero:** si hay una **API JSON escondida** detrás del Next.js (suele haber un endpoint tipo `/api` o un CMS). Si se halla, leer JSON es más limpio y robusto que leer el HTML.
+
+**Advertencias honestas:**
+- Leer el sitio (scraping) es **frágil**: si rediseñan `lnb.do`, el lector se rompe y hay que arreglarlo. Mantenimiento.
+- Revisar los términos de "Uso aceptable" del sitio.
+- Para NOTICIAS aplica la regla de copyright: reportar el **hecho** + dar crédito ("según LNB") + enlace; NO copiar artículos completos textuales. Los datos (marcadores, stats, calendario) son hechos, no tienen copyright.
+
+**Costo:** GRATIS (sin API de pago).
+
+**Estilo:** la pantalla LNB debe tener MUCHO estilo, con sabor dominicano bien visible (puede jugar con motivos/identidad dominicana), pero siempre coherente con la marca (charcoal `#08090c` + dorado-bronce metálico). Que se vea distinta y con orgullo, sin desentonar.
+
+**Fases:** (1) robot de datos factuales (calendario, resultados, standing, líderes) — primera versión, la rápida; (2) noticias con IA + crédito; (3) pantalla LNB dentro de la app.
+
+**✅ FASE 1 — CONSTRUIDA Y CORRIENDO (jun 2026):**
+- **Confirmado:** `lnb.do` es Next.js Pages Router. El robot busca el **buildId fresco** cada vez (así nunca se rompe cuando la liga actualiza). Endpoints:
+  - Portada `/` (en `__NEXT_DATA__.props.pageProps`): `standingData.standing.data` (tabla, 9 equipos), `postsData.posts` (noticias), `weeklyPlayer.data` (jugador de la semana).
+  - `/_next/data/{buildId}/estadisticas.json`: líderes en 7 categorías (`points`, `assits`(sic)=assists, `rebounds`, `blocks`, `steals`, `threes`, `efficiency`) + `competition` (5 temporadas: ids 1→5 = años 2022→2026).
+  - `/_next/data/{buildId}/calendario.json`: `calendar` + `lastMatches` (juegos con marcadores por cuarto, `teams[]` con `winner`/`visitor`/`total_score`).
+- **Imágenes (CONFIRMADO):** base = `https://lnb-media.sfo3.cdn.digitaloceanspaces.com/` + el campo `image_url`. Así se muestran escudos de equipos y fotos de jugadores.
+- **Tablas Supabase creadas (8):** `lnb_equipos`, `lnb_temporadas`, `lnb_standing`, `lnb_lideres`, `lnb_juegos`, `lnb_juego_equipos`, `lnb_noticias`, `lnb_jugador_semana` (todas con lectura pública / RLS select=true).
+- **Permisos (clave):** las tablas nuevas necesitan `GRANT select,insert,update,delete ... to service_role;` y `GRANT select ... to anon, authenticated;`. Sin eso, el robot da error 403.
+- **Robot:** archivo `robot-lnb.js` (sin dependencias, usa `fetch` nativo de Node). Lee la service key por **variable de entorno** (NUNCA dentro de un archivo subido a Git). Primera corrida subió: 9 equipos · 5 temporadas · 9 standing · 70 líderes · 101 juegos · 202 juego_equipos · 4 noticias · 1 jugador semana.
+- **FALTA:** **Fase 2** = automatizar al menos 2x/día en la nube (Supabase cron / Edge Function — hoy corre a mano con el comando). **Fase 3** = pantalla LNB en la app (la del mockup, con sabor dominicano). Pendientes menores: confirmar `source_url` de las noticias (patrón de URL del post en lnb.do) y, a futuro, reescribir noticias con IA + crédito.
+
+**DISEÑO FASE 2 — automatización con auto-monitoreo (decidido):**
+- **La LNB SÍ se lleva en vivo** (confirmado: agregadores muestran juegos en el 4º cuarto con reloj corriendo). FALTA confirmar que `lnb.do` mismo actualice en vivo en su sitio (su data tiene `period` + parciales, casi seguro sí) → **prueba:** correr el robot DURANTE un juego y ver si los marcadores se mueven (hay juego 21-jun: Metros vs Gigantes).
+- **El robot se auto-monitorea — Vladimir NO activa nada a diario.** Dos modos:
+  - **Completo:** 2x/día, jala todo (líderes, standing, noticias, calendario).
+  - **Latido en vivo:** un chequeo chiquito cada pocos minutos (Supabase cron), todo el día, casi sin costo. Lee el calendario (que el robot ya tiene) → "¿hay juego corriendo ahora?". Si NO → se duerme al instante. Si SÍ → modo en vivo: refresca solo los juegos activos. Al terminar los juegos, se apaga solo. **Él lee el horario y se activa; nadie lo toca.**
+- **Eficiencia clave:** en modo en vivo, el robot **solo ESCRIBE cuando un marcador cambió de verdad**. Así, aunque mire cada minuto, solo trabaja cuando hay algo nuevo (y nos dice cada cuánto se mueve la liga).
+- Futuro (opcional): en vez de latido fijo, el run diario podría programar crons exactos por hora de juego (pg_cron permite agregar/quitar jobs). Pero el latido fijo barato es más simple y robusto pa' empezar.
 
 ---
 
 ### 3.3 EL TECHADO — feed social / blog
-*(Lo que llamamos "el techado": el muro social / blog de la app. Aquí van sus ideas.)*
+*(Lo que llamamos "el techado": el muro social / blog de la app.)*
 
-*(Sin ideas guardadas todavía.)*
+**Idea TE-001 — Robot vigilante de noticias NBA ("listener")** · `FUTURO (de pago, no ahora)`
+
+Robot que **monitorea las cuentas de los periodistas insiders** (hoy el rey es Shams Charania de ESPN; Woj se retiró en 2024) y las redes donde publican. Las revisa cada cierto rato; cuando capta una noticia importante (trade, lesión), una **IA decide si es relevante y la reescribe** como noticia en español con crédito → sale en El Techado.
+
+**Estado: FUTURO.** Razón: necesita una **fuente de tuits de pago**. La API oficial de X es pago por uso (~medio centavo por lectura, sin capa gratis, tope 2 millones/mes); hay revendedores de terceros más baratos (~5–15 centavos por cada mil tuits). Vladimir no quiere gastos ahora → se anota para después.
+
+**Mecánica:** temporizador frecuente → fuente de tuits → IA clasifica + reescribe → tabla de noticias → El Techado.
+**Copyright:** reportar el hecho + crédito + enlace; NUNCA copiar palabras textuales.
+**Nota:** este mismo robot aplica todavía MEJOR a los periodistas dominicanos de la LNB — menos volumen, más fácil, y nadie lo está automatizando aún. (Pero la fuente de redes sigue siendo el costo a resolver.)
 
 ---
 
@@ -280,6 +378,76 @@ La pestaña "Publicaciones" debe mostrar las publicaciones de esa persona (filtr
 **Idea P-003 — Rating, ranking y promedios del jugador** · `PENDIENTE`
 
 Dependen de contar los **juegos por jugador** (la columna `juegos_jugados` existe pero no se llena todavía). Cuando se cuente, se llenan rating, ranking nacional y promedios de carrera.
+
+**Idea P-004 — Rating de jugadores + emparejamiento de datos CERTIFICADOS (claim de perfil)** · `PENDIENTE`
+
+Dos partes que van pegadas. (Nota: Vladimir dijo "NBA" pero por contexto es la **LNB**, nuestra liga — confirmar.)
+
+**PARTE A — Rating del jugador (la "inteligencia"):**
+- Al acumular las stats de TODOS los juegos de un jugador (de torneos en Media Cancha y, para profesionales, de la LNB vía el robot), hay mucho número y mucho dato. De ahí un algoritmo le calcula su **rating / niveles** — mismo concepto de inteligencia que el rating del torneo (T-009).
+- Salida: nivel del jugador (interbarrial/intermedio/superior/etc.), rating por estadística (puntos, rebotes, asistencias…), número general, ranking nacional, percentiles, promedios de carrera.
+- Depende de contar los juegos por jugador (ver P-003). **Orden:** contar juegos → rating del jugador → alimenta el rating del torneo (T-009). Todo encaja.
+
+**FÓRMULA DEL RATING (cómo se calcula — NO se suma):**
+1. **Puntaje por temporada (0-100):** de los promedios por juego de esa temporada → un puntaje de impacto, dándole más peso a lo más valioso. Ej.: `Impacto = PTS + 1.2·REB + 1.5·AST + 2·ROB + 2·BLK (+ bono triples)`, normalizado a escala 0-100 contra la liga. (Pesos a calibrar.) Cada año tiene su propia nota.
+2. **Combinar las temporadas en el RATING ACTUAL — promedio PONDERADO por recencia, NO suma ni promedio plano.** La temporada más nueva pesa más. Pesos [más nueva→más vieja] = [4,3,2,1] → `Rating actual = Σ(nota·peso) / Σpesos`. Así el rating sube/baja con la forma reciente (lo reciente manda).
+3. **Mostrar ADEMÁS, aparte:** **PICO** (mejor temporada de la carrera = su techo), **TENDENCIA** (↑ subiendo / → estable / ↓ bajando), y nº de temporadas (veteranía/confiabilidad).
+- **Lógica clave (ejemplo real de la dinámica):** un veterano con pico 88 hace años pero en declive (notas 88·84·80·78) → su rating ACTUAL baja a ~81 porque lo reciente manda, pero el pico 88 queda visible en su historia. **No inflar el presente con el pasado.** Un jugador en ascenso (80·85·88·93) → rating ~89, pegado a su pico, flecha ↑.
+
+**PROFUNDIDAD DE DATOS (hasta dónde llega el historial):**
+- **LNB (fuente limpia):** el sitio expone stats desde **~2022 hasta hoy = ~4-5 temporadas** (suficiente pa' un buen rating e historial). La liga tiene más historia (juega desde 2005) y las fichas de jugador podrían tener carreras más largas guardadas por dentro → **confirmar el alcance exacto del archivo al construir el robot.** Lo seguro/limpio hoy: esas 4-5 temporadas.
+- `basket.do`: también guarda por año, pero es plataforma más nueva.
+- Torneos **declarados**: sin historial estructurado (solo la palabra del jugador hasta certificar).
+- **Diseño (igual que en torneos):** pesar lo RECIENTE más fuerte pa'l rating de AHORA (la temporada actual manda, lo viejo cuenta menos); y mostrar el historial completo temporada por temporada aparte, pa' la carrera entera.
+
+**PARTE B — Emparejamiento de datos certificados (la joya):**
+- El sistema tiene **fichas de jugadores** con stats y rating que NO están ligadas a una cuenta (perfiles "sin reclamar"). Ej.: Yeison Yan Colomé ya está con sus números de la LNB aunque no se haya registrado él mismo.
+- Cuando la persona real se registra en Media Cancha, puede **enviar una solicitud de emparejamiento** para reclamar su ficha y ligar sus stats certificadas a su cuenta.
+- Flujo: al registrarse (o en su perfil) se le pregunta *"¿Juegas en la LNB / en algún torneo registrado?"* → busca su ficha → manda **solicitud de emparejamiento** → se aprueba → las stats certificadas se ligan a su cuenta, con **sello de "verificado / certificado".**
+- **Por qué importa:** son DATOS CERTIFICADOS (oficiales de la LNB / de torneos llevados por la app). Una vez ligados, el perfil muestra números reales verificados + rating con sello. **Foso enorme: data que no se puede inventar.**
+
+**PUNTO CRÍTICO — Verificación de identidad (con CÉDULA):** ¿cómo confirmamos que la persona SÍ es ese jugador? (Pa' que nadie reclame las stats de Yeison sin serlo.)
+- **La cédula sola NO basta:** el número no es secreto (aparece en muchos documentos); cualquiera podría escribir el de otro. Tener el número ≠ probar identidad.
+- **Validar que la cédula es real y de quién es:** el gobierno tiene un portal oficial de APIs (OGTIC — `developer.digital.gob.do`) con validación de cédula, y la DGII tiene consulta por cédula. Confirma que el número existe y a qué nombre pertenece. (Por la Ley de Protección de Datos NO hay buscador público libre; acceso controlado/autorizado por la JCE, lo usan bancos y notarías → hay que registrarse y revisar términos. La entidad **Andamio** puede ayudar a calificar.)
+- **Probar que la persona ES esa cédula:** atar persona↔documento con **foto de la cédula + selfie que coincida** con la foto del carnet.
+- **PLAN (escala LNB = pocos, ~100–200 pros):** arrancar **a mano** — el jugador sube cédula + selfie, un admin compara la cara con la foto del documento y verifica que el nombre cuadra con su ficha LNB → aprueba. GRATIS y fuerte. Luego sumar la API oficial pa' auto-validar número+nombre. KYC automático full (de pago) queda pa' escala futura (todos los amateurs).
+- **Responsabilidad de datos:** guardar cédulas y fotos = datos personales sensibles bajo la **Ley 172-13** de protección de datos (RD). Consentimiento + guardado seguro + trato serio. Hacerlo bien desde el principio = confianza.
+
+**DOS FUENTES, UN RATING:** stats de torneos (de la app) + stats de la LNB (del robot). Mostrarlas distinguidas en el perfil ("LNB · oficial" vs "Torneos Media Cancha"); el rating general puede ponderar ambas.
+
+**FUENTES DE DATOS / TORNEOS RECONOCIDOS (más allá de la LNB):**
+- Existen muchos torneos serios. Los grandes regionales ("Torneo Superior"): **Distrito Nacional** (TBS Distrito / ABADINA, versión 48 en 2026; equipos: Mauricio Báez, San Carlos, El Millón, Huellas del Siglo, San Lázaro, Rafael Barias, Bameso, Los Prados), **Santiago** (TBS Santiago / ABASACA, desde 1981), **La Vega** — los tres más prestigiosos. Cada provincia tiene su asociación y torneo; + torneos juveniles (LND-U22, etc.).
+- **Disponibilidad de data:** los regionales se cubren sobre todo por Facebook / Instagram / YouTube y prensa — NO tienen sitios de stats limpios propios. Raspar cada uno por separado = revolú.
+- **Hallazgo: `basket.do`** — plataforma que agrega varios torneos dominicanos con stats por jugador, **perfiles que marcan en qué ligas jugó cada quien**, promedios por torneo, líderes, standings. Tiene API por debajo (data dinámica).
+- **⚠️ OJO — `basket.do` es prácticamente un COMPETIDOR:** hace mucho de lo que Media Cancha quiere (gestión de torneos, anotación en vivo jugada por jugada, perfiles, stats, comparar jugadores, noticias). Útil: (a) confirma que la data es rastreable; (b) referencia pa' diferenciarnos (red social, app nativa, temas, chat, ecosistema). **NO depender de raspar su data** (es de ellos, ToS) — preferir fuentes oficiales/de liga.
+
+**DOS NIVELES DE DATOS EN EL PERFIL:**
+- **CERTIFICADO:** donde nosotros traemos la data oficial (arrancar con la LNB, la fuente oficial más limpia). Las stats se ligan solas, con sello.
+- **DECLARADO:** el jugador lista un torneo donde jugó; identidad verificada por cédula, pero stats auto-declaradas / pendientes. Se marca "declarado" hasta poder certificar.
+- La cédula resuelve **QUIÉN** es; la lista de torneos resuelve **DÓNDE** jugó; el sistema marca qué es certificado vs declarado.
+
+**NOTA EN REGISTRO:** al registrarse, preguntar *"¿Has jugado en alguno de estos torneos?"* con la lista (LNB, TBS Distrito, TBS Santiago, La Vega…) → si sí, solicita emparejamiento → verificar identidad (cédula) → marcar certificado/declarado.
+
+**UX — DÓNDE SE PIDE EL EMPAREJAMIENTO (dos lugares):**
+1. **Al registrarse:** se pregunta "¿Jugaste en alguno de estos torneos?" → si dice que sí, ofrecer ahí mismo el emparejamiento (solicitar emparejar todo).
+2. **En Configuración del jugador (SIEMPRE disponible):** un botón **"Solicitar emparejamiento"** que el jugador pueda usar CUANDO QUIERA (si no lo hizo al registrarse, o pa' agregar otro torneo después).
+
+**PANTALLA "¿QUÉ ES EL EMPAREJAMIENTO?" (explicación antes de solicitar):** explicar en cristiano:
+- **Qué es:** ligar tu ficha real de jugador (la que tiene tus stats certificadas de los torneos donde jugaste) a tu cuenta de Media Cancha.
+- **Qué pasa al aprobarse:** tu perfil recibe TUS estadísticas y TU nivel/rating (nuestra inteligencia), con sello de **verificado**. Eso es lo que te va a aparecer.
+- **Qué hace falta:** verificar tu identidad con la **cédula** (+ selfie); la solicitud **se revisa**, no es automática al instante.
+- **Estado visible de la solicitud:** `solicitada → en revisión → verificada` (o rechazada), pa' que el jugador siempre sepa en qué va. Gratis, se pide cuando quiera.
+
+**ESTRATEGIA — Ranking nacional como GANCHO DE CRECIMIENTO (flywheel):**
+- **Meta:** registrar a TODOS los jugadores posibles con su rating, juntando data oficial de torneo en torneo (LNB primero, es lo más cubierto; luego regionales). La data existe aunque sea presencial (ej.: computadora de la liga de Santiago) — a futuro se consigue, incluso yendo en persona.
+- **La rueda que se mueve sola:** con los ratings se arma el **TOP nacional** de jugadores y sus posiciones. El jugador NO registrado igual aparece con su rating y su puesto (perfil sin reclamar). Al verse rankeado ("eres #15 del país") → se motiva a reclamar → se registra + pide emparejamiento → su rating queda en su cuenta → más jugadores → más data → ranking más completo → atrae más jugadores. **No le pides que empiece de cero; le dices "ven a buscar lo que ya es tuyo."**
+- **Adquisición de data (2 caminos):** (a) **ALIANZAS** con las asociaciones (ABADINA, ABASACA, etc.) → data oficial y casi exclusiva, mejor que raspar; (b) **herramienta de admin** pa' importar/entrar data obtenida a mano (hojas, presencial). Hay que construir esa herramienta.
+- **Marketing (el producto se promociona solo):** el ranking es COMPARTIBLE → el jugador comparte "soy #8 del país" en sus redes = publicidad gratis y viral. Canales: redes (IG/FB/TikTok), alianzas con ligas/equipos, y los propios jugadores. Si hay que pagar algo de publicidad o que alguien ayude, se hace. **Meta: llegarle a TODITO.**
+- **POSICIONAMIENTO:** la app NO se vende como "una app de la LNB" sino como **"Baloncesto de República Dominicana"** (la LNB es la joya de la corona, pero la identidad es TODO el baloncesto dominicano: torneos, jugadores, ranking nacional). Que al entrar la gente se dé cuenta del alcance — esto es la casa de todo, no el rincón de una liga.
+- **PROMOCIÓN DEL EMPAREJAMIENTO DENTRO DE LA APP (muy importante):** no basta el botón en Config. (a) Al inscribirse, un paso de **onboarding** que promueve el emparejamiento ("¿Eres jugador? Reclama tu rating"). (b) **Banner/tarjeta persistente** ("Reclama tu perfil de jugador") pa' los que no han emparejado, en inicio/perfil, hasta que lo hagan. El prompt es ACTIVO y se repite, no escondido. Cada usuario nuevo se entera sí o sí.
+- **BOCA A BOCA / INVITAR JUGADORES (el crecimiento más fuerte):** los mismos jugadores se dicen "vete a emparejar tus datos." Convertirlo en FUNCIÓN: un usuario registrado busca a un compañero que conoce, lo encuentra con su perfil sin reclamar, y le sale botón **"avísale" / "invítalo a reclamar"** → le comparte el perfil ("mira, aquí está tu rating, ven a buscarlo"). **Cada usuario = un reclutador.** La voz se riega sola por la comunidad.
+- **⚠️ Integridad del ranking:** NO es justo mezclar crudo data certificada (LNB completa) con declarada/parcial (regional) — es comparar mangos con limones. Hacer **rankings separados** o **marcar transparente la fuente** de cada quien. La credibilidad es lo que hace que la gente quiera estar ahí.
+- **Privacidad:** el ranking usa stats PÚBLICAS de competencia (OK, como cualquier sitio de stats). La data personal / cédula solo se pide al emparejar, con consentimiento.
 
 ---
 
