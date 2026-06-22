@@ -365,6 +365,15 @@ Meta: traer la **LNB** (la liga pro dominicana, la más importante del país) de
 - **Eficiencia clave:** en modo en vivo, el robot **solo ESCRIBE cuando un marcador cambió de verdad**. Así, aunque mire cada minuto, solo trabaja cuando hay algo nuevo (y nos dice cada cuánto se mueve la liga).
 - Futuro (opcional): en vez de latido fijo, el run diario podría programar crons exactos por hora de juego (pg_cron permite agregar/quitar jobs). Pero el latido fijo barato es más simple y robusto pa' empezar.
 
+**Idea L-003 — Rediseño premium de la pantalla LNB + MC Rating de jugadores** · `CONSTRUIDO ✅ (jun 2026)`
+
+Tratar la LNB como página deportiva de gran escala (estilo ESPN/NBA.com) pero con identidad dominicana. Tema propio en `mc_tema_lnb` (default "dominicana"), NO pisa el tema global. Construido encima de las tablas que ya llena el robot (`lnb_jugadores`, `lnb_juegos`, `lnb_standing`, etc.).
+- **Encabezado (decidido por Vladimir):** wordmark "LNB" en fuente Anton (blanca, inclinada) + barra tricolor + "La Súper Liga" en dorado (Oswald). La fuente se carga sola vía `<link>` inyectado (no hay que tocar index.html). NO colorear cada letra de un color distinto (se veía genérico). El long-press sobre el wordmark sigue ciclando los 5 temas. El círculo de la derecha = botón de PERFIL (lleva su foto si se le pasa `usuario`/`avatarUrl` desde App.jsx; si no, cae al iconito).
+- **Portada tipo revista:** jugador de la semana con foto a sangre, número gigante de fondo (watermark) y stats abajo.
+- **Marcador agrupado POR DÍA** (la queja principal): adiós lista plana. Encabezados Hoy / Ayer / Mañana / "Sábado 20 jun", calculados en hora de RD (`America/Santo_Domingo`); dentro de cada día: en vivo → próximos → finales.
+- **Pestaña Equipos (plantillas):** tarjeta de cada equipo con su escudo de fondo (ilustración fantasma) → roster → cada jugador cliqueable → perfil con stats (reusa `PerfilJugador`).
+- **MC RATING (idea P-004, versión de arranque single-temporada):** número 0–100 (NO estrellas; el número diferencia fino). Motor = eficiencia por juego de la LNB (o producción simple si falta), escala relativa a la liga (el mejor ~100), exponente 0.85 pa' levantar el medio. Tiers: Élite 90+ · Estrella 80+ · Titular 70+ · Rotación 60+ · Reserva. **Se recalcula solo** desde la data del robot — no se guarda aparte. Pestaña "Rating" con la lista completa (todos), el **#1 coronado** (👑 + dorado), un **Top 10 en la pantalla principal** (link "Ver todos"), y badge de MC Rating dentro del perfil del jugador. **PENDIENTE (cuando el robot traiga varias temporadas):** pasar a la fórmula ponderada por recencia [4,3,2,1] de P-004 y mostrar historial por temporada.
+
 ---
 
 ### 3.3 EL TECHADO — feed social / blog

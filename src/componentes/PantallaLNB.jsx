@@ -505,6 +505,11 @@ export default function PantallaLNB({ onVolver, onAccion }) {
     if (!j) return null
     const A = j.local, B = j.visitante
     const vivo = esVivo(j), fin = esFinal(j)
+    const n1 = (v) => (v == null ? '—' : Math.round(v * 10) / 10)
+    const stOf = (eq) => standing.find((s) => s.equipo_id === eq?.equipo_id) || null
+    const topJug = (eq, n = 3) => Object.values(jugadores).filter((p) => p.equipo_id === eq?.equipo_id).sort((a, b) => (b.efficiency ?? b.points ?? 0) - (a.efficiency ?? a.points ?? 0)).slice(0, n)
+    const maxQ = Math.max(1, ...[1, 2, 3, 4].flatMap((q) => [Number(A?.['period_' + q]) || 0, Number(B?.['period_' + q]) || 0]))
+    const colA = T.accion2, colB = T.accion
     const filaQ = (eq) => (
       <div style={{ display: 'flex', alignItems: 'center', padding: '11px 0' }}>
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
@@ -551,8 +556,90 @@ export default function PantallaLNB({ onVolver, onAccion }) {
               <div style={{ height: 1, background: T.linea }} />
               {filaQ(B)}
             </div>
+            {(fin || vivo) && (
+              <div style={{ marginTop: 18 }}>
+                <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5, color: T.tenue, marginBottom: 12 }}>Puntos por cuarto</div>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', padding: '0 6px' }}>
+                  {[1, 2, 3, 4].map((q) => {
+                    const va = Number(A?.['period_' + q]) || 0, vb = Number(B?.['period_' + q]) || 0
+                    return (
+                      <div key={q} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: 5, height: 72 }}>
+                          <div style={{ width: 14, borderRadius: '4px 4px 0 0', background: colA, height: `${Math.max(5, (va / maxQ) * 72)}px` }} />
+                          <div style={{ width: 14, borderRadius: '4px 4px 0 0', background: colB, height: `${Math.max(5, (vb / maxQ) * 72)}px` }} />
+                        </div>
+                        <span style={{ fontSize: 10, fontWeight: 800, color: T.tenue }}>Q{q}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'center', gap: 18, marginTop: 11 }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: T.texto2 }}><span style={{ width: 9, height: 9, borderRadius: 2, background: colA }} />{abrev(A)}</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: T.texto2 }}><span style={{ width: 9, height: 9, borderRadius: 2, background: colB }} />{abrev(B)}</span>
+                </div>
+              </div>
+            )}
+
+            {(stOf(A) || stOf(B)) && (
+              <div style={{ marginTop: 22 }}>
+                <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5, color: T.tenue, marginBottom: 11 }}>En la temporada</div>
+                <div style={{ display: 'flex', gap: 11 }}>
+                  {[A, B].map((eq, i) => {
+                    const s = stOf(eq)
+                    return (
+                      <div key={i} style={{ flex: 1, background: T.panel, border: `1px solid ${T.borde}`, borderRadius: 12, padding: '11px 13px', minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                          <Escudo id={eq?.equipo_id} nombre={eq?.nombre} size={22} />
+                          <span style={{ fontSize: 12.5, fontWeight: 700, color: T.texto, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{abrev(eq)}</span>
+                        </div>
+                        {s ? (
+                          <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
+                            <span style={{ fontSize: 17, fontWeight: 900, color: T.texto, fontVariantNumeric: 'tabular-nums' }}>{s.won}-{s.lost}</span>
+                            <span style={{ fontSize: 11, color: T.tenue }}>{s.position}º lugar</span>
+                          </div>
+                        ) : <span style={{ fontSize: 11, color: T.tenue }}>Sin datos</span>}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {(topJug(A).length > 0 || topJug(B).length > 0) && (
+              <div style={{ marginTop: 22 }}>
+                <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5, color: T.tenue }}>Jugadores a seguir</div>
+                <div style={{ fontSize: 10.5, color: T.tenue, marginTop: 2, marginBottom: 13 }}>Promedios de temporada</div>
+                {[A, B].map((eq, i) => {
+                  const lst = topJug(eq, 3)
+                  if (!lst.length) return null
+                  return (
+                    <div key={i} style={{ marginBottom: 16 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                        <Escudo id={eq?.equipo_id} nombre={eq?.nombre} size={18} />
+                        <span style={{ fontSize: 11.5, fontWeight: 800, color: T.texto2, textTransform: 'uppercase', letterSpacing: 0.3 }}>{abrev(eq)}</span>
+                      </div>
+                      {lst.map((p) => (
+                        <div key={p.id} onClick={() => abrirJugador({ id: p.id, nombre: p.nombre, apellido: p.apellido, image_url: p.image_url, equipo_id: p.equipo_id, posicion_nombre: p.posicion_nombre, shirt_number: p.shirt_number })} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '8px 2px', cursor: 'pointer', borderBottom: `1px solid ${T.linea}` }}>
+                          <Foto url={p.image_url} nombre={p.nombre} size={36} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: T.texto, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.nombre} {p.apellido || ''}</div>
+                            <div style={{ fontSize: 10.5, color: T.tenue }}>{p.posicion_nombre || ''}{p.shirt_number != null ? ` · #${p.shirt_number}` : ''}</div>
+                          </div>
+                          <div style={{ display: 'flex', gap: 13 }}>
+                            <div style={{ textAlign: 'center' }}><div style={{ fontSize: 14, fontWeight: 900, color: T.texto, fontVariantNumeric: 'tabular-nums' }}>{n1(p.points)}</div><div style={{ fontSize: 9, fontWeight: 700, color: T.tenue }}>PTS</div></div>
+                            <div style={{ textAlign: 'center' }}><div style={{ fontSize: 14, fontWeight: 800, color: T.texto2, fontVariantNumeric: 'tabular-nums' }}>{n1(p.rebounds)}</div><div style={{ fontSize: 9, fontWeight: 700, color: T.tenue }}>REB</div></div>
+                            <div style={{ textAlign: 'center' }}><div style={{ fontSize: 14, fontWeight: 800, color: T.texto2, fontVariantNumeric: 'tabular-nums' }}>{n1(p.assists)}</div><div style={{ fontSize: 9, fontWeight: 700, color: T.tenue }}>AST</div></div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
             {(j.home_location_name || j.date) && <div style={{ marginTop: 16, fontSize: 12, color: T.tenue, textAlign: 'center' }}>{[j.home_location_name, fechaHora(j.date)].filter(Boolean).join(' · ')}</div>}
-            <div style={{ marginTop: 12, fontSize: 10.5, color: T.tenue, textAlign: 'center', lineHeight: 1.5 }}>Marcador por cuartos. Las líneas individuales de cada jugador llegan en una próxima actualización.</div>
+            <div style={{ marginTop: 12, fontSize: 10.5, color: T.tenue, textAlign: 'center', lineHeight: 1.5 }}>Promedios de temporada. El box score por jugador de cada partido llegará cuando el robot cargue las líneas individuales.</div>
           </div>
         </div>
       </div>

@@ -3,6 +3,8 @@ import { supabase } from '../supabaseClient'
 import { subirFotoPerfil } from '../fotos'
 import { statsSociales } from '../social'
 import RecortadorFoto from './RecortadorFoto'
+import TarjetaResultado from './TarjetaResultado'
+import { haceCuanto } from '../techado'
 import fondoCancha from '../assets/fondo-cancha.png'
 import fondoTarjetaMiembro from '../assets/fondo-tarjeta-miembro.png'
 import texturaCuero from '../assets/textura-cuero.png'
@@ -121,8 +123,10 @@ export default function PantallaPerfil({ onSalir, onVolver, onAccion }) {
   const [fotoARecortar, setFotoARecortar] = useState(null)
   const [visorAbierto, setVisorAbierto] = useState(false)
   const [menuFotoAbierto, setMenuFotoAbierto] = useState(false)
-  const [pestanaPerfil, setPestanaPerfil] = useState('datos')
+  const [pestanaPerfil, setPestanaPerfil] = useState('publicaciones')
   const [statsSoc, setStatsSoc] = useState({ seguidores: 0, siguiendo: 0 })
+  const [publicaciones, setPublicaciones] = useState([])
+  const [cargandoPubs, setCargandoPubs] = useState(true)
   const inputFotoRef = useRef(null)
 
   // Sube la foto elegida, la guarda en el perfil y refresca la pantalla
@@ -203,6 +207,16 @@ export default function PantallaPerfil({ onSalir, onVolver, onAccion }) {
           const s = await statsSociales(user.id)
           setStatsSoc({ seguidores: s.seguidores || 0, siguiendo: s.siguiendo || 0 })
         } catch (e) {}
+        // Cargar mis publicaciones
+        try {
+          const { data: pubs } = await supabase
+            .from('publicaciones_completas')
+            .select('*')
+            .eq('autor_id', user.id)
+            .order('creado_en', { ascending: false })
+          setPublicaciones(pubs || [])
+        } catch (e) {}
+        setCargandoPubs(false)
       } catch (e) {
         setError(e.message || 'No se pudo cargar el perfil.')
       } finally {
@@ -345,6 +359,58 @@ export default function PantallaPerfil({ onSalir, onVolver, onAccion }) {
     </div>
   )
 
+  const TarjetaPerfil = () => (
+    <div style={{ background: T.tarjetaBg, border: `1px solid ${T.tarjetaBorde}`, borderRadius: 20, boxShadow: T.tarjetaSombra, overflow: 'hidden' }}>
+      <div style={{ position: 'relative', height: 78, background: T.boton }}>
+        <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 80% 130% at 82% -25%, rgba(255,255,255,.28), transparent 60%)' }} />
+        <span style={{ position: 'absolute', right: 14, bottom: 10, fontSize: 9.5, fontWeight: 800, letterSpacing: 1, color: 'rgba(0,0,0,.34)', textTransform: 'uppercase' }}>{esJugador ? 'Jugador' : 'Fan'}</span>
+      </div>
+      <div style={{ padding: '0 18px 18px', marginTop: -42 }}>
+        <div onClick={() => perfil.foto_url ? setVisorAbierto(true) : (inputFotoRef.current && inputFotoRef.current.click())} style={{ position: 'relative', width: 84, height: 84, cursor: 'pointer' }}>
+          <div style={{ width: 84, height: 84, borderRadius: '50%', background: perfil.foto_url ? `url(${perfil.foto_url}) center/cover` : T.avatar, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 30, fontWeight: 800, color: T.avatarTexto, boxShadow: `0 0 0 4px ${T.tarjetaBg}`, opacity: subiendoFoto ? 0.5 : 1 }}>{!perfil.foto_url && iniciales}</div>
+          <div style={{ position: 'absolute', bottom: 2, right: 2, width: 26, height: 26, borderRadius: '50%', background: T.boton, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, boxShadow: `0 0 0 2px ${T.tarjetaBg}` }}>{subiendoFoto ? '…' : '📷'}</div>
+          <input ref={inputFotoRef} type="file" accept="image/*" onChange={alElegirFoto} style={{ display: 'none' }} />
+        </div>
+        <div style={{ marginTop: 10, fontSize: 22, fontWeight: 800, color: T.textoFuerte, lineHeight: 1.1 }}>{nombreCompleto || 'Sin nombre'}</div>
+        <div style={{ fontSize: 12.5, color: C.tenue, display: 'flex', flexWrap: 'wrap', gap: 7, alignItems: 'center', marginTop: 5 }}>
+          {posicion && <span>{posicion}</span>}
+          {posicion && ubicacion && <span style={{ width: 3, height: 3, borderRadius: '50%', background: C.tenue }} />}
+          {ubicacion && <span>{ubicacion}</span>}
+          {edad != null && <span style={{ width: 3, height: 3, borderRadius: '50%', background: C.tenue }} />}
+          {edad != null && <span>{edad} años</span>}
+        </div>
+        <span onClick={copiarMC} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 11, fontSize: 11.5, fontWeight: 700, color: T.acento, background: T.esClaro ? 'rgba(0,0,0,.04)' : 'rgba(255,255,255,.05)', border: `1px solid ${T.navActivoBorde}`, padding: '5px 12px', borderRadius: 9, fontFamily: 'monospace', letterSpacing: 1.5, cursor: 'pointer' }}>{copiado ? '✓ copiado' : (perfil.codigo_unico || 'MC------')}</span>
+
+        <div style={{ display: 'flex', marginTop: 16, background: cajaStat, borderRadius: 14, overflow: 'hidden' }}>
+          {[
+            { v: statsSoc.seguidores, l: 'Seguidores' },
+            { v: statsSoc.siguiendo, l: 'Siguiendo' },
+            { v: perfil.juegos_jugados != null ? perfil.juegos_jugados : 0, l: 'Juegos' },
+          ].map((s, i) => (
+            <div key={s.l} style={{ flex: 1, textAlign: 'center', padding: '12px 6px', borderLeft: i > 0 ? `1px solid ${T.lineaSuave}` : 'none' }}>
+              <div style={{ fontSize: 20, fontWeight: 800, color: T.textoFuerte, lineHeight: 1 }}>{s.v}</div>
+              <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 0.5, color: C.tenue, marginTop: 5, textTransform: 'uppercase' }}>{s.l}</div>
+            </div>
+          ))}
+        </div>
+
+        {esJugador && (
+          <>
+            <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.8, textTransform: 'uppercase', color: T.acento, margin: '14px 2px 8px' }}>Promedios</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8 }}>
+              {[['—', 'PTS'], ['—', 'REB'], ['—', 'AST'], ['—', 'ROB']].map(([v, l]) => (
+                <div key={l} style={{ textAlign: 'center', background: cajaStat, borderRadius: 12, padding: '11px 4px' }}>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: T.textoFuerte, lineHeight: 1 }}>{v}</div>
+                  <div style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 0.6, color: C.tenue, marginTop: 5, textTransform: 'uppercase' }}>{l}</div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+
   const Stat = ({ valor, etiqueta }) => (
     <div style={{ flex: 1, textAlign: 'center', padding: '6px 0' }}>
       <div style={{ fontSize: 22, fontWeight: 800, color: T.textoFuerte }}>{valor}</div>
@@ -442,69 +508,61 @@ export default function PantallaPerfil({ onSalir, onVolver, onAccion }) {
     </div>
   ) : null
 
-  if (esEscritorio) {
-    return (
-      <div style={wrap}>
-        <Velo />
-        <div style={scrollArea}>
-          <div style={{ position: 'sticky', top: 0, zIndex: 15, padding: '14px 24px 0', background: T.headerBg, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)' }}>
-            <div style={{ maxWidth: 1280, margin: '0 auto' }}><Carnet /></div>
-          </div>
-          <div style={{ position: 'relative', zIndex: 1, maxWidth: 1280, margin: '0 auto', width: '100%', display: 'grid', gridTemplateColumns: esTablet ? '1fr 1fr' : '300px 1fr 300px', gap: 16, alignItems: 'start', padding: '18px 24px 50px' }}>
-            {/* izquierda */}
-            {!esTablet && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                {bMcid}{bAtleta}{bCuenta}
-              </div>
-            )}
-            {/* centro */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
-              {esTablet && bMcid}
-              {bRating}{bPromedios}
-              {esTablet && bAtleta}
-            </div>
-            {/* derecha */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {bTrofeos}{bTorneos}
-              {esTablet && bCuenta}
-            </div>
-          </div>
-        </div>
-        {recortadorUI}{visorUI}
-      </div>
-    )
-  }
+  const topBar = (
+    <div style={{ position: 'sticky', top: 0, zIndex: 15, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 'calc(env(safe-area-inset-top) + 10px) 16px 10px', background: T.headerBg, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', borderBottom: `1px solid ${T.lineaSuave}` }}>
+      <button onClick={() => irA('inicio')} style={{ width: 38, height: 38, borderRadius: 11, border: `1px solid ${T.tarjetaBorde}`, background: T.esClaro ? 'rgba(255,255,255,.5)' : 'rgba(255,255,255,.05)', color: T.textoFuerte, fontSize: 22, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>‹</button>
+      <span style={{ fontSize: 14, fontWeight: 800, color: T.textoFuerte }}>Mi Perfil</span>
+      <BotonTema />
+    </div>
+  )
 
-  // ===== MÓVIL =====
+  const contenidoPubs = (
+    cargandoPubs ? (
+      <div style={{ textAlign: 'center', padding: '30px', color: C.tenue, fontSize: 13 }}>Cargando publicaciones…</div>
+    ) : publicaciones.length === 0 ? (
+      <div style={{ textAlign: 'center', padding: '38px 20px', color: C.tenue, background: T.tarjetaBg, border: `1px solid ${T.tarjetaBorde}`, borderRadius: 16 }}>
+        <div style={{ fontSize: 34, marginBottom: 10 }}>🏀</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: T.textoFuerte, marginBottom: 5 }}>Todavía no has publicado nada</div>
+        <div style={{ fontSize: 13, lineHeight: 1.5 }}>Tus resultados y publicaciones van a aparecer aquí.</div>
+      </div>
+    ) : (
+      publicaciones.map((p) => {
+        let datos = p.datos || {}
+        if (typeof datos === 'string') { try { datos = JSON.parse(datos) } catch (e) { datos = {} } }
+        const esJuego = datos && datos.nombreA && datos.nombreB && (datos.totalA != null || (datos.jugadores && datos.jugadores.length))
+        if (esJuego) {
+          const fuenteJuego = datos.fuente || (p.tipo === 'torneo' ? 'torneo' : p.tipo === 'liga' ? 'liga' : 'rapido')
+          return <TarjetaResultado key={p.id} datos={datos} fuente={fuenteJuego} tiempo={haceCuanto(p.creado_en)} comentario={p.texto && !p.texto.startsWith('Ganaron') && !p.texto.startsWith('Quedaron') ? p.texto.split('\n')[0] : null} temaForzado={tema} />
+        }
+        return (
+          <div key={p.id} style={{ background: T.tarjetaBg, border: `1px solid ${T.tarjetaBorde}`, borderRadius: 16, padding: 16 }}>
+            {p.titulo && <div style={{ fontSize: 16, fontWeight: 800, color: T.textoFuerte, marginBottom: 6 }}>{p.titulo}</div>}
+            {p.texto && <div style={{ fontSize: 14, color: T.textoBody, lineHeight: 1.55 }}>{p.texto}</div>}
+            <div style={{ fontSize: 11, color: T.tenue, marginTop: 8 }}>{haceCuanto(p.creado_en)}</div>
+          </div>
+        )
+      })
+    )
+  )
+
   return (
     <div style={wrap}>
       <Velo />
       <div style={scrollArea}>
-        <div style={{ position: 'relative', zIndex: 1, maxWidth: 560, margin: '0 auto', padding: '14px 16px 60px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <Carnet />
-
-        {/* Pestañas: Datos / Publicaciones */}
-        <div style={{ display: 'flex', background: T.esClaro ? 'rgba(0,0,0,.04)' : 'rgba(255,255,255,.04)', borderRadius: 12, padding: 4, gap: 4 }}>
-          {[{ id: 'datos', txt: 'Datos' }, { id: 'publicaciones', txt: 'Publicaciones' }].map((p) => {
-            const activa = p.id === pestanaPerfil
-            return (
-              <button key={p.id} onClick={() => setPestanaPerfil(p.id)} style={{ flex: 1, border: 'none', borderRadius: 9, padding: '10px 0', background: activa ? T.boton : 'transparent', color: activa ? '#1a1205' : C.tenue, fontSize: 13.5, fontWeight: 800, cursor: 'pointer', transition: 'all .15s' }}>{p.txt}</button>
-            )
-          })}
-        </div>
-
-        {/* Contenido según pestaña */}
-        {pestanaPerfil === 'datos' ? (
-          <>{bMcid}{bAtleta}{bRating}{bPromedios}{bTrofeos}{bTorneos}{bCuenta}</>
-        ) : (
-          <Tarjeta titulo="Publicaciones">
-            <div style={{ textAlign: 'center', padding: '30px 16px' }}>
-              <div style={{ fontSize: 42, marginBottom: 14 }}>📰</div>
-              <div style={{ color: T.textoFuerte, fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Publicaciones muy pronto 🏀</div>
-              <div style={{ color: C.tenue, fontSize: 13, lineHeight: 1.5 }}>Aquí van a aparecer todas las publicaciones de este perfil.</div>
-            </div>
-          </Tarjeta>
-        )}
+        {topBar}
+        <div style={{ position: 'relative', zIndex: 1, maxWidth: 600, margin: '0 auto', width: '100%', padding: '16px 16px calc(env(safe-area-inset-bottom) + 60px)', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <TarjetaPerfil />
+          <div style={{ display: 'flex', background: T.esClaro ? 'rgba(0,0,0,.04)' : 'rgba(255,255,255,.04)', borderRadius: 12, padding: 4, gap: 4 }}>
+            {[{ id: 'publicaciones', txt: 'Publicaciones' }, { id: 'datos', txt: 'Datos' }].map((p) => {
+              const activa = p.id === pestanaPerfil
+              return (
+                <button key={p.id} onClick={() => setPestanaPerfil(p.id)} style={{ flex: 1, border: 'none', borderRadius: 9, padding: '11px 0', background: activa ? T.boton : 'transparent', color: activa ? '#1a1205' : C.tenue, fontSize: 13.5, fontWeight: 800, cursor: 'pointer' }}>{p.txt}</button>
+              )
+            })}
+          </div>
+          {pestanaPerfil === 'datos'
+            ? <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>{bMcid}{bAtleta}{bRating}{bPromedios}{bTrofeos}{bTorneos}{bCuenta}</div>
+            : <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>{contenidoPubs}</div>}
         </div>
       </div>
       {recortadorUI}{visorUI}

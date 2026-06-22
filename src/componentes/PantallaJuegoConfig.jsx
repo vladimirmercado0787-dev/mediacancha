@@ -60,6 +60,10 @@ const STATS = [
 ]
 const RECOMENDADO_TEL = 6
 
+// En 1v1 estas estadísticas no tienen sentido (no te asistes a ti mismo, no se
+// cargan minutos/pérdidas, ni porcentajes): se ocultan para dejarlo sencillo.
+const STATS_NO_1V1 = ['ast', 'min', 'per', 'fall']
+
 const FORMATOS = ['1v1', '2v2', '3v3', '4v4', '5v5']
 const PUNTOS_RAPIDOS = [11, 15, 21, 32]
 
@@ -114,6 +118,11 @@ export default function PantallaJuegoConfig({ onListo, onVolver, tipoInicial }) 
   // anotación + estadísticas
   const [modoAnotacion, setModoAnotacion] = useState('jugada')
   const [statsActivas, setStatsActivas] = useState(['pts'])
+  const es1v1 = formato === '1v1'
+  // Al cambiar a 1v1, quitamos solas las estadísticas que no aplican.
+  useEffect(() => {
+    if (es1v1) setStatsActivas((prev) => prev.filter((id) => !STATS_NO_1V1.includes(id)))
+  }, [es1v1])
 
   // ===== CANDADO OFICIAL: congela el fondo para que no se mueva con el teclado =====
   useEffect(() => {
@@ -386,8 +395,9 @@ export default function PantallaJuegoConfig({ onListo, onVolver, tipoInicial }) 
           <>
             {tituloSeccion('¿Qué estadísticas vas a llevar?')}
             <div style={{ fontSize: 12, color: C.tenue, marginBottom: 12 }}>Puntos siempre va. Activa las que quieras seguir en vivo. Todas están libres.</div>
+            {es1v1 && <div style={{ fontSize: 12.5, color: T.acento, marginBottom: 12, fontWeight: 700, lineHeight: 1.5 }}>🏀 Uno-contra-uno: se simplifica solo. Sin asistencia, minutos, pérdidas ni porcentajes — solo lo que de verdad cuenta en un mano a mano.</div>}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {STATS.map((s) => {
+              {STATS.filter((s) => !(es1v1 && STATS_NO_1V1.includes(s.id))).map((s) => {
                 const activa = statsActivas.includes(s.id)
                 return (
                   <button key={s.id} onClick={() => toggleStat(s.id)} disabled={s.obligatorio} style={{

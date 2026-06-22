@@ -113,11 +113,12 @@ export default function BottomSheet({
     ? '88dvh'
     : (kbAlto > 0 ? `calc(92dvh - ${kbAlto}px)` : '92dvh')
 
-  // iOS reporta el teclado más alto de lo que de verdad es; ese sobrante es el
-  // espacio de más entre el campo de texto y el teclado. Lo bajamos con este
-  // ajuste fijo (afinable). Si queda mucho espacio, súbelo; si el campo de
-  // texto se esconde detrás del teclado, bájalo.
-  const ajusteTeclado = 30
+  // El fondo del input queda en (tope del teclado + ajusteTeclado). Si es
+  // POSITIVO, el input se mete DETRÁS del teclado (se corta). Negativo lo sube
+  // por encima con un margencito. -8 = el input queda 8px sobre el teclado.
+  // Si queda mucho espacio entre input y teclado, súbelo hacia 0; si el input
+  // todavía se esconde detrás del teclado, bájalo más (ej. -16).
+  const ajusteTeclado = -8
   const liftPadding = esEscritorio
     ? 20
     : (kbAlto > 0 ? Math.max(0, kbAlto - baseOscura - ajusteTeclado) : 0)

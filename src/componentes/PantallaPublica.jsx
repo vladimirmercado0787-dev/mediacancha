@@ -1283,25 +1283,15 @@ export default function PantallaPublica({ onAccion, haySesion }) {
     </div>
   )
 
+  // Barra "abridora": NO se escribe aquí. Al tocarla, abre la pantalla
+  // independiente PantallaPublicar (vista 'publicar'), que es la buena: fija,
+  // pantalla completa, con su botón Publicar. Se acabó el compositor inline.
   const Composer = () => (
-    <ComposerTechado
-      T={T}
-      escritorio={esEscritorio}
-      miPerfil={miPerfil}
-      abierto={composerAbierto}
-      setAbierto={setComposerAbierto}
-      texto={textoComposer}
-      setTexto={setTextoComposer}
-      fondoSel={fondoComposer}
-      setFondoSel={setFondoComposer}
-      publicando={publicandoTexto}
-      onPublicar={enviarPublicacionTexto}
-      fotos={fotosComposer}
-      setFotos={setFotosComposer}
-      maxFotos={2}
-      onResultado={() => click('resultados')}
-      onAbrir={() => click('publicar')}
-    />
+    <div onClick={() => click('publicar')} style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '4px 0 2px', padding: '13px 16px', borderRadius: 16, cursor: 'pointer', background: T.esClaro ? 'rgba(255,255,255,.6)' : 'rgba(255,255,255,.04)', border: `1px solid ${T.navActivoBorde}`, boxShadow: T.esClaro ? '0 2px 10px rgba(60,40,8,.08)' : 'none' }}>
+      <div style={{ width: 42, height: 42, borderRadius: '50%', flexShrink: 0, background: miPerfil?.foto_url ? `url(${miPerfil.foto_url}) center/cover` : T.boton, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 800, color: T.avatarTexto, boxShadow: `0 0 0 2px ${T.acento}` }}>{!miPerfil?.foto_url && ((miPerfil?.nombre || '?')[0] || '').toUpperCase()}</div>
+      <span style={{ flex: 1, fontSize: 15, color: T.tenue, fontWeight: 600 }}>¿Qué está pasando en la cancha?</span>
+      <span style={{ flexShrink: 0, fontSize: 19 }}>📷</span>
+    </div>
   )
 
   // Hoja de tipos de juego (se abre con el botón Anotar) — las funciones "por fuera"
@@ -1538,7 +1528,6 @@ export default function PantallaPublica({ onAccion, haySesion }) {
             <div onClick={() => click('buscar')} title="Buscar" style={{ width: 40, height: 40, borderRadius: 11, background: T.esClaro ? '#ffffff' : 'rgba(255,255,255,.06)', border: `1px solid ${T.navActivoBorde}`, boxShadow: T.esClaro ? '0 2px 10px rgba(60,40,8,.16)' : 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke={T.acento} strokeWidth="2"/><path d="m20 20-3.2-3.2" stroke={T.acento} strokeWidth="2" strokeLinecap="round"/></svg>
             </div>
-            <BotonTema />
             <div onClick={() => click('mensajes')} title="Mensajes" style={{ position: 'relative', width: 40, height: 40, borderRadius: 11, background: T.esClaro ? '#ffffff' : 'rgba(255,255,255,.06)', border: `1px solid ${T.navActivoBorde}`, boxShadow: T.esClaro ? '0 2px 10px rgba(60,40,8,.16)' : 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" style={{ display: 'block' }}>
                 <path d="M4 5.5C4 4.7 4.7 4 5.5 4h13C19.3 4 20 4.7 20 5.5v8c0 .8-.7 1.5-1.5 1.5H9l-4 3.5v-3.5H5.5C4.7 15 4 14.3 4 13.5v-8Z" stroke={T.acento} strokeWidth="1.7" fill="none" strokeLinejoin="round" />
@@ -1551,6 +1540,12 @@ export default function PantallaPublica({ onAccion, haySesion }) {
           </div>
           {menuAbierto && (
             <div style={{ position: 'absolute', top: 'calc(env(safe-area-inset-top) + 56px)', right: 2, zIndex: 30, width: 230, background: T.esClaro ? 'rgba(248,243,233,.97)' : 'rgba(20,18,16,.95)', border: `1px solid ${T.navActivoBorde}`, borderRadius: 14, padding: 8, boxShadow: '0 10px 30px rgba(0,0,0,.6)', backdropFilter: 'blur(12px)' }}>
+              {/* Tema (movido aquí desde la barra superior para despejarla) */}
+              <button onClick={cambiarTema} title="Toca para cambiar de tema" style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', textAlign: 'left', background: 'transparent', border: 'none', color: C.texto, fontSize: 14, fontWeight: 700, padding: '12px', borderRadius: 9, cursor: 'pointer' }}>
+                <span style={{ width: 14, height: 14, borderRadius: '50%', background: T.boton, display: 'inline-block', flexShrink: 0, boxShadow: `0 0 0 1.5px ${T.navActivoBorde}` }} />
+                Tema: {T.nombre}
+              </button>
+              <div style={{ height: 1, background: T.navActivoBorde, opacity: 0.55, margin: '4px 8px 6px' }} />
               {[{ id: 'buscar', txt: '🔍 Buscar personas' }, { id: 'perfil', txt: '◉ Mi perfil' }, ...ACCIONES_CREAR, ...ACCIONES_MIAS, ...(haySesion ? [{ id: 'cerrarSesion', txt: '↩ Cerrar sesión' }] : [{ id: 'registro', txt: '✦ Crear mi cuenta gratis' }, { id: 'entrar', txt: '→ Iniciar sesión' }])].map((a) => (
                 <button key={a.id} onClick={() => click(a.id)} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'transparent', border: 'none', color: C.texto, fontSize: 14, fontWeight: 600, padding: '12px', borderRadius: 9, cursor: 'pointer' }}>{a.txt}</button>
               ))}
@@ -1596,7 +1591,7 @@ export default function PantallaPublica({ onAccion, haySesion }) {
         </div>
       </div>
       {haySesion && (
-        <button onClick={() => setComposerAbierto(true)} aria-label="Publicar" style={{ position: 'fixed', right: 18, bottom: 'calc(env(safe-area-inset-bottom) + 84px)', zIndex: 45, width: 54, height: 54, borderRadius: '50%', border: 'none', cursor: 'pointer', background: 'linear-gradient(140deg,#e4263c,#ce1126)', color: '#fff', boxShadow: '0 8px 22px rgba(206,17,38,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <button onClick={() => click('publicar')} aria-label="Publicar" style={{ position: 'fixed', right: 18, bottom: 'calc(env(safe-area-inset-bottom) + 84px)', zIndex: 45, width: 54, height: 54, borderRadius: '50%', border: 'none', cursor: 'pointer', background: 'linear-gradient(140deg,#e4263c,#ce1126)', color: '#fff', boxShadow: '0 8px 22px rgba(206,17,38,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#fff" strokeWidth="2.4" strokeLinecap="round"/></svg>
         </button>
       )}

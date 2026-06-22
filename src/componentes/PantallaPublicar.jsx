@@ -33,6 +33,11 @@ export default function PantallaPublicar({ miPerfil, onVolver, onPublicado, onRe
   const [fondoSel, setFondoSel] = useState(0)
   const [publicando, setPublicando] = useState(false)
   const [panelEmoji, setPanelEmoji] = useState(false)
+  const [panelSentimiento, setPanelSentimiento] = useState(false)
+  const [panelUbicacion, setPanelUbicacion] = useState(false)
+  const [sentimiento, setSentimiento] = useState(null)   // { emoji, label } o null
+  const [ubicacion, setUbicacion] = useState(null)        // string o null
+  const [ubicacionTmp, setUbicacionTmp] = useState('')
   const [perfilCargado, setPerfilCargado] = useState(miPerfil || null)
   const areaRef = useRef(null)
   const inputFotosRef = useRef(null)
@@ -112,8 +117,25 @@ export default function PantallaPublicar({ miPerfil, onVolver, onPublicado, onRe
 
   const iniciales = `${(p.nombre || '?')[0] || ''}${(p.apellido || '')[0] || ''}`.toUpperCase()
   const hayTexto = texto.trim().length > 0
-  const puedePublicar = hayTexto || fotos.length > 0
+  const puedePublicar = hayTexto || fotos.length > 0 || !!sentimiento || !!ubicacion
   const nombreCompleto = `${p.nombre || 'Usuario'}${p.apellido ? ' ' + p.apellido : ''}`
+
+  // Sentimientos con sabor de cancha (puro client-side, se guardan en el texto)
+  const SENTIMIENTOS = [
+    { emoji: '🔥', label: 'encendido' }, { emoji: '😤', label: 'con todo' },
+    { emoji: '😎', label: 'tranquilo' }, { emoji: '🏆', label: 'campeón' },
+    { emoji: '💪', label: 'fuerte' }, { emoji: '⚡', label: 'a millón' },
+    { emoji: '👑', label: 'mandando' }, { emoji: '🙏', label: 'bendecido' },
+    { emoji: '😅', label: 'sufriendo' }, { emoji: '😱', label: 'asombrado' },
+    { emoji: '😭', label: 'dolido' }, { emoji: '🤝', label: 'agradecido' },
+  ]
+
+  // Mutua exclusión: abrir un panel cierra los otros
+  const toggleEmoji = () => { setPanelEmoji((v) => !v); setPanelSentimiento(false); setPanelUbicacion(false) }
+  const toggleSentimiento = () => { setPanelSentimiento((v) => !v); setPanelEmoji(false); setPanelUbicacion(false) }
+  const toggleUbicacion = () => { setPanelUbicacion((v) => { if (!v) setUbicacionTmp(ubicacion || ''); return !v }); setPanelEmoji(false); setPanelSentimiento(false) }
+  const elegirSentimiento = (s) => { setSentimiento(s); setPanelSentimiento(false) }
+  const guardarUbicacion = () => { const v = ubicacionTmp.trim(); setUbicacion(v || null); setPanelUbicacion(false) }
 
   const PLANTILLAS = [
     { id: 0, nombre: 'Normal', img: null, emoji: '📝', textoColor: T.textoFuerte },
@@ -128,9 +150,9 @@ export default function PantallaPublicar({ miPerfil, onVolver, onPublicado, onRe
 
   const avisarPronto = (n) => alert(`${n}: muy pronto 🏀`)
   const CHIPS = [
-    { id: 'torneo', emoji: '🏆', txt: 'Torneo', fn: () => avisarPronto('Etiquetar torneo') },
-    { id: 'ubicacion', emoji: '📍', txt: 'Ubicación', fn: () => avisarPronto('Ubicación') },
-    { id: 'sentimiento', emoji: '😊', txt: 'Sentimiento', fn: () => avisarPronto('Sentimiento') },
+    { id: 'torneo', emoji: '🏆', txt: 'Torneo', activa: false, fn: () => avisarPronto('Etiquetar torneo') },
+    { id: 'ubicacion', emoji: '📍', txt: ubicacion || 'Ubicación', activa: !!ubicacion, fn: toggleUbicacion },
+    { id: 'sentimiento', emoji: sentimiento ? sentimiento.emoji : '😊', txt: sentimiento ? sentimiento.label : 'Sentimiento', activa: !!sentimiento, fn: toggleSentimiento },
   ]
   const ACCIONES = [
     { id: 'foto', emoji: '📷', txt: 'Foto', fn: () => { if (fotos.length >= maxFotos) { alert(`Puedes subir hasta ${maxFotos} fotos por publicación.`) } else { inputFotosRef.current && inputFotosRef.current.click() } } },
@@ -172,9 +194,18 @@ export default function PantallaPublicar({ miPerfil, onVolver, onPublicado, onRe
   const quitarFoto = (idx) => setFotos((prev) => { const f = prev[idx]; if (f) { try { URL.revokeObjectURL(f.previa) } catch (e) {} } return prev.filter((_, i) => i !== idx) })
 
   const publicar = async () => {
-    const txt = texto.trim()
+    const base = texto.trim()
+    const extras = []
+    if (ubicacion) extras.push(`📍 ${ubicacion}`)
+    if (sentimiento) extras.push(`${sentimiento.emoji} sintiéndose ${sentimiento.label}`)
+    const meta = extras.join('  ·  ')
+    const textoFinal = meta ? (base ? `${base}\n\n${meta}` : meta) : base
     const hayFotos = fotos.length > 0
-    if ((!txt && !hayFotos) || publicando) return
+    if (publicando) return
+    if (!textoFinal && !hayFotos) {
+      alert('Escribe algo, elige un sentimiento o ubicación, o agrega una foto para publicar 🏀')
+      return
+    }
     setPublicando(true)
     try {
       const { publicarTexto } = await import('../techado')
@@ -187,11 +218,11 @@ export default function PantallaPublicar({ miPerfil, onVolver, onPublicado, onRe
           if (r && r.url) urls.push(r.url)
         }
       }
-      const res = await publicarTexto({ texto: txt, imagenes: urls.length ? urls : null, fondo: urls.length ? null : fondoElegido })
+      const res = await publicarTexto({ texto: textoFinal, imagenes: urls.length ? urls : null, fondo: urls.length ? null : fondoElegido })
       if (res && res.error) {
         alert('No se pudo publicar: ' + res.error)
       } else {
-        setTexto(''); setFondoSel(0)
+        setTexto(''); setFondoSel(0); setSentimiento(null); setUbicacion(null); setUbicacionTmp('')
         fotos.forEach((f) => { try { URL.revokeObjectURL(f.previa) } catch (e) {} })
         setFotos([])
         onPublicado && onPublicado()
@@ -213,7 +244,7 @@ export default function PantallaPublicar({ miPerfil, onVolver, onPublicado, onRe
 
   // ===== ESTRUCTURA DEL CHAT: raíz que sube con el teclado (height calc) =====
   return (
-    <div style={{ fontFamily: font, color: T.textoBody, background: T.fondo, display: 'flex', flexDirection: 'column', width: '100vw', height: kbAlto > 0 ? `calc(100dvh - ${Math.max(0, kbAlto - ajusteTeclado)}px)` : '100dvh', position: 'relative', overflow: 'hidden', transition: 'height .25s cubic-bezier(.25,.8,.25,1)' }}>
+    <div style={{ fontFamily: font, color: T.textoBody, background: T.fondo, display: 'flex', flexDirection: 'column', position: 'fixed', top: 0, left: 0, right: 0, zIndex: 300, height: kbAlto > 0 ? `calc(100dvh - ${Math.max(0, kbAlto - ajusteTeclado)}px)` : '100dvh', overflow: 'hidden', transition: 'height .25s cubic-bezier(.25,.8,.25,1)' }}>
       <style>{css}</style>
 
       {/* Glow deportivo de fondo */}
@@ -227,7 +258,7 @@ export default function PantallaPublicar({ miPerfil, onVolver, onPublicado, onRe
             <span style={{ fontSize: 15.5, fontWeight: 900, color: T.textoFuerte, letterSpacing: 0.3 }}>Nueva jugada</span>
             <span style={{ fontSize: 10, fontWeight: 700, color: T.acento, textTransform: 'uppercase', letterSpacing: 1 }}>al techado</span>
           </div>
-          <button onClick={publicar} disabled={!puedePublicar || publicando} style={{ flexShrink: 0, border: 'none', borderRadius: 22, padding: '10px 20px', background: puedePublicar ? T.boton : (T.esClaro ? 'rgba(0,0,0,.08)' : 'rgba(255,255,255,.08)'), color: puedePublicar ? T.botonTexto : T.tenue, fontWeight: 900, fontSize: 14, letterSpacing: 0.3, cursor: puedePublicar ? 'pointer' : 'default', opacity: publicando ? 0.6 : 1, boxShadow: puedePublicar ? `0 6px 18px ${T.glow}` : 'none', transition: 'all .2s' }}>{publicando ? 'Enviando…' : 'Publicar'}</button>
+          <button onClick={publicar} disabled={publicando} style={{ flexShrink: 0, border: 'none', borderRadius: 22, padding: '11px 22px', background: T.boton, color: T.botonTexto, fontWeight: 900, fontSize: 14.5, letterSpacing: 0.3, cursor: 'pointer', opacity: publicando ? 0.6 : (puedePublicar ? 1 : 0.72), boxShadow: `0 6px 18px ${T.glow}`, transition: 'all .2s' }}>{publicando ? 'Enviando…' : 'Publicar'}</button>
         </div>
       </div>
 
@@ -246,11 +277,52 @@ export default function PantallaPublicar({ miPerfil, onVolver, onPublicado, onRe
         {/* Chips contextuales */}
         <div className="mc-pub-row" style={{ flexShrink: 0, display: 'flex', gap: 8, overflowX: 'auto', padding: '0 16px 14px' }}>
           {CHIPS.map((c) => (
-            <button key={c.id} onClick={c.fn} style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, padding: '9px 15px', borderRadius: 22, border: `1.5px solid ${T.borde}`, background: T.esClaro ? 'rgba(255,255,255,.6)' : 'rgba(255,255,255,.04)', color: T.textoFuerte, fontSize: 13, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            <button key={c.id} onClick={c.fn} style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, padding: '9px 15px', borderRadius: 22, border: `1.5px solid ${c.activa ? T.acento : T.borde}`, background: c.activa ? T.glow : (T.esClaro ? 'rgba(255,255,255,.6)' : 'rgba(255,255,255,.04)'), color: c.activa ? T.acento : T.textoFuerte, fontSize: 13, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap' }}>
               <span>{c.emoji}</span>{c.txt}
             </button>
           ))}
         </div>
+
+        {/* Panel SENTIMIENTO (real, client-side) */}
+        {panelSentimiento && (
+          <div style={{ flexShrink: 0, margin: '0 16px 14px', padding: '12px', borderRadius: 16, border: `1px solid ${T.borde}`, background: T.esClaro ? 'rgba(255,255,255,.5)' : 'rgba(255,255,255,.03)', animation: 'mcPubIn .22s ease' }}>
+            <div style={{ fontSize: 11, fontWeight: 900, color: T.tenue, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>¿Cómo te sientes?</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+              {SENTIMIENTOS.map((s) => {
+                const sel = sentimiento && sentimiento.label === s.label
+                return (
+                  <button key={s.label} onClick={() => elegirSentimiento(s)} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 10px', borderRadius: 12, border: `1.5px solid ${sel ? T.acento : T.borde}`, background: sel ? T.glow : 'transparent', color: sel ? T.acento : T.textoBody, fontSize: 12.5, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <span style={{ fontSize: 18 }}>{s.emoji}</span>{s.label}
+                  </button>
+                )
+              })}
+            </div>
+            {sentimiento && (
+              <button onClick={() => { setSentimiento(null); setPanelSentimiento(false) }} style={{ marginTop: 11, border: 'none', background: 'transparent', color: T.tenue, fontSize: 12.5, fontWeight: 800, cursor: 'pointer', padding: 4 }}>✕ Quitar sentimiento</button>
+            )}
+          </div>
+        )}
+
+        {/* Panel UBICACIÓN (real, client-side) */}
+        {panelUbicacion && (
+          <div style={{ flexShrink: 0, margin: '0 16px 14px', padding: '12px', borderRadius: 16, border: `1px solid ${T.borde}`, background: T.esClaro ? 'rgba(255,255,255,.5)' : 'rgba(255,255,255,.03)', animation: 'mcPubIn .22s ease' }}>
+            <div style={{ fontSize: 11, fontWeight: 900, color: T.tenue, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>¿Dónde estás?</div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input
+                value={ubicacionTmp}
+                onChange={(e) => setUbicacionTmp(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') guardarUbicacion() }}
+                placeholder="Cancha, barrio, ciudad…"
+                maxLength={60}
+                style={{ flex: 1, minWidth: 0, background: T.esClaro ? '#fff' : 'rgba(255,255,255,.06)', border: `1px solid ${T.borde}`, borderRadius: 12, padding: '11px 14px', color: T.textoBody, fontSize: 15, outline: 'none', fontFamily: 'inherit' }}
+              />
+              <button onClick={guardarUbicacion} style={{ flexShrink: 0, border: 'none', borderRadius: 12, padding: '11px 16px', background: T.boton, color: T.botonTexto, fontWeight: 900, fontSize: 13, cursor: 'pointer' }}>Listo</button>
+            </div>
+            {ubicacion && (
+              <button onClick={() => { setUbicacion(null); setUbicacionTmp(''); setPanelUbicacion(false) }} style={{ marginTop: 11, border: 'none', background: 'transparent', color: T.tenue, fontSize: 12.5, fontWeight: 800, cursor: 'pointer', padding: 4 }}>✕ Quitar ubicación</button>
+            )}
+          </div>
+        )}
 
         {/* Área de escritura */}
         {conFondo ? (
@@ -314,7 +386,7 @@ export default function PantallaPublicar({ miPerfil, onVolver, onPublicado, onRe
       {/* ===== BARRA DE ACCIONES FIJA ABAJO (flexShrink:0, motor del Chat) ===== */}
       <div style={{ position: 'relative', zIndex: 3, flexShrink: 0, borderTop: `1px solid ${T.borde}`, background: T.panel, paddingBottom: kbAlto > 0 ? 6 : 'calc(8px + env(safe-area-inset-bottom))', backdropFilter: 'blur(14px)' }}>
         <div className="mc-pub-row" style={{ display: 'flex', alignItems: 'center', gap: 6, overflowX: 'auto', padding: '9px 12px' }}>
-          <button onClick={() => setPanelEmoji(!panelEmoji)} style={{ flexShrink: 0, width: 44, height: 44, borderRadius: 13, border: 'none', background: panelEmoji ? T.glow : (T.esClaro ? 'rgba(0,0,0,.05)' : 'rgba(255,255,255,.06)'), fontSize: 22, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>😊</button>
+          <button onClick={toggleEmoji} style={{ flexShrink: 0, width: 44, height: 44, borderRadius: 13, border: 'none', background: panelEmoji ? T.glow : (T.esClaro ? 'rgba(0,0,0,.05)' : 'rgba(255,255,255,.06)'), fontSize: 22, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>😊</button>
           {ACCIONES.map((a) => (
             <button key={a.id} onClick={a.fn} style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, padding: '10px 15px', borderRadius: 13, border: `1.5px solid ${T.borde}`, background: T.esClaro ? 'rgba(255,255,255,.6)' : 'rgba(255,255,255,.04)', color: T.textoFuerte, fontSize: 13, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap' }}>
               <span style={{ fontSize: 16 }}>{a.emoji}</span>{a.txt}

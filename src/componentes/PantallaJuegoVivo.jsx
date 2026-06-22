@@ -33,6 +33,23 @@ const ACCIONES_OTRAS = {
 }
 const ORDEN_OTRAS = ['reb', 'ast', 'rob', 'tap', 'tl', 'fal', 'per', 'fall', 'min']
 
+// Cada acción con SU color e ícono propios, para distinguirlas de un vistazo
+// en pleno juego. Puntos = familia verde (anotación); cada stat un tono distinto.
+const META_ACCION = {
+  p2:  { color: '#34d399', ico: '2',  punto: true },
+  p3:  { color: '#10b981', ico: '3',  punto: true },
+  p1:  { color: '#6ee7b7', ico: '1',  punto: true },
+  tl:  { color: '#2dd4bf', ico: '🎯' },
+  reb: { color: '#38bdf8', ico: '🔄' },
+  ast: { color: '#818cf8', ico: '🤝' },
+  rob: { color: '#c084fc', ico: '✋' },
+  tap: { color: '#f87171', ico: '🛡️' },
+  fal: { color: '#fbbf24', ico: '🟨' },
+  per: { color: '#fb923c', ico: '↩️' },
+  fall:{ color: '#fb7185', ico: '🚫' },
+  min: { color: '#94a3b8', ico: '⏱️' },
+}
+
 export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
   const [tema, setTema] = useState(() => {
     const validos = ['dorado', 'azul', 'claro', 'larimar']
@@ -273,15 +290,27 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
     </div>
   )
 
-  const botonAccion = (a, eq) => (
-    <button key={a.id} onClick={() => tocarAccion(a, eq)} style={{
-      border: `1.5px solid ${a.pos ? VERDE + '88' : T.bordeTenue}`, borderRadius: 13, cursor: 'pointer', background: a.pos ? `linear-gradient(160deg, rgba(47,191,113,.14), ${T.vidrio})` : T.vidrio,
-      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3, minHeight: 0, padding: '4px 2px',
-    }}>
-      <span style={{ fontFamily: DISP, fontSize: 26, fontWeight: 900, lineHeight: 1, color: a.pos ? VERDE : EQ[eq].acento }}>{a.ico}</span>
-      <span style={{ fontSize: 10.5, fontWeight: 700, color: T.tenue }}>{a.et}</span>
-    </button>
-  )
+  const botonAccion = (a, eq) => {
+    const m = META_ACCION[a.id] || { color: EQ[eq].acento, ico: a.ico }
+    return (
+      <button key={a.id} onClick={() => tocarAccion(a, eq)} style={{
+        border: `1.5px solid ${m.color}`, borderRadius: 14, cursor: 'pointer',
+        background: `linear-gradient(155deg, ${m.color}33, ${m.color}10)`,
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 5, minHeight: 0, padding: '6px 2px',
+        boxShadow: `0 3px 12px ${m.color}2e`,
+      }}>
+        <span style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+          width: 36, height: 36, borderRadius: '50%',
+          background: m.punto ? m.color : `${m.color}40`,
+          border: `2px solid ${m.color}`, boxShadow: `0 2px 12px ${m.color}66`,
+          fontSize: m.punto ? 20 : 18, fontWeight: 900, lineHeight: 1,
+          color: m.punto ? '#06210f' : '#fff', fontFamily: m.punto ? DISP : 'inherit',
+        }}>{m.ico}</span>
+        <span style={{ fontSize: 11, fontWeight: 800, color: T.texto, letterSpacing: 0.2, whiteSpace: 'nowrap' }}>{a.et}</span>
+      </button>
+    )
+  }
 
   const jugadorEnCancha = (j) => (
     <button key={j.id} onClick={() => tocarJugador(j)} style={{
@@ -304,7 +333,7 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
   )
 
   return (
-    <div style={{ fontFamily: font, background: T.fondo, color: T.texto, maxWidth: 480, margin: '0 auto', display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', position: 'relative' }}>
+    <div style={{ fontFamily: font, background: T.fondo, color: T.texto, maxWidth: 480, margin: '0 auto', display: 'flex', flexDirection: 'column', position: 'fixed', top: 0, bottom: 0, left: 0, right: 0, overflow: 'hidden' }}>
       <div style={{ position: 'absolute', inset: 0, zIndex: 0, backgroundImage: `url(${fondoJuego})`, backgroundSize: 'cover', backgroundPosition: 'center', opacity: T.esClaro ? 0.18 : 0.5 }} />
       <div style={{ position: 'absolute', inset: 0, zIndex: 0, background: T.esClaro ? 'linear-gradient(180deg, rgba(235,228,212,0.82), rgba(228,220,200,0.9))' : 'linear-gradient(180deg, rgba(8,9,12,0.86), rgba(8,9,12,0.93))' }} />
 
@@ -313,7 +342,7 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
       `}</style>
       <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
 
-        <div style={{ borderBottom: `1px solid ${BORDE_TENUE}`, padding: '10px 14px 14px', flexShrink: 0, background: 'linear-gradient(180deg, rgba(14,12,9,0.97), rgba(9,10,13,0.97))', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
+        <div style={{ borderBottom: `1px solid ${BORDE_TENUE}`, padding: 'calc(env(safe-area-inset-top) + 10px) 14px 14px', flexShrink: 0, background: 'linear-gradient(180deg, rgba(14,12,9,0.97), rgba(9,10,13,0.97))', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
             <span onClick={() => onVolver && onVolver()} style={{ fontSize: 12, color: TENUE, cursor: 'pointer' }}>← Salir</span>
             <span style={{ fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', fontWeight: 700, ...ORO }}>{config?.nombreJuego || 'Juego rápido'}</span>
@@ -388,7 +417,7 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
           ))}
         </div>
 
-        <div style={{ flexShrink: 0, padding: '10px 12px', background: T.pieBg, borderTop: `1px solid ${T.bordeTenue}`, backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
+        <div style={{ flexShrink: 0, padding: '10px 12px calc(env(safe-area-inset-bottom) + 10px)', background: T.pieBg, borderTop: `1px solid ${T.bordeTenue}`, backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
           {historial.length > 0 && (() => {
             const u = historial[historial.length - 1]
             return (
@@ -454,12 +483,15 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
                     </div>
                     <div style={{ fontSize: 12, letterSpacing: 1, textTransform: 'uppercase', color: TENUE, textAlign: 'center', marginBottom: 16, fontWeight: 700 }}>¿Qué hizo?</div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 11 }}>
-                      {accionesTodas.map((a) => (
-                        <button key={a.id} onClick={() => elegirAccionEnHoja(a)} style={{ border: `1.5px solid ${eqColor.borde}`, borderRadius: 16, padding: '26px 6px', cursor: 'pointer', background: VIDRIO_CLARO, color: TEXTO, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 9, minHeight: 130 }}>
-                          <span style={{ fontFamily: DISP, fontSize: 42, fontWeight: 900, color: a.pos ? VERDE : eqColor.acento }}>{a.ico}</span>
-                          <span style={{ fontSize: 13, fontWeight: 600 }}>{a.et}</span>
-                        </button>
-                      ))}
+                      {accionesTodas.map((a) => {
+                        const m = META_ACCION[a.id] || { color: eqColor.acento, ico: a.ico }
+                        return (
+                          <button key={a.id} onClick={() => elegirAccionEnHoja(a)} style={{ border: `1.5px solid ${m.color}66`, borderRadius: 16, padding: '22px 6px', cursor: 'pointer', background: `linear-gradient(160deg, ${m.color}1f, ${VIDRIO_CLARO})`, color: TEXTO, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, minHeight: 130 }}>
+                            <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 52, height: 52, borderRadius: '50%', background: m.punto ? m.color : `${m.color}26`, border: `2px solid ${m.color}`, boxShadow: `0 3px 14px ${m.color}45`, fontSize: m.punto ? 28 : 26, fontWeight: 900, lineHeight: 1, color: m.punto ? '#06210f' : m.color, fontFamily: m.punto ? DISP : 'inherit' }}>{m.ico}</span>
+                            <span style={{ fontSize: 13, fontWeight: 700 }}>{a.et}</span>
+                          </button>
+                        )
+                      })}
                     </div>
                   </>
                 ) : null}

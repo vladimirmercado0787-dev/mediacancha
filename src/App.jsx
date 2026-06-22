@@ -17,6 +17,8 @@ import PantallaPublicar from './componentes/PantallaPublicar'
 import PantallaTorneos from './componentes/PantallaTorneos'
 import PantallaCrearTorneo from './componentes/PantallaCrearTorneo'
 import { guardarJuegoDelDia } from './historialDia'
+import PantallaLigas from './componentes/PantallaLigas'
+import PantallaLNB from './componentes/PantallaLNB'
 import { StatusBar, Style } from '@capacitor/status-bar'
 
 function App() {
@@ -224,6 +226,27 @@ function App() {
     )
   }
 
+  if (vista === 'ligas') {
+    return (
+      <PantallaLigas
+        onVolver={() => setVista('publica')}
+        onAccion={(id) => { if (id === 'lnb') setVista('lnb') }}
+      />
+    )
+  }
+
+  if (vista === 'lnb') {
+    return (
+      <PantallaLNB
+        onVolver={() => setVista('ligas')}
+        onAccion={(id) => {
+          if (id === 'buscar') setVista(sesion ? 'buscar' : 'login')
+          else if (id === 'perfil') { setDestinoTrasLogin('perfil'); setVista(sesion ? 'perfil' : 'login') }
+        }}
+      />
+    )
+  }
+
   return (
     <PantallaPublica
       haySesion={!!sesion}
@@ -253,6 +276,8 @@ function App() {
         } else if (id === 'publicar') {
           setDestinoTrasLogin('publicar')
           setVista(sesion ? 'publicar' : 'login')
+        } else if (id === 'ligas') {
+          setVista('ligas')
         } else if (id === 'buscar') {
           setVista(sesion ? 'buscar' : 'login')
         } else if (id === 'mensajes') {
