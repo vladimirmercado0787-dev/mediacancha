@@ -61,109 +61,131 @@ import { alternarSeguir, idsQueSigo, statsSociales } from '../social'
 import { contarNoLeidos } from '../mensajes'
 import BottomSheet from './BottomSheet'
 
-// Tokens de superficie OSCURA (compartidos por los temas dorado y azul).
-const SUP_OSCURA = {
-  esClaro: false,
-  fondo: '#08090c',
-  textoFuerte: '#f4f7f9',
-  textoBody: '#eef3f6',
-  tenue: '#9aa7b2',
-  subTexto: '#c3ccd4',
-  vidrio: 'linear-gradient(150deg, rgba(24,26,30,0.82), rgba(12,14,18,0.86))',
-  panelWash: 'linear-gradient(180deg, rgba(8,9,12,0.72), rgba(8,9,12,0.8))',
-  scrimCarnet: 'linear-gradient(90deg, rgba(6,7,9,0.92) 0%, rgba(6,7,9,0.7) 45%, rgba(6,7,9,0.15) 75%, transparent 100%)',
-  headerBg: 'rgba(8,9,12,0.92)',
-  veloGrad: 'linear-gradient(90deg, rgba(8,9,12,0.92) 0%, rgba(8,9,12,0.66) 45%, rgba(8,9,12,0.55) 100%)',
-  barraInteriorBg: 'rgba(20,22,26,0.55)',
-  navDorada: 'linear-gradient(180deg,#eab64f,#c8842e 55%,#9c6518)',
-  texturaImg: texturaCuero,
-  barraImg: fondoTarjetaMiembro,
-}
-
 const TEMAS = {
+  noche: {
+    esClaro: false,
+    nombre: 'Cancha de noche',
+    fondo: '#070f26',
+    textoFuerte: '#eef3fc',
+    textoBody: '#eef3fc',
+    tenue: '#8a9bc0',
+    subTexto: '#c2cce0',
+    vidrio: 'linear-gradient(120deg, rgba(22,40,92,0.72), rgba(14,28,68,0.78))',
+    scrimCarnet: 'linear-gradient(90deg, rgba(7,13,29,0.92) 0%, rgba(7,13,29,0.62) 45%, rgba(7,13,29,0.15) 75%, transparent 100%)',
+    headerBg: 'rgba(7,13,29,0.82)',
+    veloGrad: 'linear-gradient(180deg, rgba(7,15,38,0.74) 0%, rgba(6,12,31,0.92) 100%)',
+    navDorada: 'linear-gradient(180deg,#5a86e0,#3e6bd6 55%,#274a9a)',
+    barraImg: fondoTarjetaMiembro,
+    acento: '#3e6bd6',
+    borde: 'linear-gradient(140deg,#9fb5ea,#3e6bd6 40%,#274a9a 70%,#9fb5ea)',
+    texto: 'linear-gradient(120deg,#9fb9f2,#3e6bd6)',
+    balon: ['#9fb9f2', '#3e6bd6', '#274a9a'],
+    avatar: 'linear-gradient(150deg, #5a86e0, #274a9a)',
+    avatarTexto: '#ffffff',
+    boton: 'linear-gradient(150deg, #5a86e0, #3e6bd6)',
+    glow: 'rgba(62,107,214,0.20)',
+    navActivoBg: 'rgba(62,107,214,.15)',
+    navActivoBorde: 'rgba(62,107,214,.4)',
+  },
+  dia: {
+    esClaro: true,
+    nombre: 'Cancha de día',
+    fondo: '#eef2fa',
+    textoFuerte: '#13224a',
+    textoBody: '#1f2e54',
+    tenue: '#8b97b2',
+    subTexto: '#46557a',
+    vidrio: 'linear-gradient(135deg, #ffffff, #f3f6ff 60%, #eaf0fc)',
+    scrimCarnet: 'linear-gradient(100deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.55) 45%, rgba(255,255,255,0.12) 75%, transparent 100%)',
+    headerBg: 'rgba(255,255,255,0.9)',
+    veloGrad: 'linear-gradient(90deg, rgba(248,250,254,0.9) 0%, rgba(248,250,254,0.7) 45%, rgba(248,250,254,0.6) 100%)',
+    navDorada: 'linear-gradient(180deg,#3a63c8,#1b3a8c 55%,#12285f)',
+    barraImg: barraMiembroClara,
+    acento: '#1b3a8c',
+    borde: 'linear-gradient(140deg,#cfdcf6,#1b3a8c 55%,#cfdcf6)',
+    texto: 'linear-gradient(120deg,#2a52a8,#1b3a8c)',
+    balon: ['#3a63c8', '#1b3a8c', '#12285f'],
+    avatar: 'linear-gradient(150deg, #3a63c8, #12285f)',
+    avatarTexto: '#ffffff',
+    boton: 'linear-gradient(150deg, #3a63c8, #1b3a8c)',
+    glow: 'rgba(27,58,140,0.08)',
+    navActivoBg: 'rgba(27,58,140,.10)',
+    navActivoBorde: 'rgba(27,58,140,.22)',
+  },
   dorado: {
-    ...SUP_OSCURA,
+    esClaro: false,
     nombre: 'Dorado',
+    fondo: '#0e0b06',
+    textoFuerte: '#f6efe1',
+    textoBody: '#f6efe1',
+    tenue: '#a08e6f',
+    subTexto: '#dccdb0',
+    vidrio: 'linear-gradient(120deg,#2a2110,#1c1509 50%,#120d05)',
+    scrimCarnet: 'linear-gradient(90deg, rgba(14,11,6,0.92) 0%, rgba(14,11,6,0.62) 45%, rgba(14,11,6,0.15) 75%, transparent 100%)',
+    headerBg: 'rgba(20,16,9,0.84)',
+    veloGrad: 'linear-gradient(180deg, rgba(20,16,9,0.74) 0%, rgba(14,11,6,0.92) 100%)',
+    navDorada: 'linear-gradient(180deg,#f0c674,#e8b65a 55%,#caa24a)',
+    barraImg: fondoTarjetaMiembro,
     acento: '#e8b65a',
     borde: 'linear-gradient(140deg,#f7d785,#b9802c 40%,#5e4318 70%,#caa050)',
-    texto: 'linear-gradient(120deg,#fbe08a,#c8842e)',
-    balon: ['#fbe08a', '#d18f33', '#9a6420'],
+    texto: 'linear-gradient(120deg,#f0c674,#caa24a)',
+    balon: ['#f0c674', '#caa24a', '#8a6a22'],
     avatar: 'linear-gradient(150deg, #e0b057, #9a6420)',
-    avatarTexto: '#241a07',
-    boton: 'linear-gradient(150deg, #f3cf63, #c8842e)',
-    glow: 'rgba(190,135,55,0.20)',
-    navActivoBg: 'rgba(232,169,75,.15)',
-    navActivoBorde: 'rgba(232,169,75,.35)',
-  },
-  azul: {
-    ...SUP_OSCURA,
-    nombre: 'Azul',
-    acento: '#6fb0ec',
-    borde: 'linear-gradient(140deg,#9fd4fb,#3b7fcf 40%,#1d3a63 70%,#6fb0ec)',
-    texto: 'linear-gradient(120deg,#8fccfb,#2f6fc8)',
-    balon: ['#9fd4fb', '#4f8fd0', '#1d4a80'],
-    avatar: 'linear-gradient(150deg, #5aa0e0, #1d4a80)',
-    avatarTexto: '#08151f',
-    boton: 'linear-gradient(150deg, #6fb0ec, #2f6fc8)',
-    glow: 'rgba(55,120,190,0.22)',
-    navActivoBg: 'rgba(111,176,236,.15)',
-    navActivoBorde: 'rgba(111,176,236,.35)',
-  },
-  claro: {
-    esClaro: true,
-    nombre: 'Claro',
-    acento: '#b07a26',
-    borde: 'linear-gradient(140deg,#f0d79a,#c79a45 40%,#9a7530 70%,#e3c578)',
-    texto: 'linear-gradient(120deg,#c8902f,#9a6420)',
-    balon: ['#e7c069', '#c8842e', '#9a6420'],
-    avatar: 'linear-gradient(150deg, #e7c069, #a9741f)',
-    avatarTexto: '#3a2806',
-    boton: 'linear-gradient(150deg, #e7c069, #b07a26)',
-    glow: 'rgba(190,135,55,0.10)',
-    navActivoBg: 'rgba(176,122,38,.16)',
-    navActivoBorde: 'rgba(176,122,38,.35)',
-    fondo: '#e6dcc8',
-    textoFuerte: '#2a2014',
-    textoBody: '#3a2f20',
-    tenue: '#7a6e58',
-    subTexto: '#5b5040',
-    vidrio: 'linear-gradient(150deg, rgba(255,255,255,0.60), rgba(255,255,255,0.46))',
-    panelWash: 'linear-gradient(180deg, rgba(250,245,235,0.66), rgba(248,242,231,0.80))',
-    scrimCarnet: 'linear-gradient(100deg, rgba(250,245,235,0.86) 0%, rgba(250,245,235,0.52) 45%, rgba(250,245,235,0.12) 75%, transparent 100%)',
-    headerBg: 'rgba(248,243,233,0.92)',
-    veloGrad: 'linear-gradient(90deg, rgba(248,243,233,0.86) 0%, rgba(248,243,233,0.66) 45%, rgba(248,243,233,0.55) 100%)',
-    barraInteriorBg: 'rgba(255,255,255,0.5)',
-    navDorada: 'linear-gradient(180deg,#eab64f,#c8842e 55%,#9c6518)',
-    texturaImg: texturaCueroClara,
-    barraImg: barraMiembroClara,
+    avatarTexto: '#211705',
+    boton: 'linear-gradient(150deg, #f3cf63, #caa24a)',
+    glow: 'rgba(232,182,79,0.16)',
+    navActivoBg: 'rgba(232,182,79,.14)',
+    navActivoBorde: 'rgba(232,182,79,.4)',
   },
   larimar: {
-    esClaro: true,
+    esClaro: false,
     nombre: 'Larimar',
-    acento: '#b07a26',
-    borde: 'linear-gradient(140deg,#f0d79a,#c79a45 40%,#9a7530 70%,#e3c578)',
-    texto: 'linear-gradient(120deg,#c8902f,#9a6420)',
-    balon: ['#e7c069', '#c8842e', '#9a6420'],
-    avatar: 'linear-gradient(150deg, #e7c069, #a9741f)',
-    avatarTexto: '#3a2806',
-    boton: 'linear-gradient(150deg, #e7c069, #b07a26)',
-    glow: 'rgba(60,150,170,0.12)',
-    navActivoBg: 'rgba(176,122,38,.16)',
-    navActivoBorde: 'rgba(176,122,38,.35)',
-    fondo: '#d6e7e8',
-    textoFuerte: '#1c2624',
-    textoBody: '#2c3a3a',
-    tenue: '#5f7375',
-    subTexto: '#48595a',
-    vidrio: 'linear-gradient(150deg, rgba(255,255,255,0.58), rgba(255,255,255,0.44))',
-    panelWash: 'linear-gradient(180deg, rgba(236,246,247,0.64), rgba(228,242,244,0.78))',
-    scrimCarnet: 'linear-gradient(100deg, rgba(236,246,247,0.86) 0%, rgba(236,246,247,0.52) 45%, rgba(236,246,247,0.12) 75%, transparent 100%)',
-    headerBg: 'rgba(232,244,245,0.92)',
-    veloGrad: 'linear-gradient(90deg, rgba(232,244,245,0.86) 0%, rgba(232,244,245,0.66) 45%, rgba(232,244,245,0.55) 100%)',
-    barraInteriorBg: 'rgba(255,255,255,0.5)',
-    navDorada: 'linear-gradient(180deg,#6ac0d8,#2a8fb8 55%,#1a6a8a)',
-    texturaImg: texturaCueroLarimar,
+    fondo: '#03121a',
+    textoFuerte: '#e8fbff',
+    textoBody: '#e8fbff',
+    tenue: '#79b4bd',
+    subTexto: '#b9e6ec',
+    vidrio: 'linear-gradient(120deg,#0c3a44,#082a32 50%,#04181f)',
+    scrimCarnet: 'linear-gradient(90deg, rgba(4,24,31,0.92) 0%, rgba(4,24,31,0.62) 45%, rgba(4,24,31,0.15) 75%, transparent 100%)',
+    headerBg: 'rgba(4,24,31,0.84)',
+    veloGrad: 'linear-gradient(180deg, rgba(7,36,43,0.74) 0%, rgba(3,18,26,0.92) 100%)',
+    navDorada: 'linear-gradient(180deg,#56d6dd,#3fc1c9 55%,#2ba6ae)',
     barraImg: barraMiembroLarimar,
+    acento: '#3fc1c9',
+    borde: 'linear-gradient(140deg,#7fe0e6,#3fc1c9 40%,#1a6a8a 70%,#7fe0e6)',
+    texto: 'linear-gradient(120deg,#7fe0e6,#3fc1c9)',
+    balon: ['#7fe0e6', '#3fc1c9', '#1a6a8a'],
+    avatar: 'linear-gradient(150deg, #56d6dd, #1a6a8a)',
+    avatarTexto: '#04222a',
+    boton: 'linear-gradient(150deg, #56d6dd, #2ba6ae)',
+    glow: 'rgba(63,193,201,0.18)',
+    navActivoBg: 'rgba(63,193,201,.16)',
+    navActivoBorde: 'rgba(63,193,201,.42)',
+  },
+  negro: {
+    esClaro: false,
+    nombre: 'Negro puro',
+    fondo: '#000000',
+    textoFuerte: '#ffffff',
+    textoBody: '#ffffff',
+    tenue: '#7d818c',
+    subTexto: '#cfd2db',
+    vidrio: 'linear-gradient(120deg,#141622,#0c0d14 50%,#050507)',
+    scrimCarnet: 'linear-gradient(90deg, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.62) 45%, rgba(0,0,0,0.15) 75%, transparent 100%)',
+    headerBg: 'rgba(0,0,0,0.86)',
+    veloGrad: 'linear-gradient(180deg, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.94) 100%)',
+    navDorada: 'linear-gradient(180deg,#6f95f3,#4d7cf0 55%,#3a5fc0)',
+    barraImg: fondoTarjetaMiembro,
+    acento: '#4d7cf0',
+    borde: 'linear-gradient(140deg, rgba(255,255,255,0.3),#4d7cf0 50%, rgba(255,255,255,0.2))',
+    texto: 'linear-gradient(120deg,#7f9ff5,#4d7cf0)',
+    balon: ['#7f9ff5', '#4d7cf0', '#3a5fc0'],
+    avatar: 'linear-gradient(150deg, #6f95f3, #3a5fc0)',
+    avatarTexto: '#ffffff',
+    boton: 'linear-gradient(150deg, #6f95f3, #4d7cf0)',
+    glow: 'rgba(77,124,240,0.16)',
+    navActivoBg: 'rgba(77,124,240,.16)',
+    navActivoBorde: 'rgba(77,124,240,.45)',
   },
 }
 
@@ -275,12 +297,12 @@ export default function PantallaPublica({ onAccion, haySesion }) {
   const [torneosAbierto, setTorneosAbierto] = useState(false)
   const [likes, setLikes] = useState({})
   const [tema, setTema] = useState(() => {
-    const validos = ['dorado', 'azul', 'claro', 'larimar']
+    const validos = ['noche', 'dia', 'dorado', 'larimar', 'negro']
     if (typeof window !== 'undefined') {
       const g = localStorage.getItem('mc_tema')
-      return validos.includes(g) ? g : 'dorado'
+      return validos.includes(g) ? g : 'noche'
     }
-    return 'dorado'
+    return 'noche'
   })
   const [juegosDia, setJuegosDia] = useState([])
   const [publicaciones, setPublicaciones] = useState([])
@@ -462,7 +484,7 @@ export default function PantallaPublica({ onAccion, haySesion }) {
   }, [])
 
   const cambiarTema = () => {
-    const orden = ['dorado', 'azul', 'claro', 'larimar']
+    const orden = ['noche', 'dia', 'dorado', 'larimar', 'negro']
     const i = orden.indexOf(tema)
     const nuevo = orden[(i + 1) % orden.length]
     setTema(nuevo)
@@ -1264,6 +1286,7 @@ export default function PantallaPublica({ onAccion, haySesion }) {
   const Composer = () => (
     <ComposerTechado
       T={T}
+      escritorio={esEscritorio}
       miPerfil={miPerfil}
       abierto={composerAbierto}
       setAbierto={setComposerAbierto}
@@ -1311,6 +1334,68 @@ export default function PantallaPublica({ onAccion, haySesion }) {
       </div>
     )
   }
+
+  // Fila de historias "En la cancha" (estilo del mockup; datos de muestra por ahora)
+  const Historias = () => {
+    const items = [
+      { tipo: 'add', nm: 'Tu jugada' },
+      { tipo: 'live', sig: 'JÍC', nm: 'En vivo', g: 'linear-gradient(135deg,#d23048,#8a1020)' },
+      { sig: 'MET', nm: 'Metros', g: 'linear-gradient(135deg,#2a4fa8,#16224a)' },
+      { sig: 'LEO', nm: 'Leones', g: 'linear-gradient(135deg,#1f9d63,#127041)' },
+      { sig: 'VAL', nm: 'Copa Val.', g: 'linear-gradient(135deg,#caa24a,#8a6a22)' },
+      { sig: 'TIT', nm: 'Titanes', g: 'linear-gradient(135deg,#d23048,#8a1020)' },
+    ]
+    return (
+      <div style={{ marginTop: 16 }}>
+        <style>{`@keyframes mcPulseHl{0%{transform:scale(1);opacity:.7}100%{transform:scale(1.32);opacity:0}} .mc-hl-scroll::-webkit-scrollbar{display:none}`}</style>
+        <SecHead titulo="En la cancha" accion={{ txt: 'Ver todo →', fn: () => click('techado') }} />
+        <div className="mc-hl-scroll" style={{ display: 'flex', gap: 13, overflowX: 'auto', padding: '2px 2px 4px', scrollbarWidth: 'none' }}>
+          {items.map((it, i) => (
+            <div key={i} style={{ flexShrink: 0, width: 60, textAlign: 'center' }}>
+              <div style={{ width: 60, height: 60, borderRadius: '50%', padding: 2.5, display: 'grid', placeItems: 'center', position: 'relative', background: it.tipo === 'add' ? T.vidrio : it.tipo === 'live' ? 'linear-gradient(135deg,#e4263c,#ce1126)' : `conic-gradient(from 220deg, #e4263c, ${T.acento}, ${T.acento}, #e4263c)`, border: it.tipo === 'add' ? `1px dashed ${T.navActivoBorde}` : 'none' }}>
+                {it.tipo === 'live' && <span style={{ position: 'absolute', inset: -3, borderRadius: '50%', border: '2px solid #e4263c', animation: 'mcPulseHl 1.8s ease-out infinite' }} />}
+                <div style={{ width: '100%', height: '100%', borderRadius: '50%', display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: it.tipo === 'add' ? 24 : 15, color: it.tipo === 'add' ? T.tenue : '#fff', border: it.tipo === 'add' ? 'none' : `2.5px solid ${T.fondo}`, background: it.tipo === 'add' ? 'transparent' : (it.g || T.avatar), fontStyle: it.tipo === 'add' ? 'normal' : 'italic' }}>
+                  {it.tipo === 'add' ? '+' : it.sig}
+                </div>
+              </div>
+              {it.tipo === 'live'
+                ? <div style={{ marginTop: 4, display: 'inline-block', fontSize: 8.5, fontWeight: 800, letterSpacing: 0.5, color: '#fff', background: '#e4263c', padding: '1px 6px', borderRadius: 20, textTransform: 'uppercase' }}>{it.nm}</div>
+                : <div style={{ marginTop: 5, fontSize: 10, color: T.subTexto, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.nm}</div>}
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  // Tarjeta "Jugador de la semana" (estilo del mockup; datos de muestra hasta tener el rating)
+  const JugadorSemana = () => (
+    <div style={{ marginTop: 18 }}>
+      <div style={{ position: 'relative', borderRadius: 20, overflow: 'hidden', border: `1px solid ${T.navActivoBorde}`, background: T.vidrio, minHeight: 196, boxShadow: T.esClaro ? '0 12px 30px rgba(20,24,30,.1)' : '0 14px 34px rgba(0,0,0,.4)' }}>
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 4, display: 'flex', zIndex: 3 }}><i style={{ flex: 1, background: '#1b3a8c' }} /><i style={{ flex: 1, background: '#fff' }} /><i style={{ flex: 1, background: '#ce1126' }} /></div>
+        <div style={{ position: 'absolute', right: -12, top: 6, fontFamily: '"Arial Narrow", Impact, sans-serif', fontStyle: 'italic', fontWeight: 700, fontSize: 178, lineHeight: 0.8, color: T.esClaro ? 'rgba(27,58,140,.06)' : 'rgba(255,255,255,.05)', zIndex: 1, letterSpacing: -8 }}>7</div>
+        <div style={{ position: 'absolute', top: 12, right: 14, textAlign: 'center', zIndex: 3, background: T.navActivoBg, border: `1px solid ${T.navActivoBorde}`, borderRadius: 15, padding: '5px 12px 6px' }}>
+          <div style={{ fontFamily: '"Arial Narrow", Impact, sans-serif', fontStyle: 'italic', fontWeight: 700, fontSize: 38, lineHeight: 0.82, color: T.acento }}>92</div>
+          <div style={{ fontFamily: '"Arial Narrow", Impact, sans-serif', fontWeight: 700, fontSize: 8, letterSpacing: 1.5, color: '#ce1126', marginTop: 2 }}>MC RATING</div>
+        </div>
+        <div style={{ position: 'relative', zIndex: 2, padding: '15px 16px 16px', height: '100%', display: 'flex', flexDirection: 'column' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, alignSelf: 'flex-start', fontFamily: '"Arial Narrow", Impact, sans-serif', fontStyle: 'italic', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, fontSize: 10, color: T.acento, background: T.navActivoBg, border: `1px solid ${T.navActivoBorde}`, padding: '4px 10px', borderRadius: 30 }}>★ Jugador de la semana<span style={{ opacity: 0.65, marginLeft: 5 }}>· muestra</span></span>
+          <div style={{ marginTop: 'auto' }}>
+            <div style={{ fontFamily: '"Arial Narrow", Impact, sans-serif', fontStyle: 'italic', fontWeight: 700, fontSize: 30, lineHeight: 0.95, textTransform: 'uppercase', color: T.textoFuerte }}>Starling<br />Mejía</div>
+            <div style={{ fontSize: 11.5, color: T.subTexto, marginTop: 5, fontWeight: 600 }}>Metros de Santiago · Escolta · <b style={{ color: T.acento }}>#7</b></div>
+            <div style={{ display: 'flex', gap: 7, marginTop: 12 }}>
+              {[['24.3', 'Puntos'], ['6.1', 'Rebotes'], ['5.4', 'Asist.'], ['22', 'Efic.']].map((s, i) => (
+                <div key={i} style={{ flex: 1, background: T.esClaro ? 'rgba(0,0,0,.03)' : 'rgba(255,255,255,.05)', border: `1px solid ${T.navActivoBorde}`, borderRadius: 10, padding: '7px 5px', textAlign: 'center' }}>
+                  <div style={{ fontFamily: '"Arial Narrow", Impact, sans-serif', fontWeight: 700, fontSize: 18, color: T.acento, fontStyle: 'italic' }}>{s[0]}</div>
+                  <div style={{ fontSize: 8, color: T.tenue, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', marginTop: 2 }}>{s[1]}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 
   // ===== VISTA ESCRITORIO / TABLET =====
   if (esEscritorio) {
@@ -1450,6 +1535,9 @@ export default function PantallaPublica({ onAccion, haySesion }) {
             <Logo chico />
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div onClick={() => click('buscar')} title="Buscar" style={{ width: 40, height: 40, borderRadius: 11, background: T.esClaro ? '#ffffff' : 'rgba(255,255,255,.06)', border: `1px solid ${T.navActivoBorde}`, boxShadow: T.esClaro ? '0 2px 10px rgba(60,40,8,.16)' : 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke={T.acento} strokeWidth="2"/><path d="m20 20-3.2-3.2" stroke={T.acento} strokeWidth="2" strokeLinecap="round"/></svg>
+            </div>
             <BotonTema />
             <div onClick={() => click('mensajes')} title="Mensajes" style={{ position: 'relative', width: 40, height: 40, borderRadius: 11, background: T.esClaro ? '#ffffff' : 'rgba(255,255,255,.06)', border: `1px solid ${T.navActivoBorde}`, boxShadow: T.esClaro ? '0 2px 10px rgba(60,40,8,.16)' : 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" style={{ display: 'block' }}>
@@ -1475,8 +1563,9 @@ export default function PantallaPublica({ onAccion, haySesion }) {
       <div style={{ position: 'relative', zIndex: 1, flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
         <div style={{ maxWidth: 480, margin: '0 auto', padding: '4px 16px 130px' }}>
         {!haySesion && <div style={{ marginTop: 14 }}><Bienvenida /></div>}
-        <div style={{ marginTop: 22 }}><EnVivo /></div>
-        {haySesion && <div style={{ marginTop: 16 }}>{Composer()}</div>}
+        <Historias />
+        <JugadorSemana />
+        {haySesion && Composer()}
         <div style={{ marginTop: 22 }}><SecHead titulo="El Techado" icono="techado" accion={{ txt: 'Ver todo →', fn: () => click('techado') }} /><span style={{ display: 'block', fontSize: 11.5, color: T.tenue, margin: '-6px 2px 10px' }}>Tu zona, primero</span><ListaTechado /></div>
         <div style={{ marginTop: 22 }}><SecHead titulo="Torneos populares" accion={{ txt: 'Ver todos →', fn: () => click('torneos') }} /><ListaTorneos /></div>
         <div style={{ marginTop: 22 }}><SecHead titulo="Ranking nacional" accion={{ txt: 'Ver todo →', fn: () => click('rankings') }} /><ListaRanking n={5} /></div>
@@ -1486,26 +1575,31 @@ export default function PantallaPublica({ onAccion, haySesion }) {
       <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 40, background: T.headerBg, backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', borderTop: `1px solid ${T.navActivoBorde}`, boxShadow: '0 -5px 25px rgba(0,0,0,.1)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', paddingTop: 8, paddingBottom: 4 }}>
         <div style={{ width: '100%', maxWidth: 480, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px' }}>
-        {[{ id: 'inicio', txt: 'Inicio', icono: '⌂' }, { id: 'torneos', txt: 'Torneos', icono: '🏆' }].map((n) => (
+        {[{ id: 'inicio', txt: 'Inicio', icono: '⌂' }, { id: 'ligas', txt: 'Ligas', icono: '🏀' }].map((n) => (
           <button key={n.id} onClick={() => click(n.id)} style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', textAlign: 'center', color: n.id === 'inicio' ? T.acento : C.tenue, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
             <div style={{ fontSize: 18, marginBottom: 3, display: 'flex', justifyContent: 'center' }}>{n.icono}</div>{n.txt}
           </button>
         ))}
         <div style={{ flex: 1, minWidth: 0, display: 'flex', justifyContent: 'center' }}>
-          <button onClick={() => setAnotarAbierto(true)} style={{ width: 52, height: 52, borderRadius: '50%', background: T.boton, border: 'none', cursor: 'pointer', boxShadow: `0 4px 14px ${T.esClaro ? 'rgba(176,122,38,.4)' : 'rgba(232,182,79,.45)'}`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#1a1205' }}>
+          <button onClick={() => setAnotarAbierto(true)} style={{ width: 52, height: 52, borderRadius: '50%', background: T.boton, border: 'none', cursor: 'pointer', boxShadow: '0 4px 14px rgba(0,0,0,.3)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: T.avatarTexto }}>
             <span style={{ fontSize: 22, fontWeight: 900, lineHeight: 0.8 }}>＋</span>
             <span style={{ fontSize: 7.5, fontWeight: 900, letterSpacing: 0.5, textTransform: 'uppercase', marginTop: 1 }}>Anotar</span>
           </button>
         </div>
-        <button onClick={() => click('buscar')} style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', textAlign: 'center', color: C.tenue, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
-          <div style={{ fontSize: 18, marginBottom: 3, display: 'flex', justifyContent: 'center' }}>🔍</div>Buscar
+        <button onClick={() => click('rankings')} style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', textAlign: 'center', color: C.tenue, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
+          <div style={{ fontSize: 18, marginBottom: 3, display: 'flex', justifyContent: 'center' }}>★</div>Ranking
         </button>
         <button onClick={() => click('perfil')} style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', textAlign: 'center', color: C.tenue, fontSize: 10, fontWeight: 700, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <div style={{ width: 26, height: 26, borderRadius: '50%', marginBottom: 3, background: miPerfil?.foto_url ? `url(${miPerfil.foto_url}) center/cover` : T.boton, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800, color: '#1a1205', boxShadow: `0 0 0 1.5px ${T.acento}` }}>{!miPerfil?.foto_url && ((miPerfil?.nombre || '?')[0] || '').toUpperCase()}</div>Perfil
+          <div style={{ width: 26, height: 26, borderRadius: '50%', marginBottom: 3, background: miPerfil?.foto_url ? `url(${miPerfil.foto_url}) center/cover` : T.boton, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800, color: T.avatarTexto, boxShadow: `0 0 0 1.5px ${T.acento}` }}>{!miPerfil?.foto_url && ((miPerfil?.nombre || '?')[0] || '').toUpperCase()}</div>Perfil
         </button>
         </div>
         </div>
       </div>
+      {haySesion && (
+        <button onClick={() => setComposerAbierto(true)} aria-label="Publicar" style={{ position: 'fixed', right: 18, bottom: 'calc(env(safe-area-inset-bottom) + 84px)', zIndex: 45, width: 54, height: 54, borderRadius: '50%', border: 'none', cursor: 'pointer', background: 'linear-gradient(140deg,#e4263c,#ce1126)', color: '#fff', boxShadow: '0 8px 22px rgba(206,17,38,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#fff" strokeWidth="2.4" strokeLinecap="round"/></svg>
+        </button>
+      )}
       {Modales()}{HojaAnotar()}
     </div>
   )
@@ -1623,7 +1717,7 @@ function CarruselFotos({ fotos, onAbrir }) {
   )
 }
 
-function ComposerTechado({ T, miPerfil, abierto, setAbierto, texto, setTexto, fondoSel, setFondoSel, publicando, onPublicar, onResultado, onAbrir, fotos = [], setFotos, maxFotos = 2 }) {
+function ComposerTechado({ T, escritorio, miPerfil, abierto, setAbierto, texto, setTexto, fondoSel, setFondoSel, publicando, onPublicar, onResultado, onAbrir, fotos = [], setFotos, maxFotos = 2 }) {
   const p = miPerfil
   const [panelEmoji, setPanelEmoji] = useState(false)
   const [catEmoji, setCatEmoji] = useState('Básquet')
@@ -1847,8 +1941,9 @@ function ComposerTechado({ T, miPerfil, abierto, setAbierto, texto, setTexto, fo
     </button>
   )
 
-  // ---- Barrita disparadora (siempre visible en el feed) ----
+  // ---- Barrita disparadora (solo en escritorio; en celular se publica con el botón +) ----
   if (!abierto) {
+    if (!escritorio) return null
     return (
       <div style={{ background: T.esClaro ? '#fff' : 'rgba(20,22,26,.72)', border: `1px solid ${T.esClaro ? '#e0e3e8' : 'rgba(255,255,255,.08)'}`, borderRadius: 16, boxShadow: T.esClaro ? '0 8px 24px rgba(20,24,30,.06)' : 'none', overflow: 'hidden' }}>
         <div style={{ padding: '14px 16px' }}>

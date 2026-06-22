@@ -4,26 +4,35 @@
   box-sizing: border-box;
 }
 
-html, body, #root {
-  margin: 0;
-  padding: 0;
+/* SHELL RÍGIDO: el body se clava al borde físico y NO se desplaza nunca.
+   Ahora funciona sin romper el notch porque la config nativa usa
+   contentInset:"never" (el CSS toma el control total del safe-area). */
+html, body {
   width: 100%;
-  background: #0c1116;
-}
-
-/* La app llena toda la pantalla del teléfono, pero SÍ deja deslizar */
-html {
-  height: 100%;
-}
-
-body {
-  min-height: 100%;
-  /* mata SOLO el rebote elástico del borde, no el scroll normal */
-  overscroll-behavior-y: none;
+  height: 100dvh;
+  min-height: 100dvh;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
+  background: #04060c;
+  overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* #root: contenedor flex de altura completa. SIN max-width (pa' no romper
+   la vista de computadora). Por ahora deja deslizar aquí dentro a las
+   pantallas viejas; cuando TODAS usen la plantilla, esto pasa a hidden. */
 #root {
-  min-height: 100%;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  position: relative;
 }

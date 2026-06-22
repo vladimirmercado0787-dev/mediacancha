@@ -1,19 +1,14 @@
 import React, { useEffect, useMemo, useState } from "react";
 
 /**
- * IntroMediaCancha
- * Intro de arranque de la app: balón de cuero con costuras de oro que cae,
- * rebota con onda dorada, el cuero llena la pantalla y sube la marca
- * "MEDIA CANCHA" con brillo metálico + lema.
- *
- * Uso en App.jsx:
- *   const [intro, setIntro] = useState(true);
- *   ...
- *   {intro && <IntroMediaCancha onFinish={() => setIntro(false)} />}
+ * IntroMediaCancha — REMODELADO
+ * Mismo balón de cuero con costuras de oro que cae y rebota, y la marca
+ * "MEDIA CANCHA" que sube — pero sobre fondo navy "Cancha de noche" y con
+ * la línea en tricolor dominicano. Sin lema (limpio, como las marcas grandes).
  *
  * Props:
- *   onFinish   -> se llama cuando termina (para ocultar el intro)
- *   duracion   -> ms que dura antes de desvanecer (default 4500)
+ *   onFinish -> se llama cuando termina (para ocultar el intro)
+ *   duracion -> ms que dura antes de desvanecer (default 4500)
  */
 export default function IntroMediaCancha({ onFinish, duracion = 4500 }) {
   const [saliendo, setSaliendo] = useState(false);
@@ -27,7 +22,6 @@ export default function IntroMediaCancha({ onFinish, duracion = 4500 }) {
     };
   }, [duracion, onFinish]);
 
-  // posiciones de las chispas en círculo
   const chispas = useMemo(() => {
     const arr = [];
     const N = 8;
@@ -39,12 +33,9 @@ export default function IntroMediaCancha({ onFinish, duracion = 4500 }) {
     return arr;
   }, []);
 
-  const disp =
-    '"Arial Narrow", Impact, "Haettenschweiler", system-ui, sans-serif';
-  const gold =
-    "linear-gradient(120deg,#9c6518 0%,#e8b65a 38%,#fbe08a 50%,#e8b65a 62%,#9c6518 100%)";
-  const plata =
-    "linear-gradient(120deg,#8a929a 0%,#e7edf2 45%,#ffffff 52%,#cdd6dd 60%,#8a929a 100%)";
+  const disp = '"Arial Narrow", Impact, "Haettenschweiler", system-ui, sans-serif';
+  const gold = "linear-gradient(120deg,#9c6518 0%,#e8b65a 38%,#fbe08a 50%,#e8b65a 62%,#9c6518 100%)";
+  const plata = "linear-gradient(120deg,#8a929a 0%,#e7edf2 45%,#ffffff 52%,#cdd6dd 60%,#8a929a 100%)";
 
   return (
     <div
@@ -52,7 +43,8 @@ export default function IntroMediaCancha({ onFinish, duracion = 4500 }) {
         position: "fixed",
         inset: 0,
         zIndex: 9999,
-        background: "#040303",
+        background:
+          "radial-gradient(440px 360px at 18% 12%, rgba(62,107,214,.14), transparent 60%), radial-gradient(460px 380px at 86% 88%, rgba(228,38,60,.10), transparent 60%), linear-gradient(180deg,#0b1530,#070f26 40%,#050b1d)",
         overflow: "hidden",
         opacity: saliendo ? 0 : 1,
         transition: "opacity .6s ease",
@@ -61,7 +53,7 @@ export default function IntroMediaCancha({ onFinish, duracion = 4500 }) {
     >
       <style>{CSS_INTRO}</style>
 
-      {/* fondo "cuero" por CSS (sin imagen) que se revela */}
+      {/* el navy se "enciende" (luz de cancha) en vez del cuero */}
       <div className="mc-leather" />
       <div className="mc-vign" />
 
@@ -87,14 +79,7 @@ export default function IntroMediaCancha({ onFinish, duracion = 4500 }) {
                 <stop offset="100%" stopColor="#c8842e" />
               </linearGradient>
             </defs>
-            <circle
-              cx="64"
-              cy="64"
-              r="60"
-              fill="url(#mcLea)"
-              stroke="url(#mcSeam)"
-              strokeWidth="2.5"
-            />
+            <circle cx="64" cy="64" r="60" fill="url(#mcLea)" stroke="url(#mcSeam)" strokeWidth="2.5" />
             <circle cx="48" cy="44" r="26" fill="rgba(255,255,255,.06)" />
             <g fill="none" stroke="url(#mcSeam)" strokeWidth="3">
               <line x1="64" y1="6" x2="64" y2="122" />
@@ -112,54 +97,22 @@ export default function IntroMediaCancha({ onFinish, duracion = 4500 }) {
 
       {/* chispas */}
       {chispas.map((c, i) => (
-        <div
-          key={i}
-          className="mc-spark"
-          style={{ "--dx": `${c.dx}px`, "--dy": `${c.dy}px` }}
-        />
+        <div key={i} className="mc-spark" style={{ "--dx": `${c.dx}px`, "--dy": `${c.dy}px` }} />
       ))}
 
       {/* marca */}
       <div className="mc-brand">
         <div className="mc-word">
-          <span
-            className="mc-l1"
-            style={{
-              fontFamily: disp,
-              backgroundImage: plata,
-              WebkitBackgroundClip: "text",
-              backgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-            }}
-          >
+          <span className="mc-l1" style={{ fontFamily: disp, backgroundImage: plata, WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent" }}>
             MEDIA
           </span>
-          <span
-            className="mc-l2"
-            style={{
-              fontFamily: disp,
-              backgroundImage: gold,
-              WebkitBackgroundClip: "text",
-              backgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-            }}
-          >
+          <span className="mc-l2" style={{ fontFamily: disp, backgroundImage: gold, WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent" }}>
             CANCHA
           </span>
           <span className="mc-gleam" />
         </div>
+        {/* línea tricolor dominicana */}
         <div className="mc-rule" />
-        <div
-          className="mc-tag"
-          style={{
-            backgroundImage: gold,
-            WebkitBackgroundClip: "text",
-            backgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-          }}
-        >
-          Tu cancha · Tu liga · Tu leyenda
-        </div>
       </div>
 
       <div className="mc-by">
@@ -172,12 +125,12 @@ export default function IntroMediaCancha({ onFinish, duracion = 4500 }) {
 const CSS_INTRO = `
 .mc-leather{position:absolute;inset:0;opacity:0;transform:scale(1.25);
   background:
-    radial-gradient(60% 45% at 32% 28%, rgba(120,84,40,.55), transparent 60%),
-    radial-gradient(80% 60% at 75% 80%, rgba(70,46,22,.5), transparent 65%),
-    linear-gradient(180deg,#1c130a,#0b0703);
+    radial-gradient(60% 45% at 32% 28%, rgba(62,107,214,.38), transparent 60%),
+    radial-gradient(80% 60% at 75% 80%, rgba(228,38,60,.22), transparent 65%),
+    linear-gradient(180deg,#0b1530,#050b1d);
   animation:mcReveal 1.1s ease-out 1.35s forwards}
 .mc-vign{position:absolute;inset:0;opacity:0;
-  background:radial-gradient(120% 90% at 50% 42%, transparent 38%, rgba(0,0,0,.72) 100%);
+  background:radial-gradient(120% 90% at 50% 42%, transparent 38%, rgba(2,5,14,.78) 100%);
   animation:mcFade .8s ease-out 1.6s forwards}
 .mc-spark0{position:absolute;left:50%;top:16%;width:8px;height:8px;border-radius:50%;
   transform:translate(-50%,-50%) scale(0);background:#fff;
@@ -207,12 +160,11 @@ const CSS_INTRO = `
 .mc-gleam{position:absolute;top:-10%;left:-40%;width:34%;height:120%;transform:skewX(-18deg);opacity:0;
   background:linear-gradient(90deg,transparent,rgba(255,255,255,.85),transparent);mix-blend-mode:overlay;
   animation:mcGleam 1s ease-in-out 2.55s forwards}
-.mc-rule{width:0;height:2px;margin:13px auto 0;background:linear-gradient(120deg,#9c6518,#fbe08a,#9c6518);
-  border-radius:2px;box-shadow:0 0 12px rgba(232,182,79,.6);animation:mcRule .7s ease-out 2.55s forwards}
-.mc-tag{margin-top:14px;font-size:13.5px;letter-spacing:3px;text-transform:uppercase;font-weight:800;
-  opacity:0;transform:translateY(10px);animation:mcTagIn .8s ease-out 2.95s forwards}
+.mc-rule{width:0;height:5px;margin:15px auto 0;border-radius:3px;overflow:hidden;
+  background:linear-gradient(90deg,#1b3a8c 0 33.34%,#ffffff 33.34% 66.67%,#ce1126 66.67% 100%);
+  box-shadow:0 2px 12px rgba(0,0,0,.4);animation:mcRule .7s ease-out 2.55s forwards}
 .mc-by{position:absolute;left:0;right:0;bottom:34px;text-align:center;font-size:11px;letter-spacing:2px;
-  color:#6a5a3a;font-weight:700;opacity:0;animation:mcFade .8s ease-out 3.2s forwards}
+  color:#7a86a0;font-weight:700;opacity:0;animation:mcFade .8s ease-out 3.2s forwards}
 
 @keyframes mcSpark0{0%{transform:translate(-50%,-50%) scale(0);opacity:1}60%{opacity:1}100%{transform:translate(-50%,-50%) scale(2.4);opacity:0}}
 @keyframes mcDrop{0%{transform:translateY(-60vh)}70%{transform:translateY(0)}82%{transform:translateY(-46px) scaleY(.96)}100%{transform:translateY(0) scaleY(1)}}
@@ -226,6 +178,5 @@ const CSS_INTRO = `
 @keyframes mcBallOut{to{opacity:0;transform:translate(-50%,-50%) scale(2.3)}}
 @keyframes mcBrandIn{0%{opacity:0;transform:translateY(26px)}100%{opacity:1;transform:translateY(0)}}
 @keyframes mcGleam{0%{left:-40%;opacity:0}20%{opacity:1}80%{opacity:1}100%{left:130%;opacity:0}}
-@keyframes mcRule{to{width:128px}}
-@keyframes mcTagIn{to{opacity:1;transform:translateY(0)}}
+@keyframes mcRule{to{width:172px}}
 `;

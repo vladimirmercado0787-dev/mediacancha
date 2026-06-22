@@ -17,6 +17,7 @@ import PantallaPublicar from './componentes/PantallaPublicar'
 import PantallaTorneos from './componentes/PantallaTorneos'
 import PantallaCrearTorneo from './componentes/PantallaCrearTorneo'
 import { guardarJuegoDelDia } from './historialDia'
+import { StatusBar, Style } from '@capacitor/status-bar'
 
 function App() {
   const [mostrarIntro, setMostrarIntro] = useState(true)
@@ -32,6 +33,39 @@ function App() {
     supabase.auth.getSession().then(({ data }) => setSesion(data.session))
     const { data: sub } = supabase.auth.onAuthStateChange((_evento, ses) => setSesion(ses))
     return () => sub.subscription.unsubscribe()
+  }, [])
+
+  // Resetea el scroll cada vez que cambia de pantalla: mata la "contaminación"
+  // del WebView de iOS (el columpio) que dejaba la vista desfasada al volver
+  // atrás desde una pantalla vieja que todavía usa scroll de página.
+  useEffect(() => {
+    const reset = () => {
+      try {
+        window.scrollTo(0, 0)
+        document.documentElement.scrollTop = 0
+        document.body.scrollTop = 0
+        const r = document.getElementById('root')
+        if (r) r.scrollTop = 0
+      } catch (e) {}
+    }
+    reset()
+    requestAnimationFrame(reset)
+  }, [vista])
+
+  // Barra de estado nativa (iOS): el WebView se dibuja POR DEBAJO del notch
+  // (pantalla completa real) y el color del texto se adapta al tema.
+  useEffect(() => {
+    const initBarra = async () => {
+      try {
+        await StatusBar.setOverlaysWebView({ overlay: true })
+        let temaGuardado = null
+        try { temaGuardado = localStorage.getItem('mc_tema') } catch (e) {}
+        await StatusBar.setStyle({ style: temaGuardado === 'dia' ? Style.Dark : Style.Light })
+      } catch (e) {
+        // En la web (no nativo) el plugin no existe; se ignora sin romper nada.
+      }
+    }
+    initBarra()
   }, [])
 
   if (mostrarIntro) {

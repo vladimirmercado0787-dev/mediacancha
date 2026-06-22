@@ -1,20 +1,20 @@
 // =====================================================================
-//  ROBOT LNB · Media Cancha  (Fase 1)
+//  ROBOT LNB · Media Cancha  (Fase 1 + Fase 4: jugadores)
 //  Jala la data de lnb.do (JSON limpio) y la mete en Supabase.
 //  Sólido: busca el buildId fresco cada vez, así nunca se rompe
 //  cuando la liga actualiza su sitio.
 //
-//  CÓMO CORRERLO (después de haber creado las tablas con el SQL):
-//    1. Guárdalo en una carpeta (ej.: Desktop).
-//    2. En la terminal, pega tu service key y corre (todo en una línea):
+//  NUEVO EN FASE 4: hala el róster de cada equipo → TODOS los jugadores
+//  con sus estadísticas, a la tabla lnb_jugadores.
+//  (Primero corre el SQL lnb_jugadores.sql en Supabase.)
 //
-//       SUPABASE_SERVICE_KEY="PEGA_AQUI_TU_SERVICE_KEY" node robot-lnb.js
-//
-//    3. Copia toda la salida y pásamela.
+//  CÓMO CORRERLO:
+//    1. En la terminal, pega tu service key y corre (todo en una línea):
+//         SUPABASE_SERVICE_KEY="PEGA_AQUI_TU_SERVICE_KEY" node robot-lnb.js
+//    2. Copia toda la salida y pásamela.
 //
 //  ⚠️ La SERVICE KEY es secreta. NUNCA la pongas dentro de un archivo
 //     que vayas a subir a GitHub. Por eso va por la terminal, no en el código.
-//     (La sacas de: Supabase → Project Settings → API → service_role.)
 // =====================================================================
 
 const SUPABASE_URL = 'https://cbpuhfuojfvvkudapgki.supabase.co';
@@ -33,6 +33,10 @@ if (!KEY) {
 function stripHtml(s) {
   if (!s) return null;
   return s.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 240);
+}
+// algunos campos de lnb.do vienen envueltos en { error, value }
+function unwrap(x) {
+  return (x && typeof x === 'object' && !Array.isArray(x) && 'value' in x) ? x.value : x;
 }
 
 async function getBuildIdYHome() {
@@ -169,34 +173,51 @@ async function main() {
     equipo_id: wp.team?.id ?? null, equipo_nombre: wp.team?.name ?? null,
   }] : [];
 
+  // ===== NUEVO FASE 4: JUGADORES (róster de cada equipo) =====
+  console.log('\nHalando los rósters de cada equipo (todos los jugadores)...');
+  const jugMap = new Map();
+  for (const t of teamMap.values()) {
+    try {
+      const ed = await getJson(`/_next/data/${buildId}/equipo/x/${t.id}.json`);
+      const roster = unwrap(ed.roster) || [];
+      for (const p of roster) {
+        if (!p || p.id == null) continue;
+        const st = p.statistics || {};
+        jugMap.set(p.id, {
+          id: p.id, temporada_id: tempId, equipo_id: t.id,
+          nombre: p.name, apellido: p.last_name, shirt_number: p.shirt_number ?? null,
+          image_url: p.image_url ?? null,
+          posicion_nombre: p.position?.name ?? null, posicion_alias: p.position?.alias ?? null,
+          birth_date: p.birth_date ?? null, feets: p.feets ?? null, inches: p.inches ?? null,
+          count_matches: st.count_matches ?? null,
+          points: st.points ?? null, rebounds: st.rebounds ?? null, assists: st.assists ?? null,
+          minutes: st.minutes ?? null, steals: st.steals ?? null, blocks: st.blocks ?? null,
+          personal_fouls: st.personal_fouls ?? null, turnovers: st.turnovers ?? null,
+          fg_att: st.field_goals_attempted ?? null, fg_made: st.field_goals_made ?? null, fg_pct: st.field_goals_percent ?? null,
+          three_att: st.three_points_attempted ?? null, three_made: st.three_points_made ?? null, three_pct: st.three_points_percent ?? null,
+          ft_att: st.free_throw_attempted ?? null, ft_made: st.free_throw_made ?? null, ft_pct: st.free_throw_percent ?? null,
+          efficiency: st.efficiency ?? null,
+        });
+      }
+      console.log(`  · ${t.name}: ${roster.length} jugadores`);
+    } catch (e) {
+      console.log(`  · ${t.name}: error (${e.message})`);
+    }
+  }
+  const jugadores = [...jugMap.values()];
+  console.log(`Total de jugadores recogidos: ${jugadores.length}`);
+
   // ----- SUBIR TODO (en orden por las llaves foráneas) -----
   console.log('\nSubiendo a Supabase...');
   await upsert('lnb_equipos', [...teamMap.values()], 'id');
   await upsert('lnb_temporadas', temporadas, 'id');
+  await upsert('lnb_jugadores', jugadores, 'id');
   await upsert('lnb_standing', standing, 'temporada_id,equipo_id');
   await upsert('lnb_lideres', lideres, 'temporada_id,categoria,rank');
   await upsert('lnb_juegos', juegos, 'id');
   await upsert('lnb_juego_equipos', juegoEquipos, 'juego_id,equipo_id');
   await upsert('lnb_noticias', noticias, 'id');
   await upsert('lnb_jugador_semana', jugadorSemana, 'id');
-
-  // ----- BONUS: averiguar la base de las imágenes -----
-  console.log('\nProbando de dónde salen las imágenes...');
-  const sampleImg = [...teamMap.values()].find(t => t.image_url)?.image_url;
-  if (sampleImg) {
-    const bases = [
-      'https://lnb-media.sfo3.cdn.digitaloceanspaces.com/',
-      'https://lnb.do/',
-      'https://lnb.do/api/media/',
-    ];
-    for (const b of bases) {
-      try {
-        const r = await fetch(b + sampleImg, { method: 'HEAD' });
-        console.log(`  ${r.status === 200 ? '✓ SIRVE' : r.status} → ${b}`);
-      } catch (e) { console.log(`  error → ${b}`); }
-    }
-    console.log(`  (ruta de ejemplo: ${sampleImg})`);
-  }
 
   console.log('\n========== ROBOT LNB — TERMINÓ ✓ ==========');
   console.log('Copia toda esta salida y pásamela.');

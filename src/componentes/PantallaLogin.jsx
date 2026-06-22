@@ -2,45 +2,26 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
 import fondoCancha from '../assets/fondo-cancha.png'
 
-const SUP_OSCURA = {
-  esClaro: false, fondo: '#08090c', textoFuerte: '#f4f7f9', textoBody: '#eef3f6', tenue: '#9aa7b2',
-  vidrio: 'linear-gradient(150deg, rgba(24,26,30,0.88), rgba(12,14,18,0.92))',
-  veloGrad: 'linear-gradient(180deg, rgba(8,9,12,0.82) 0%, rgba(8,9,12,0.9) 100%)',
-  inputBg: 'rgba(12,14,18,0.7)', inputBorde: 'rgba(255,255,255,.12)',
-}
-const SUP_CLARA_BASE = {
-  esClaro: true, textoFuerte: '#2a2014', textoBody: '#3a2f20', tenue: '#7a6e58',
-  vidrio: 'linear-gradient(150deg, rgba(255,255,255,0.92), rgba(250,248,244,0.95))',
-  inputBg: 'rgba(0,0,0,.03)', inputBorde: 'rgba(0,0,0,.12)',
-}
+// ============================================================
+//  IDENTIDAD MEDIA CANCHA (rediseño) — usa la misma clave 'mc_tema'
+//  y los mismos nombres de tema de la app (dorado/azul/claro/larimar)
+//  para no chocar con las pantallas que todavía no se han migrado.
+//  Aquí "azul" = el navy premium "Cancha de noche".
+// ============================================================
+const FUENTE = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+const DISP = '"Arial Narrow","Roboto Condensed","Helvetica Neue",Impact,sans-serif'
+const TRI_AZUL = '#1b3a8c', TRI_ROJO = '#ce1126'
+
 const TEMAS = {
-  dorado: {
-    ...SUP_OSCURA, nombre: 'Dorado', acento: '#e8b65a',
-    borde: 'linear-gradient(140deg,#f7d785,#b9802c 40%,#5e4318 70%,#caa050)',
-    texto: 'linear-gradient(120deg,#fbe08a,#c8842e)', balon: ['#fbe08a', '#d18f33', '#9a6420'],
-    boton: 'linear-gradient(150deg, #f3cf63, #c8842e)', glow: 'rgba(190,135,55,0.20)',
-  },
-  azul: {
-    ...SUP_OSCURA, nombre: 'Azul', acento: '#6fb0ec',
-    borde: 'linear-gradient(140deg,#9fd4fb,#3b7fcf 40%,#1d3a63 70%,#6fb0ec)',
-    texto: 'linear-gradient(120deg,#8fccfb,#2f6fc8)', balon: ['#9fd4fb', '#4f8fd0', '#1d4a80'],
-    boton: 'linear-gradient(150deg, #6fb0ec, #2f6fc8)', glow: 'rgba(55,120,190,0.22)',
-  },
-  claro: {
-    ...SUP_CLARA_BASE, nombre: 'Claro', acento: '#b07a26', fondo: '#e6dcc8',
-    borde: 'linear-gradient(140deg,#f0d79a,#c79a45 40%,#9a7530 70%,#e3c578)',
-    texto: 'linear-gradient(120deg,#c8902f,#9a6420)', balon: ['#e7c069', '#c8842e', '#9a6420'],
-    boton: 'linear-gradient(150deg, #e7c069, #b07a26)', glow: 'rgba(190,135,55,0.12)',
-    veloGrad: 'linear-gradient(180deg, rgba(248,243,233,0.82) 0%, rgba(244,238,226,0.9) 100%)',
-  },
-  larimar: {
-    ...SUP_CLARA_BASE, nombre: 'Larimar', acento: '#2a8fb8', fondo: '#d6e7e8',
-    borde: 'linear-gradient(140deg,#8fd4e8,#2a8fb8 45%,#1a6a8a 75%,#6ac0d8)',
-    texto: 'linear-gradient(120deg,#2a8fb8,#1a6a8a)', balon: ['#6ac0d8', '#2a8fb8', '#1a6a8a'],
-    boton: 'linear-gradient(150deg, #4aafc8, #2a8fb8)', glow: 'rgba(42,143,184,0.14)',
-    veloGrad: 'linear-gradient(180deg, rgba(232,244,245,0.82) 0%, rgba(224,240,242,0.9) 100%)',
-    textoFuerte: '#1c2624', textoBody: '#2c3a3a', tenue: '#5f7375',
-  },
+  azul: { esClaro: false, bg: '#070f26', glow1: 'rgba(62,107,214,.22)', glow2: 'rgba(228,38,60,.14)', veil: 'linear-gradient(180deg, rgba(7,13,29,.82), rgba(5,10,24,.95))', surf: 'rgba(255,255,255,.06)', surf2: 'rgba(255,255,255,.09)', bd: 'rgba(150,172,228,.18)', bd2: 'rgba(150,172,228,.32)', tx: '#eef3fc', tx2: '#c2cce0', tn: '#8a9bc0', accent: '#3e6bd6', hot: '#e8b65a', live: '#e4263c', boton: 'linear-gradient(135deg,#3e6bd6,#2748a0)', onBoton: '#fff', inputBg: 'rgba(255,255,255,.05)', inputBd: 'rgba(150,172,228,.25)', balon: ['#9fd4fb', '#4f8fd0', '#1d4a80'], nombre: 'Cancha de noche' },
+  dorado: { esClaro: false, bg: '#141009', glow1: 'rgba(232,182,79,.20)', glow2: 'rgba(180,30,47,.12)', veil: 'linear-gradient(180deg, rgba(20,16,9,.84), rgba(14,11,6,.95))', surf: 'rgba(255,240,210,.06)', surf2: 'rgba(255,240,210,.10)', bd: 'rgba(232,182,79,.22)', bd2: 'rgba(232,182,79,.40)', tx: '#f6efe1', tx2: '#dccdb0', tn: '#a08e6f', accent: '#e8b65a', hot: '#f0c674', live: '#e4263c', boton: 'linear-gradient(135deg,#f0c674,#caa24a)', onBoton: '#211705', inputBg: 'rgba(255,240,210,.05)', inputBd: 'rgba(232,182,79,.30)', balon: ['#fbe08a', '#d18f33', '#9a6420'], nombre: 'Dorado' },
+  claro: { esClaro: true, bg: '#eef2fa', glow1: 'rgba(27,58,140,.10)', glow2: 'rgba(206,17,38,.07)', veil: 'linear-gradient(180deg, rgba(238,242,250,.84), rgba(233,238,248,.96))', surf: '#ffffff', surf2: '#f5f8fd', bd: '#e5eaf4', bd2: '#d3dcec', tx: '#13224a', tx2: '#46557a', tn: '#8b97b2', accent: '#1b3a8c', hot: '#1b3a8c', live: '#ce1126', boton: 'linear-gradient(135deg,#1b3a8c,#2a4fa8)', onBoton: '#fff', inputBg: '#ffffff', inputBd: '#d3dcec', balon: ['#2a4fa8', '#1b3a8c', '#16224a'], nombre: 'Cancha de día' },
+  larimar: { esClaro: false, bg: '#04181f', glow1: 'rgba(63,193,201,.22)', glow2: 'rgba(86,214,221,.12)', veil: 'linear-gradient(180deg, rgba(4,24,31,.84), rgba(3,18,26,.95))', surf: 'rgba(200,250,255,.06)', surf2: 'rgba(200,250,255,.10)', bd: 'rgba(63,193,201,.22)', bd2: 'rgba(63,193,201,.42)', tx: '#e8fbff', tx2: '#b9e6ec', tn: '#79b4bd', accent: '#3fc1c9', hot: '#56d6dd', live: '#ff5a6e', boton: 'linear-gradient(135deg,#56d6dd,#2ba6ae)', onBoton: '#04222a', inputBg: 'rgba(200,250,255,.05)', inputBd: 'rgba(63,193,201,.30)', balon: ['#8fd4e8', '#3fc1c9', '#1a6a8a'], nombre: 'Larimar' },
+}
+const ORDEN_TEMAS = ['azul', 'dorado', 'claro', 'larimar']
+function leerTema() {
+  try { const v = localStorage.getItem('mc_tema'); if (TEMAS[v]) return v } catch (e) {}
+  return 'azul'
 }
 
 function Balon({ size = 64, cols }) {
@@ -58,22 +39,13 @@ function Balon({ size = 64, cols }) {
 }
 
 export default function PantallaLogin({ onListo, onIrRegistro, onVolver }) {
-  const [tema, setTema] = useState(() => {
-    const validos = ['dorado', 'azul', 'claro', 'larimar']
-    if (typeof window !== 'undefined') {
-      const g = localStorage.getItem('mc_tema')
-      return validos.includes(g) ? g : 'dorado'
-    }
-    return 'dorado'
-  })
-  const T = TEMAS[tema] || TEMAS.dorado
-  const ORO = { background: T.texto, WebkitBackgroundClip: 'text', backgroundClip: 'text', WebkitTextFillColor: 'transparent' }
-  const C = { texto: T.textoBody, tenue: T.tenue, font: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }
+  const [tema, setTema] = useState(leerTema)
+  const T = TEMAS[tema] || TEMAS.azul
+  const C = { texto: T.tx2, tenue: T.tn, font: FUENTE }
 
   const cambiarTema = () => {
-    const orden = ['dorado', 'azul', 'claro', 'larimar']
-    const i = orden.indexOf(tema)
-    const nuevo = orden[(i + 1) % orden.length]
+    const i = ORDEN_TEMAS.indexOf(tema)
+    const nuevo = ORDEN_TEMAS[(i + 1) % ORDEN_TEMAS.length]
     setTema(nuevo)
     try { localStorage.setItem('mc_tema', nuevo) } catch (e) {}
   }
@@ -84,7 +56,6 @@ export default function PantallaLogin({ onListo, onIrRegistro, onVolver }) {
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState('')
 
-  // ===== CANDADO OFICIAL: congela el fondo para que no se mueva con el teclado =====
   useEffect(() => {
     const scrollY = window.scrollY
     document.body.style.position = 'fixed'
@@ -120,56 +91,53 @@ export default function PantallaLogin({ onListo, onIrRegistro, onVolver }) {
     }
   }
 
-  const inputStyle = {
-    width: '100%', background: T.inputBg, border: `1px solid ${T.inputBorde}`,
-    borderRadius: 12, padding: '13px 14px', color: T.textoFuerte, fontSize: 15, outline: 'none', fontFamily: C.font, boxSizing: 'border-box',
-  }
-  const label = { fontSize: 12, color: C.tenue, fontWeight: 600, marginBottom: 6, display: 'block' }
+  const inputStyle = { width: '100%', background: T.inputBg, border: `1px solid ${T.inputBd}`, borderRadius: 12, padding: '13px 14px', color: T.tx, fontSize: 15, outline: 'none', fontFamily: FUENTE, boxSizing: 'border-box' }
+  const label = { fontSize: 11.5, color: C.tenue, fontWeight: 700, marginBottom: 6, display: 'block', letterSpacing: 0.2, textTransform: 'uppercase' }
 
   return (
-    <div style={{ height: '100dvh', overflowY: 'auto', WebkitOverflowScrolling: 'touch', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '28px 18px', fontFamily: C.font, background: T.fondo }}>
-      <div style={{ position: 'fixed', inset: 0, zIndex: 0, backgroundImage: `url(${fondoCancha})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
-      <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: T.veloGrad }} />
-      <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: `radial-gradient(ellipse 60% 45% at 50% 40%, ${T.glow}, transparent 70%)` }} />
+    <div style={{ height: '100dvh', overflowY: 'auto', WebkitOverflowScrolling: 'touch', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '28px 18px', fontFamily: FUENTE, background: T.bg }}>
+      <div style={{ position: 'fixed', inset: 0, zIndex: 0, backgroundImage: `url(${fondoCancha})`, backgroundSize: 'cover', backgroundPosition: 'center', opacity: T.esClaro ? 0.25 : 0.5 }} />
+      <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: T.veil }} />
+      <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: `radial-gradient(360px 300px at 12% 8%, ${T.glow1}, transparent 60%), radial-gradient(380px 320px at 92% 92%, ${T.glow2}, transparent 60%)` }} />
 
-      {/* selector de tema flotante */}
-      <button onClick={cambiarTema} title={`Tema: ${T.nombre}`} style={{ position: 'fixed', top: 18, right: 18, zIndex: 5, display: 'flex', alignItems: 'center', gap: 7, background: T.esClaro ? 'rgba(255,255,255,.6)' : 'rgba(20,18,16,.7)', border: `1px solid ${T.acento}55`, color: T.acento, fontSize: 11.5, fontWeight: 700, padding: '7px 11px', borderRadius: 10, cursor: 'pointer', backdropFilter: 'blur(8px)' }}>
-        <span style={{ width: 12, height: 12, borderRadius: '50%', background: T.boton, display: 'inline-block' }} />{T.nombre}
+      <button onClick={cambiarTema} title={`Tema: ${T.nombre}`} style={{ position: 'fixed', top: 'calc(env(safe-area-inset-top) + 14px)', right: 16, zIndex: 5, display: 'flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 34, background: T.surf, border: `1px solid ${T.bd}`, borderRadius: 10, cursor: 'pointer', backdropFilter: 'blur(8px)' }}>
+        <span style={{ width: 13, height: 13, borderRadius: '50%', background: T.boton, display: 'inline-block', boxShadow: `0 0 8px ${T.accent}66` }} />
       </button>
 
       <div style={{ position: 'relative', zIndex: 1, width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 14 }}><Balon size={58} cols={T.balon} /></div>
-        <h1 style={{ fontSize: 25, fontWeight: 800, color: T.textoFuerte, margin: '0 0 6px', textAlign: 'center' }}>Iniciar sesión</h1>
-        <p style={{ fontSize: 14, color: C.tenue, margin: '0 0 24px', textAlign: 'center' }}>Entra a tu cuenta de Media Cancha</p>
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}><Balon size={56} cols={T.balon} /></div>
+        <div style={{ fontFamily: DISP, fontStyle: 'italic', fontWeight: 700, fontSize: 26, letterSpacing: 0.3, lineHeight: 1, marginBottom: 16, textAlign: 'center' }}>
+          <span style={{ color: T.tx2 }}>MEDIA</span><span style={{ color: T.accent }}>CANCHA</span>
+        </div>
 
-        <div style={{ position: 'relative', borderRadius: 20, padding: 1.5, background: T.borde, width: '100%', maxWidth: 400 }}>
-          <div style={{ position: 'relative', borderRadius: 19, padding: 24, background: T.vidrio, backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)' }}>
-            {/* costura dorada credencial */}
-            <div style={{ position: 'absolute', inset: 8, borderRadius: 13, border: `1.5px dashed ${T.acento}33`, pointerEvents: 'none' }} />
-            <div style={{ position: 'relative' }}>
-              <div style={{ marginBottom: 14 }}><label style={label}>Correo</label><input style={inputStyle} type="email" value={correo} onChange={(e) => setCorreo(e.target.value)} placeholder="tucorreo@ejemplo.com" autoCapitalize="none" /></div>
-              <div style={{ marginBottom: 4 }}>
-                <label style={label}>Clave</label>
-                <div style={{ position: 'relative' }}>
-                  <input style={{ ...inputStyle, paddingRight: 70 }} type={verClave ? 'text' : 'password'} value={clave} onChange={(e) => setClave(e.target.value)} placeholder="••••••" onKeyDown={(e) => e.key === 'Enter' && entrar()} />
-                  <span onClick={() => setVerClave(!verClave)} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 12, fontWeight: 700, color: T.acento, cursor: 'pointer', userSelect: 'none' }}>{verClave ? 'Ocultar' : 'Ver'}</span>
-                </div>
+        <div style={{ position: 'relative', borderRadius: 22, width: '100%', maxWidth: 400, background: T.surf, border: `1px solid ${T.bd2}`, overflow: 'hidden', backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)', boxShadow: T.esClaro ? '0 18px 44px rgba(27,58,140,.16)' : '0 18px 46px rgba(4,10,28,.5)' }}>
+          <div style={{ display: 'flex', height: 4 }}><span style={{ flex: 1, background: TRI_AZUL }} /><span style={{ flex: 1, background: '#fff' }} /><span style={{ flex: 1, background: TRI_ROJO }} /></div>
+          <div style={{ padding: 24 }}>
+            <h1 style={{ fontSize: 22, fontWeight: 800, color: T.tx, margin: '0 0 4px', textAlign: 'center' }}>Iniciar sesión</h1>
+            <p style={{ fontSize: 13.5, color: C.tenue, margin: '0 0 22px', textAlign: 'center' }}>Entra a tu cuenta</p>
+
+            <div style={{ marginBottom: 14 }}><label style={label}>Correo</label><input style={inputStyle} type="email" value={correo} onChange={(e) => setCorreo(e.target.value)} placeholder="tucorreo@ejemplo.com" autoCapitalize="none" /></div>
+            <div style={{ marginBottom: 4 }}>
+              <label style={label}>Clave</label>
+              <div style={{ position: 'relative' }}>
+                <input style={{ ...inputStyle, paddingRight: 70 }} type={verClave ? 'text' : 'password'} value={clave} onChange={(e) => setClave(e.target.value)} placeholder="••••••" onKeyDown={(e) => e.key === 'Enter' && entrar()} />
+                <span onClick={() => setVerClave(!verClave)} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 12, fontWeight: 700, color: T.accent, cursor: 'pointer', userSelect: 'none' }}>{verClave ? 'Ocultar' : 'Ver'}</span>
               </div>
+            </div>
 
-              {error && <div style={{ marginTop: 14, padding: '10px 13px', borderRadius: 10, background: 'rgba(226,75,74,.14)', border: '1px solid rgba(226,75,74,.3)', color: '#e0563f', fontSize: 13 }}>{error}</div>}
+            {error && <div style={{ marginTop: 14, padding: '10px 13px', borderRadius: 10, background: 'rgba(228,38,60,.14)', border: '1px solid rgba(228,38,60,.32)', color: '#ff8593', fontSize: 13 }}>{error}</div>}
 
-              <button onClick={entrar} disabled={cargando} style={{ width: '100%', marginTop: 18, border: 'none', borderRadius: 13, padding: 15, background: T.boton, color: '#1a1205', fontWeight: 800, fontSize: 16, cursor: cargando ? 'wait' : 'pointer', opacity: cargando ? 0.7 : 1 }}>
-                {cargando ? 'Entrando...' : 'Iniciar sesión'}
-              </button>
+            <button onClick={entrar} disabled={cargando} style={{ width: '100%', marginTop: 18, border: 'none', borderRadius: 13, padding: 15, background: T.boton, color: T.onBoton, fontWeight: 800, fontSize: 16, cursor: cargando ? 'wait' : 'pointer', opacity: cargando ? 0.7 : 1 }}>
+              {cargando ? 'Entrando...' : 'Iniciar sesión'}
+            </button>
 
-              <div style={{ marginTop: 16, textAlign: 'center', fontSize: 13, color: C.tenue }}>
-                ¿No tienes cuenta? <span onClick={() => onIrRegistro && onIrRegistro()} style={{ color: T.acento, fontWeight: 600, cursor: 'pointer' }}>Regístrate gratis</span>
-              </div>
+            <div style={{ marginTop: 16, textAlign: 'center', fontSize: 13, color: C.tenue }}>
+              ¿No tienes cuenta? <span onClick={() => onIrRegistro && onIrRegistro()} style={{ color: T.accent, fontWeight: 700, cursor: 'pointer' }}>Regístrate gratis</span>
             </div>
           </div>
         </div>
 
-        {onVolver && <div style={{ marginTop: 18 }}><span onClick={onVolver} style={{ color: C.tenue, fontSize: 13, cursor: 'pointer' }}>← Volver al inicio</span></div>}
+        {onVolver && <div style={{ marginTop: 18 }}><span onClick={onVolver} style={{ color: C.tenue, fontSize: 13, cursor: 'pointer' }}>‹ Volver al inicio</span></div>}
       </div>
     </div>
   )

@@ -3,24 +3,31 @@ import { supabase } from '../supabaseClient'
 import { miUsuarioId, alternarSeguir, idsQueSigo } from '../social'
 import fondoCancha from '../assets/fondo-cancha.png'
 
+// ============================================================
+//  IDENTIDAD MEDIA CANCHA (rediseño) — usa la misma clave 'mc_tema'
+//  y los mismos nombres de tema de la app (dorado/azul/claro/larimar)
+//  para no chocar con las pantallas que todavía no se han migrado.
+//  Aquí "azul" = el navy premium "Cancha de noche".
+// ============================================================
+const FUENTE = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+const DISP = '"Arial Narrow","Roboto Condensed","Helvetica Neue",Impact,sans-serif'
+const TRI_AZUL = '#1b3a8c', TRI_ROJO = '#ce1126'
+
 const TEMAS = {
-  dorado: { esClaro: false, acento: '#e8b65a', fondo: '#08090c', textoFuerte: '#f4f7f9', textoBody: '#eef3f6', tenue: '#9aa7b2', subTexto: '#c3ccd4', boton: 'linear-gradient(150deg, #f3cf63, #c8842e)', avatar: 'linear-gradient(150deg, #e0b057, #9a6420)', avatarTexto: '#241a07', tarjetaBg: 'rgba(20,22,26,.72)', tarjetaBorde: 'rgba(255,255,255,.08)', inputBg: 'rgba(12,14,18,0.7)', glow: 'rgba(190,135,55,0.18)', navDorada: 'linear-gradient(180deg,#eab64f,#c8842e 55%,#9c6518)', veloGrad: 'linear-gradient(180deg, rgba(8,9,12,0.84), rgba(8,9,12,0.92))' },
-  azul: { esClaro: false, acento: '#6fb0ec', fondo: '#08090c', textoFuerte: '#f4f7f9', textoBody: '#eef3f6', tenue: '#9aa7b2', subTexto: '#c3ccd4', boton: 'linear-gradient(150deg, #6fb0ec, #2f6fc8)', avatar: 'linear-gradient(150deg, #5aa0e0, #1d4a80)', avatarTexto: '#08151f', tarjetaBg: 'rgba(20,22,26,.72)', tarjetaBorde: 'rgba(255,255,255,.08)', inputBg: 'rgba(12,14,18,0.7)', glow: 'rgba(55,120,190,0.2)', navDorada: 'linear-gradient(180deg,#eab64f,#c8842e 55%,#9c6518)', veloGrad: 'linear-gradient(180deg, rgba(8,9,12,0.84), rgba(8,9,12,0.92))' },
-  claro: { esClaro: true, acento: '#b07a26', fondo: '#e6dcc8', textoFuerte: '#2a2014', textoBody: '#3a2f20', tenue: '#7a6e58', subTexto: '#5b5040', boton: 'linear-gradient(150deg, #e7c069, #b07a26)', avatar: 'linear-gradient(150deg, #e7c069, #a9741f)', avatarTexto: '#3a2806', tarjetaBg: '#fff', tarjetaBorde: '#e0e3e8', inputBg: '#fff', glow: 'rgba(190,135,55,0.10)', navDorada: 'linear-gradient(180deg,#eab64f,#c8842e 55%,#9c6518)', veloGrad: 'linear-gradient(180deg, rgba(235,228,212,0.86), rgba(228,220,200,0.92))' },
-  larimar: { esClaro: true, acento: '#2a8fb8', fondo: '#d6e7e8', textoFuerte: '#1c2624', textoBody: '#2c3a3a', tenue: '#5f7375', subTexto: '#48595a', boton: 'linear-gradient(150deg, #4aafc8, #2a8fb8)', avatar: 'linear-gradient(150deg, #4aafc8, #1a6a8a)', avatarTexto: '#04121f', tarjetaBg: '#fff', tarjetaBorde: '#cfe0e2', inputBg: '#fff', glow: 'rgba(42,143,184,0.12)', navDorada: 'linear-gradient(180deg,#6ac0d8,#2a8fb8 55%,#1a6a8a)', veloGrad: 'linear-gradient(180deg, rgba(214,231,232,0.86), rgba(214,231,232,0.92))' },
+  azul: { esClaro: false, bg: '#070f26', glow1: 'rgba(62,107,214,.22)', glow2: 'rgba(228,38,60,.14)', veil: 'linear-gradient(180deg, rgba(7,13,29,.82), rgba(5,10,24,.95))', surf: 'rgba(255,255,255,.06)', surf2: 'rgba(255,255,255,.09)', bd: 'rgba(150,172,228,.18)', bd2: 'rgba(150,172,228,.32)', tx: '#eef3fc', tx2: '#c2cce0', tn: '#8a9bc0', accent: '#3e6bd6', hot: '#e8b65a', live: '#e4263c', boton: 'linear-gradient(135deg,#3e6bd6,#2748a0)', onBoton: '#fff', inputBg: 'rgba(255,255,255,.05)', inputBd: 'rgba(150,172,228,.25)', balon: ['#9fd4fb', '#4f8fd0', '#1d4a80'], nombre: 'Cancha de noche' },
+  dorado: { esClaro: false, bg: '#141009', glow1: 'rgba(232,182,79,.20)', glow2: 'rgba(180,30,47,.12)', veil: 'linear-gradient(180deg, rgba(20,16,9,.84), rgba(14,11,6,.95))', surf: 'rgba(255,240,210,.06)', surf2: 'rgba(255,240,210,.10)', bd: 'rgba(232,182,79,.22)', bd2: 'rgba(232,182,79,.40)', tx: '#f6efe1', tx2: '#dccdb0', tn: '#a08e6f', accent: '#e8b65a', hot: '#f0c674', live: '#e4263c', boton: 'linear-gradient(135deg,#f0c674,#caa24a)', onBoton: '#211705', inputBg: 'rgba(255,240,210,.05)', inputBd: 'rgba(232,182,79,.30)', balon: ['#fbe08a', '#d18f33', '#9a6420'], nombre: 'Dorado' },
+  claro: { esClaro: true, bg: '#eef2fa', glow1: 'rgba(27,58,140,.10)', glow2: 'rgba(206,17,38,.07)', veil: 'linear-gradient(180deg, rgba(238,242,250,.84), rgba(233,238,248,.96))', surf: '#ffffff', surf2: '#f5f8fd', bd: '#e5eaf4', bd2: '#d3dcec', tx: '#13224a', tx2: '#46557a', tn: '#8b97b2', accent: '#1b3a8c', hot: '#1b3a8c', live: '#ce1126', boton: 'linear-gradient(135deg,#1b3a8c,#2a4fa8)', onBoton: '#fff', inputBg: '#ffffff', inputBd: '#d3dcec', balon: ['#2a4fa8', '#1b3a8c', '#16224a'], nombre: 'Cancha de día' },
+  larimar: { esClaro: false, bg: '#04181f', glow1: 'rgba(63,193,201,.22)', glow2: 'rgba(86,214,221,.12)', veil: 'linear-gradient(180deg, rgba(4,24,31,.84), rgba(3,18,26,.95))', surf: 'rgba(200,250,255,.06)', surf2: 'rgba(200,250,255,.10)', bd: 'rgba(63,193,201,.22)', bd2: 'rgba(63,193,201,.42)', tx: '#e8fbff', tx2: '#b9e6ec', tn: '#79b4bd', accent: '#3fc1c9', hot: '#56d6dd', live: '#ff5a6e', boton: 'linear-gradient(135deg,#56d6dd,#2ba6ae)', onBoton: '#04222a', inputBg: 'rgba(200,250,255,.05)', inputBd: 'rgba(63,193,201,.30)', balon: ['#8fd4e8', '#3fc1c9', '#1a6a8a'], nombre: 'Larimar' },
+}
+const ORDEN_TEMAS = ['azul', 'dorado', 'claro', 'larimar']
+function leerTema() {
+  try { const v = localStorage.getItem('mc_tema'); if (TEMAS[v]) return v } catch (e) {}
+  return 'azul'
 }
 
 export default function PantallaBuscar({ onVolver, onVerPerfil }) {
-  const [tema, setTema] = useState(() => {
-    const validos = ['dorado', 'azul', 'claro', 'larimar']
-    if (typeof window !== 'undefined') {
-      const g = localStorage.getItem('mc_tema')
-      return validos.includes(g) ? g : 'dorado'
-    }
-    return 'dorado'
-  })
-  const T = TEMAS[tema] || TEMAS.dorado
-  const font = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+  const [tema] = useState(leerTema)
+  const T = TEMAS[tema] || TEMAS.azul
 
   const [q, setQ] = useState('')
   const [resultados, setResultados] = useState([])
@@ -48,7 +55,6 @@ export default function PantallaBuscar({ onVolver, onVerPerfil }) {
     const termino = q.trim()
     if (termino.length < 2) return
     setCargando(true)
-    // busca por nombre, apellido o código único (MC ID)
     const { data, error } = await supabase
       .from('perfiles')
       .select('id, nombre, apellido, codigo_unico, foto_url, municipio, provincia, posiciones')
@@ -75,17 +81,17 @@ export default function PantallaBuscar({ onVolver, onVerPerfil }) {
     const sigo = siguiendoIds.includes(p.id)
     const nombreCompleto = `${p.nombre || ''}${p.apellido ? ' ' + p.apellido : ''}`.trim() || 'Jugador'
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: T.tarjetaBg, border: `1px solid ${T.tarjetaBorde}`, borderRadius: 14, marginBottom: 10 }}>
-        <div onClick={() => onVerPerfil && onVerPerfil(p.id)} style={{ width: 48, height: 48, borderRadius: '50%', flexShrink: 0, background: p.foto_url ? `url(${p.foto_url}) center/cover` : T.avatar, display: 'grid', placeItems: 'center', fontSize: 18, fontWeight: 800, color: T.avatarTexto, cursor: 'pointer', position: 'relative', overflow: 'hidden' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: T.surf, border: `1px solid ${T.bd}`, borderRadius: 16, marginBottom: 10 }}>
+        <div onClick={() => onVerPerfil && onVerPerfil(p.id)} style={{ width: 48, height: 48, borderRadius: '50%', flexShrink: 0, background: p.foto_url ? `url(${p.foto_url}) center/cover` : T.boton, display: 'grid', placeItems: 'center', fontSize: 18, fontWeight: 800, color: T.onBoton, cursor: 'pointer', position: 'relative', overflow: 'hidden', border: `2px solid ${T.bd2}` }}>
           {!p.foto_url && nombreCompleto.slice(0, 1).toUpperCase()}
         </div>
         <div onClick={() => onVerPerfil && onVerPerfil(p.id)} style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}>
-          <div style={{ fontSize: 14.5, fontWeight: 700, color: T.textoFuerte, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nombreCompleto}</div>
-          <div style={{ fontSize: 12, color: T.tenue, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <div style={{ fontSize: 14.5, fontWeight: 700, color: T.tx, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nombreCompleto}</div>
+          <div style={{ fontSize: 12, color: T.tn, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {p.municipio ? p.municipio : 'Jugador'}{p.provincia && p.municipio !== p.provincia ? `, ${p.provincia}` : ''}
           </div>
         </div>
-        <button onClick={() => onSeguir(p)} disabled={procesando === p.id} style={{ flexShrink: 0, border: sigo ? `1px solid ${T.tarjetaBorde}` : 'none', borderRadius: 20, padding: '8px 16px', fontSize: 12.5, fontWeight: 800, cursor: 'pointer', background: sigo ? 'transparent' : T.boton, color: sigo ? T.tenue : '#1a1205', opacity: procesando === p.id ? 0.6 : 1 }}>
+        <button onClick={() => onSeguir(p)} disabled={procesando === p.id} style={{ flexShrink: 0, border: sigo ? `1px solid ${T.bd2}` : 'none', borderRadius: 20, padding: '8px 16px', fontSize: 12.5, fontWeight: 800, cursor: 'pointer', background: sigo ? 'transparent' : T.boton, color: sigo ? T.tn : T.onBoton, opacity: procesando === p.id ? 0.6 : 1 }}>
           {sigo ? 'Siguiendo' : '+ Seguir'}
         </button>
       </div>
@@ -93,20 +99,20 @@ export default function PantallaBuscar({ onVolver, onVerPerfil }) {
   }
 
   return (
-    <div style={{ minHeight: '100vh', fontFamily: font, color: T.textoBody, position: 'relative', background: T.fondo }}>
-      <div style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none', backgroundImage: `url(${fondoCancha})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
-      <div style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none', background: T.veloGrad }} />
-      <div style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none', background: `radial-gradient(ellipse 55% 40% at 50% 15%, ${T.glow}, transparent 70%)` }} />
+    <div style={{ minHeight: '100vh', fontFamily: FUENTE, color: T.tx2, position: 'relative', background: T.bg }}>
+      <div style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none', backgroundImage: `url(${fondoCancha})`, backgroundSize: 'cover', backgroundPosition: 'center', opacity: T.esClaro ? 0.18 : 0.4 }} />
+      <div style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none', background: T.veil }} />
+      <div style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none', background: `radial-gradient(360px 280px at 50% 6%, ${T.glow1}, transparent 65%)` }} />
 
       <div style={{ position: 'relative', zIndex: 1, maxWidth: 620, margin: '0 auto', padding: '16px 16px 50px' }}>
         {/* nav */}
-        <div style={{ background: T.navDorada, borderRadius: 14, padding: '11px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, boxShadow: '0 6px 18px rgba(156,101,24,.3)' }}>
-          <span onClick={() => onVolver && onVolver()} style={{ color: '#2a1c08', fontWeight: 800, fontSize: 13, cursor: 'pointer' }}>← Volver</span>
-          <span style={{ color: '#2a1c08', fontWeight: 800, fontSize: 14 }}>🔍 Buscar personas</span>
-          <span style={{ width: 30 }} />
+        <div style={{ background: T.surf, border: `1px solid ${T.bd}`, borderRadius: 16, padding: '11px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, position: 'relative', overflow: 'hidden', backdropFilter: 'blur(10px)' }}>
+          <span style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, display: 'flex' }}><span style={{ flex: 1, background: TRI_AZUL }} /><span style={{ flex: 1, background: '#fff' }} /><span style={{ flex: 1, background: TRI_ROJO }} /></span>
+          <span onClick={() => onVolver && onVolver()} style={{ color: T.tx, fontWeight: 800, fontSize: 19, cursor: 'pointer', lineHeight: 1 }}>‹</span>
+          <span style={{ color: T.tx, fontWeight: 800, fontSize: 14, fontFamily: DISP, fontStyle: 'italic', textTransform: 'uppercase', letterSpacing: 0.5 }}>Buscar personas</span>
+          <span style={{ width: 16 }} />
         </div>
 
-        {/* buscador */}
         <input
           type="text"
           value={q}
@@ -114,18 +120,18 @@ export default function PantallaBuscar({ onVolver, onVerPerfil }) {
           placeholder="Nombre, apellido o MC ID…"
           autoComplete="off"
           autoCorrect="off"
-          style={{ position: 'relative', zIndex: 2, width: '100%', boxSizing: 'border-box', background: T.inputBg, border: `1px solid ${T.acento}55`, borderRadius: 12, padding: '13px 15px', color: T.textoFuerte, fontSize: 16, outline: 'none', marginBottom: 18, WebkitAppearance: 'none' }}
+          style={{ position: 'relative', zIndex: 2, width: '100%', boxSizing: 'border-box', background: T.inputBg, border: `1px solid ${T.inputBd}`, borderRadius: 12, padding: '13px 15px', color: T.tx, fontSize: 16, outline: 'none', marginBottom: 18, WebkitAppearance: 'none' }}
         />
 
         {q.trim().length < 2 ? (
-          <div style={{ textAlign: 'center', padding: '50px 20px', color: T.tenue }}>
+          <div style={{ textAlign: 'center', padding: '50px 20px', color: T.tn }}>
             <div style={{ fontSize: 38, marginBottom: 12 }}>🔍</div>
             <div style={{ fontSize: 14, lineHeight: 1.5 }}>Escribe el nombre de un jugador o su MC ID para encontrarlo y seguirlo.</div>
           </div>
         ) : cargando ? (
-          <div style={{ textAlign: 'center', padding: '30px', color: T.tenue, fontSize: 14 }}>Buscando…</div>
+          <div style={{ textAlign: 'center', padding: '30px', color: T.tn, fontSize: 14 }}>Buscando…</div>
         ) : resultados.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '30px', color: T.tenue, fontSize: 14 }}>No se encontró a nadie con "{q.trim()}".</div>
+          <div style={{ textAlign: 'center', padding: '30px', color: T.tn, fontSize: 14 }}>No se encontró a nadie con "{q.trim()}".</div>
         ) : (
           resultados.map((p) => <TarjetaPersona key={p.id} p={p} />)
         )}

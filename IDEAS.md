@@ -143,19 +143,52 @@ Cada vez que terminemos un archivo/cambio que ya esté en la app, Jarvis le da a
 - Para que Jarvis lea/edite archivos del repo: poner el repo **público** un momento → Jarvis baja con `curl` → edita → devuelve → Vladimir hace push → vuelve a **privado**.
 - Jarvis valida con esbuild antes de entregar. Entrega archivos completos (nunca parches parciales): Cmd+A → Cmd+V → Cmd+S en VS Code.
 
+### 1.15 COBERTURA DE PANTALLA COMPLETA (safe-area) — el candado del shell rígido
+**Qué resuelve:** el espacio negro arriba (notch) o abajo (home indicator) que no toma el color del tema, y el efecto **"columpio"** (la app baila al navegar y solo se arregla cerrando/reabriendo). **Causa raíz:** la capa nativa de iOS calculaba los márgenes por su cuenta y peleaba con el CSS. **La cura es quitarle el control al nativo y dárselo TODO al CSS.** Son cuatro piezas que van JUNTAS (si pones una sola, se rompe):
+
+**1) Config nativa — `capacitor.config.json`:** `ios.contentInset: "never"` (NUNCA `"always"`). Con `"always"` iOS añade márgenes nativos que pelean con `viewport-fit=cover` y causan el columpio. Con `"never"`, el WebView usa el 100% de la pantalla física y el CSS manda.
+
+**2) Barra de estado — plugin `@capacitor/status-bar`:** al usar `"never"` hay que decirle al nativo que dibuje el HTML POR DEBAJO del notch. En `App.jsx`, un `useEffect([])` de arranque: `StatusBar.setOverlaysWebView({ overlay: true })` + `StatusBar.setStyle({ style: tema==='dia' ? Style.Dark : Style.Light })` (texto claro en temas oscuros, oscuro en el tema día). Envolver en try/catch (en la web el plugin no existe).
+
+**3) Shell rígido global — `index.css`:** el `body` se clava al borde y NO se desplaza nunca:
+```css
+html, body { position: fixed; top:0; left:0; right:0; bottom:0;
+  width:100%; height:100dvh; min-height:100dvh; overflow:hidden; background:#04060c; }
+#root { width:100%; height:100%; display:flex; flex-direction:column;
+  overflow-y:auto; position:relative; }   /* SIN max-width: rompería la vista de computadora */
+```
+SIEMPRE `100dvh`, **NUNCA `100vh`** (en iPhone `100vh` se queda corto y asoma el negro). El `#root` queda en `overflow-y:auto` mientras existan pantallas viejas (pa' que deslicen y no se corten); cuando TODAS usen la plantilla, se aprieta a `overflow:hidden`.
+
+**4) Cada pantalla = la plantilla (1.3) con el safe-area DENTRO:** contenedor `inset:0` flex column overflow hidden; **header con `paddingTop: env(safe-area-inset-top)` + `flexShrink:0`** (absorbe el notch); **área de contenido `flex:1; overflowY:'auto'; WebkitOverflowScrolling:'touch'`** = el ÚNICO lugar con scroll; **barra inferior con `paddingBottom: env(safe-area-inset-bottom)` + `flexShrink:0`** (absorbe el home indicator).
+
+**Refuerzo en `App.jsx`:** como navegamos por estado `vista` (no React Router), un `useEffect([vista])` resetea el scroll en cada cambio: `window.scrollTo(0,0)` + `documentElement/body/#root .scrollTop = 0` + `requestAnimationFrame`.
+
+**LA REGLA DE ORO de cobertura:** el scroll vive SOLO dentro del área de contenido, NUNCA en el body/página. Si una pantalla deja scrollear el body, contamina a las demás.
+
+**Dato nativo:** el appId real es **`com.andamio.mediacancha`** — si una IA externa te da config, verifica que no lo cambie (a Gemini se le escapó una vez).
+
+### 1.16 Diseño nuevo de la pantalla pública (red social) — pase visual en curso
+Look de red social deportiva moderna, columna única centrada (máx ~480px, centrada en pantallas grandes — NO va en `#root`, cada pantalla centra su propio contenido). Piezas: header (logo + tricolor, buscador, botón de tema discreto, mensajes, menú); fila de historias **"En la cancha"** (bolitas estilo stories); tarjeta **Jugador de la Semana** (depende del rating P-004 → datos de MUESTRA por ahora); feed (resultados con logos vía `TarjetaResultado` **SE QUEDAN**, fotos, texto); **barra inferior:** Inicio · Ligas · **Anotar** (centro) · Ranking · Perfil.
+- **Botón "+" rojo flotante = PUBLICAR** (el composer ya NO va en línea en el feed; es discreto, se abre con el "+").
+- **"Anotar" central = marcar juegos/torneos** (son cosas DISTINTAS al "+").
+- **Temas (5)** — actualiza la regla 1.7: **noche** (azul dominicano, default) · **día** (claro) · **dorado** · **larimar** (azul-verde oscuro) · **negro**. Selector discreto (botón en el header que los cicla). En `localStorage('mc_tema')`.
+
 ---
 
 ## 2. LO QUE NO FUNCIONA — no repetir estos errores
 
-### 2.1 Pantallas sin el template oficial se contaminan entre sí
-**Síntoma:** al navegar y volver atrás, una pantalla "ensucia" el layout de otra.
-**Causa:** no usar el template oficial de la sección 1.3.
-**Regla:** TODAS las pantallas usan el template oficial. Sin excepción.
+### 2.1 Pantallas sin el template oficial se contaminan entre sí (efecto "columpio")
+**Síntoma:** al navegar y volver atrás, una pantalla "ensucia" el layout de otra; la app baila y solo se arregla cerrando/reabriendo.
+**Causa raíz (descubierta):** la pantalla vieja usaba scroll de página / `100vh` y activaba el rebote elástico de iOS; al volver, el WebView quedaba desfasado. Lo AGRAVABA el `contentInset: "always"` de la config nativa (márgenes nativos peleando con el CSS).
+**Cura:** el candado del shell rígido completo — ver **regla 1.15** (`contentInset:"never"` + status-bar overlay + body fijo + cada pantalla con su plantilla y scroll interno). Un solo candado a medias (solo `position:fixed` en el body, con `contentInset:"always"` todavía puesto) ROMPE el notch — hay que poner las cuatro piezas juntas.
+**Regla:** TODAS las pantallas usan el template oficial (1.3) con safe-area interno (1.15). Sin excepción.
+**Estado:** base `RESUELTA` (1.15 aplicada). Falta pasar pantalla por pantalla las viejas a la plantilla.
 
-### 2.2 Espacio negro debajo de la barra de luz (bottom nav)
-**Síntoma:** queda un espacio negro debajo de la barra inferior, por debajo de la "barra de luz".
-**Estado:** `PENDIENTE DE RESOLVER`
-**Pista:** revisar el layering del fondo vs. la bottom nav y el `env(safe-area-inset-bottom)`.
+### 2.2 Espacio negro arriba (notch) y abajo (home indicator)
+**Síntoma:** banda negra que no toma el color del tema, arriba o abajo.
+**Causa raíz (descubierta):** `100vh` en `html/body` (se queda corto en iPhone) + `contentInset: "always"` empujando el WebView. Faltaba que el CSS tomara el control del safe-area.
+**Cura:** `100dvh` (NUNCA `100vh`) + el candado del shell rígido — ver **regla 1.15**.
+**Estado:** `RESUELTO` (victoria en equipo con Gemini: él dio el diagnóstico del `contentInset`; se ajustó el appId real, se quitó su `max-width:480` que rompía escritorio, y se dejó el `#root` en `overflow-y:auto` pa' la transición).
 
 ### 2.3 Conflicto del botón Publicar (zIndex)
 **Síntoma:** el botón Publicar queda tapado o no responde.
