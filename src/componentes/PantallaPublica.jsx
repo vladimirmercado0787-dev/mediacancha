@@ -1423,7 +1423,7 @@ export default function PantallaPublica({ onAccion, haySesion }) {
                 <span style={{ color: T.esClaro ? '#7a6e58' : '#dfe2e6' }}>MEDIA</span><span style={{ ...ORO_TEXTO }}>CANCHA</span>
               </div>
               <nav style={{ display: 'flex', gap: 4 }}>
-                {[{ id: 'inicio', txt: 'Inicio' }, { id: 'techado', txt: 'El Techado' }, { id: 'torneos', txt: 'Torneos' }, { id: 'rankings', txt: 'Rankings' }, { id: 'mapa', txt: 'Mapa' }].map((n) => {
+                {[{ id: 'inicio', txt: 'Inicio' }, { id: 'ligas', txt: 'Ligas' }, { id: 'techado', txt: 'El Techado' }, { id: 'torneos', txt: 'Torneos' }, { id: 'rankings', txt: 'Rankings' }, { id: 'mapa', txt: 'Mapa' }].map((n) => {
                   const on = n.id === 'inicio'
                   if (n.id === 'torneos') {
                     return (

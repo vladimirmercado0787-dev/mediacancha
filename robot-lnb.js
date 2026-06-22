@@ -1,12 +1,14 @@
 // =====================================================================
-//  ROBOT LNB · Media Cancha  (Fase 1 + Fase 4: jugadores)
+//  ROBOT LNB · Media Cancha  (Fase 1 + Fase 4 jugadores + Fase 5 box score)
 //  Jala la data de lnb.do (JSON limpio) y la mete en Supabase.
 //  Sólido: busca el buildId fresco cada vez, así nunca se rompe
 //  cuando la liga actualiza su sitio.
 //
-//  NUEVO EN FASE 4: hala el róster de cada equipo → TODOS los jugadores
-//  con sus estadísticas, a la tabla lnb_jugadores.
-//  (Primero corre el SQL lnb_jugadores.sql en Supabase.)
+//  FASE 4: róster de cada equipo → TODOS los jugadores (lnb_jugadores).
+//  FASE 5 (NUEVO): box score por jugador por partido (lnb_juego_jugadores).
+//     Ruta del detalle: /_next/data/${buildId}/partido/x/${id}.json
+//     Las líneas viven en match.teams[].players[].statistics
+//     (Primero corre el SQL lnb_juego_jugadores.sql en Supabase.)
 //
 //  CÓMO CORRERLO:
 //    1. En la terminal, pega tu service key y corre (todo en una línea):
@@ -173,7 +175,7 @@ async function main() {
     equipo_id: wp.team?.id ?? null, equipo_nombre: wp.team?.name ?? null,
   }] : [];
 
-  // ===== NUEVO FASE 4: JUGADORES (róster de cada equipo) =====
+  // ===== FASE 4: JUGADORES (róster de cada equipo) =====
   console.log('\nHalando los rósters de cada equipo (todos los jugadores)...');
   const jugMap = new Map();
   for (const t of teamMap.values()) {
@@ -207,6 +209,58 @@ async function main() {
   const jugadores = [...jugMap.values()];
   console.log(`Total de jugadores recogidos: ${jugadores.length}`);
 
+  // ===== FASE 5: BOX SCORE por jugador por partido =====
+  // Ruta descubierta: /_next/data/${buildId}/partido/x/${id}.json
+  // Las líneas viven en match.teams[].players[].statistics (mismos nombres que el róster).
+  console.log('\nHalando el box score de cada juego (minutos, %, líneas individuales)...');
+  const boxRows = [];
+  const STATUS_CON_STATS = new Set(['finished', 'playing', 'live', 'in_progress']);
+  const juegosConStats = juegos.filter(j => STATUS_CON_STATS.has(String(j.status)));
+  console.log(`  juegos a procesar: ${juegosConStats.length}`);
+  for (const j of juegosConStats) {
+    try {
+      const det = await getJson(`/_next/data/${buildId}/partido/x/${j.id}.json`);
+      const teams = (det.match && det.match.teams) || [];
+      let cuenta = 0;
+      for (const tm of teams) {
+        const players = tm.players || [];
+        for (const pl of players) {
+          if (!pl || pl.id == null) continue;
+          const s = pl.statistics || {};
+          boxRows.push({
+            juego_id: j.id,
+            jugador_id: pl.id,
+            equipo_id: tm.id ?? null,
+            minutes: s.minutes != null ? String(Math.round(Number(s.minutes))) : null,
+            points: s.points ?? null,
+            rebounds: s.rebounds ?? null,
+            assists: s.assists ?? null,
+            steals: s.steals ?? null,
+            blocks: s.blocks ?? null,
+            turnovers: s.turnovers ?? null,
+            personal_fouls: s.personal_fouls ?? null,
+            fg_made: s.field_goals_made ?? null,
+            fg_att: s.field_goals_attempted ?? null,
+            fg_pct: s.field_goals_percent ?? null,
+            three_made: s.three_points_made ?? null,
+            three_att: s.three_points_attempted ?? null,
+            three_pct: s.three_points_percent ?? null,
+            ft_made: s.free_throw_made ?? null,
+            ft_att: s.free_throw_attempted ?? null,
+            ft_pct: s.free_throw_percent ?? null,
+            efficiency: s.efficiency ?? null,
+          });
+          cuenta++;
+        }
+      }
+      console.log(`  · juego ${j.id}: ${cuenta} líneas`);
+    } catch (e) {
+      console.log(`  · juego ${j.id}: error (${e.message})`);
+    }
+    await new Promise(r => setTimeout(r, 120)); // cortesía con el servidor
+  }
+  console.log(`Total de líneas de box score: ${boxRows.length}`);
+
   // ----- SUBIR TODO (en orden por las llaves foráneas) -----
   console.log('\nSubiendo a Supabase...');
   await upsert('lnb_equipos', [...teamMap.values()], 'id');
@@ -216,6 +270,7 @@ async function main() {
   await upsert('lnb_lideres', lideres, 'temporada_id,categoria,rank');
   await upsert('lnb_juegos', juegos, 'id');
   await upsert('lnb_juego_equipos', juegoEquipos, 'juego_id,equipo_id');
+  await upsert('lnb_juego_jugadores', boxRows, 'juego_id,jugador_id');
   await upsert('lnb_noticias', noticias, 'id');
   await upsert('lnb_jugador_semana', jugadorSemana, 'id');
 

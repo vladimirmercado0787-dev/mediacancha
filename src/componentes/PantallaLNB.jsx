@@ -22,6 +22,30 @@ function soloDia(s) {
   if (!m) return ''
   return `${parseInt(m[3], 10)} ${MESES[parseInt(m[2], 10) - 1]}`
 }
+// Agrupación de juegos por día con encabezado de fecha legible.
+const DIAS_SEM = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
+const MESES_LARGO = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+function claveDia(s) {
+  const m = String(s || '').match(/(\d{4})-(\d{2})-(\d{2})/)
+  return m ? `${m[1]}-${m[2]}-${m[3]}` : ''
+}
+function fechaLarga(s) {
+  const m = String(s || '').match(/(\d{4})-(\d{2})-(\d{2})/)
+  if (!m) return 'Sin fecha'
+  const y = +m[1], mo = +m[2], d = +m[3]
+  const dia = DIAS_SEM[new Date(Date.UTC(y, mo - 1, d)).getUTCDay()]
+  return `${dia} ${d} de ${MESES_LARGO[mo - 1]} de ${y}`
+}
+// Toma una lista de juegos (ya ordenada) y la parte en bloques por día.
+function agruparPorDia(arr) {
+  const grupos = []; const idx = {}
+  arr.forEach((j) => {
+    const k = claveDia(j.date) || 'sin-fecha'
+    if (idx[k] == null) { idx[k] = grupos.length; grupos.push({ k, fecha: j.date, juegos: [] }) }
+    grupos[idx[k]].juegos.push(j)
+  })
+  return grupos
+}
 
 // ===== estado de un juego =====
 const tieneMarcador = (j) => j.local && j.local.total_score != null && (j.status === 'finished' || Number(j.local.total_score) > 0)
@@ -100,6 +124,7 @@ const TEMAS = {
 const ORDEN_TEMAS = ['dominicana', 'dorado', 'azul', 'claro', 'larimar']
 
 const CATS = [
+  { id: 'mcrating', txt: 'MC Rating' },
   { id: 'points', txt: 'Puntos' },
   { id: 'rebounds', txt: 'Rebotes' },
   { id: 'assists', txt: 'Asistencias' },
@@ -111,6 +136,7 @@ const CATS = [
 const TABS = [
   { id: 'juegos', txt: 'Juegos' },
   { id: 'tabla', txt: 'Tabla' },
+  { id: 'equipos', txt: 'Equipos' },
   { id: 'lideres', txt: 'Líderes' },
   { id: 'noticias', txt: 'Noticias' },
 ]
@@ -145,7 +171,7 @@ export default function PantallaLNB({ onVolver, onAccion }) {
   }, [])
 
   const [tab, setTab] = useState('juegos')
-  const [catSel, setCatSel] = useState('points')
+  const [catSel, setCatSel] = useState('mcrating')
   const [juegoSel, setJuegoSel] = useState(null)
   const [jugadorSel, setJugadorSel] = useState(null)
   const [noticiaSel, setNoticiaSel] = useState(null)
@@ -153,6 +179,8 @@ export default function PantallaLNB({ onVolver, onAccion }) {
   const [error, setError] = useState(null)
 
   const [temporada, setTemporada] = useState(null)
+  const [temporadas, setTemporadas] = useState([])
+  const [temporadaSel, setTemporadaSel] = useState(null)
   const [equipos, setEquipos] = useState({})
   const [standing, setStanding] = useState([])
   const [juegos, setJuegos] = useState([])
@@ -160,6 +188,9 @@ export default function PantallaLNB({ onVolver, onAccion }) {
   const [noticias, setNoticias] = useState([])
   const [jugadorSemana, setJugadorSemana] = useState(null)
   const [jugadores, setJugadores] = useState({})
+  const [tempStats, setTempStats] = useState([])
+  const [equipoSel, setEquipoSel] = useState(null)
+  const [juegoJugadores, setJuegoJugadores] = useState({})
 
   useEffect(() => {
     let vivo = true
@@ -169,28 +200,21 @@ export default function PantallaLNB({ onVolver, onAccion }) {
         const { data: temps, error: e1 } = await supabase
           .from('lnb_temporadas').select('*').order('year', { ascending: false })
         if (e1) throw e1
-        const actual = (temps || []).find((t) => t.current) || (temps || [])[0] || null
+        const lista = temps || []
+        const actual = lista.find((t) => t.current) || lista[0] || null
 
         const { data: eqs } = await supabase.from('lnb_equipos').select('*')
         const eMap = {}; (eqs || []).forEach((e) => { eMap[e.id] = e })
 
-        let st = [], jg = [], je = [], ld = []
-        if (actual) {
-          const r2 = await supabase.from('lnb_standing').select('*')
-            .eq('temporada_id', actual.id).order('position', { ascending: true })
-          st = r2.data || []
-          const r3 = await supabase.from('lnb_juegos').select('*')
-            .eq('temporada_id', actual.id).order('date', { ascending: false })
-          jg = r3.data || []
-          const ids = jg.map((j) => j.id)
-          if (ids.length) {
-            const r4 = await supabase.from('lnb_juego_equipos').select('*').in('juego_id', ids)
-            je = r4.data || []
-          }
-          const r5 = await supabase.from('lnb_lideres').select('*')
-            .eq('temporada_id', actual.id).order('rank', { ascending: true })
-          ld = r5.data || []
-        }
+        // TODAS las temporadas (para el selector de año)
+        const r2 = await supabase.from('lnb_standing').select('*').order('position', { ascending: true })
+        const st = r2.data || []
+        const r3 = await supabase.from('lnb_juegos').select('*').order('date', { ascending: false })
+        const jg = r3.data || []
+        const r4 = await supabase.from('lnb_juego_equipos').select('*')
+        const je = r4.data || []
+        const r5 = await supabase.from('lnb_lideres').select('*').order('rank', { ascending: true })
+        const ld = r5.data || []
         const r6 = await supabase.from('lnb_noticias').select('*')
           .order('created_at', { ascending: false }).limit(20)
         const nt = r6.data || []
@@ -198,17 +222,23 @@ export default function PantallaLNB({ onVolver, onAccion }) {
         const js = (r7.data || [])[0] || null
         const r8 = await supabase.from('lnb_jugadores').select('*')
         const jMap = {}; (r8.data || []).forEach((p) => { jMap[p.id] = p })
+        // promedios por año (si la tabla aún no existe → [])
+        const r9 = await supabase.from('lnb_jugador_temporada').select('*')
+        const ts = r9.data || []
 
+        const jeMap = {}; je.forEach((x) => { (jeMap[x.juego_id] = jeMap[x.juego_id] || []).push(x) })
         const jueLista = jg.map((j) => {
-          const ee = je.filter((x) => x.juego_id === j.id)
+          const ee = jeMap[j.id] || []
           const visitante = ee.find((x) => x.es_visitante) || ee[1] || null
           const local = ee.find((x) => !x.es_visitante) || ee[0] || null
           return { ...j, local, visitante }
         })
 
         if (!vivo) return
-        setTemporada(actual); setEquipos(eMap); setStanding(st)
+        setTemporada(actual); setTemporadas(lista); setTemporadaSel(actual ? actual.id : (lista[0] && lista[0].id))
+        setEquipos(eMap); setStanding(st)
         setJuegos(jueLista); setLideres(ld); setNoticias(nt); setJugadorSemana(js); setJugadores(jMap)
+        setTempStats(ts)
         setCargando(false)
       } catch (err) {
         if (!vivo) return
@@ -219,6 +249,18 @@ export default function PantallaLNB({ onVolver, onAccion }) {
     cargar()
     return () => { vivo = false }
   }, [])
+
+  // Carga perezosa del box score: cuando se abre un juego, si no está en caché,
+  // se busca solo el de ese partido (sirve para cualquier temporada).
+  useEffect(() => {
+    if (!juegoSel || juegoJugadores[juegoSel.id] !== undefined) return
+    let vivo = true
+    supabase.from('lnb_juego_jugadores').select('*').eq('juego_id', juegoSel.id).then((r) => {
+      if (!vivo) return
+      setJuegoJugadores((m) => ({ ...m, [juegoSel.id]: (r.data || []) }))
+    })
+    return () => { vivo = false }
+  }, [juegoSel])
 
   // ===== piezas =====
   const Escudo = ({ id, nombre, size = 36 }) => {
@@ -331,13 +373,15 @@ export default function PantallaLNB({ onVolver, onAccion }) {
 
   // ===== vistas =====
   const VistaJuegos = () => {
-    const vivos = juegos.filter(esVivo)
-    const finales = juegos.filter(esFinal)
-    const proximos = juegos.filter(esProximo).slice().reverse()
+    const esActual = temporada && temporadaSel === temporada.id
+    const dela = juegos.filter((j) => j.temporada_id === temporadaSel)
+    const vivos = dela.filter(esVivo)
+    const finales = dela.filter(esFinal)
+    const proximos = dela.filter(esProximo).slice().reverse()
     const ticker = [...vivos, ...finales].slice(0, 14)
     return (
       <>
-        <HeroSemana />
+        {esActual && <HeroSemana />}
         {ticker.length > 0 && (
           <div style={{ marginBottom: 24 }}>
             <Eyebrow txt="Marcadores" />
@@ -355,19 +399,43 @@ export default function PantallaLNB({ onVolver, onAccion }) {
         {proximos.length > 0 && (
           <div style={{ marginBottom: 24 }}>
             <Eyebrow txt="Próximos juegos" />
-            {proximos.slice(0, 6).map((j) => <TarjetaJuego key={j.id} j={j} />)}
+            {agruparPorDia(proximos.slice(0, 12)).map((g) => (
+              <div key={`p${g.k}`} style={{ marginBottom: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '4px 2px 10px' }}>
+                  <span style={{ fontSize: 12.5, fontWeight: 800, color: T.texto, letterSpacing: 0.2 }}>{fechaLarga(g.fecha)}</span>
+                  <span style={{ flex: 1, height: 1, background: T.linea }} />
+                  <span style={{ fontSize: 10.5, fontWeight: 700, color: T.tenue }}>{g.juegos.length} {g.juegos.length === 1 ? 'juego' : 'juegos'}</span>
+                </div>
+                {g.juegos.map((j) => <TarjetaJuego key={j.id} j={j} />)}
+              </div>
+            ))}
           </div>
         )}
         <div>
           <Eyebrow txt="Resultados" />
-          {finales.length === 0 ? <Vacio txt="Todavía no hay resultados." /> : finales.slice(0, 14).map((j) => <TarjetaJuego key={j.id} j={j} />)}
+          {finales.length === 0 ? <Vacio txt="Todavía no hay resultados." /> : (
+            <>
+              {agruparPorDia(finales.slice(0, 60)).map((g) => (
+                <div key={`f${g.k}`} style={{ marginBottom: 6 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '4px 2px 10px' }}>
+                    <span style={{ fontSize: 12.5, fontWeight: 800, color: T.texto, letterSpacing: 0.2 }}>{fechaLarga(g.fecha)}</span>
+                    <span style={{ flex: 1, height: 1, background: T.linea }} />
+                    <span style={{ fontSize: 10.5, fontWeight: 700, color: T.tenue }}>{g.juegos.length} {g.juegos.length === 1 ? 'juego' : 'juegos'}</span>
+                  </div>
+                  {g.juegos.map((j) => <TarjetaJuego key={j.id} j={j} />)}
+                </div>
+              ))}
+              {finales.length > 60 && <div style={{ textAlign: 'center', fontSize: 11, color: T.tenue, marginTop: 10 }}>Mostrando los 60 resultados más recientes de la temporada.</div>}
+            </>
+          )}
         </div>
       </>
     )
   }
 
   const VistaTabla = () => {
-    if (!standing.length) return <Vacio txt="La tabla de posiciones aparecerá aquí." />
+    const tabla = standing.filter((s) => s.temporada_id === temporadaSel)
+    if (!tabla.length) return <Vacio txt="La tabla de posiciones aparecerá aquí." />
     const corte = 4
     return (
       <div style={{ background: T.panel, border: `1px solid ${T.borde}`, borderRadius: 18, overflow: 'hidden' }}>
@@ -378,11 +446,11 @@ export default function PantallaLNB({ onVolver, onAccion }) {
           <span style={{ width: 30, textAlign: 'center' }}>P</span>
           <span style={{ width: 70, textAlign: 'right' }}>Últimos 5</span>
         </div>
-        {standing.map((s, i) => {
+        {tabla.map((s, i) => {
           const eq = equipos[s.equipo_id]
           const form = parseForm(s.last5_games)
           const top = i < corte
-          const ultimo = i === standing.length - 1
+          const ultimo = i === tabla.length - 1
           return (
             <div key={s.equipo_id}>
               <div style={{ display: 'flex', alignItems: 'center', padding: '12px 14px', background: top ? hexA(T.accion2, 0.07) : 'transparent' }}>
@@ -410,11 +478,139 @@ export default function PantallaLNB({ onVolver, onAccion }) {
     )
   }
 
+  // ===== Estadísticas de la temporada seleccionada =====
+  // Vienen de lnb_jugador_temporada (un registro por jugador por año). Si esa
+  // tabla aún no tiene datos para la temporada actual, se usa de respaldo lo que
+  // ya hay en lnb_jugadores (promedios de la temporada en curso).
+  let statsSeason = tempStats.filter((t) => t.temporada_id === temporadaSel)
+  if (!statsSeason.length && temporada && temporadaSel === temporada.id) {
+    statsSeason = Object.values(jugadores).map((p) => ({ ...p, jugador_id: p.id, temporada_id: temporada.id }))
+  }
+  const statsPorJugador = {}; statsSeason.forEach((s) => { statsPorJugador[s.jugador_id] = s })
+  // Historial completo de un jugador (todos sus años), más reciente primero.
+  const historialDe = (jid) => tempStats.filter((t) => t.jugador_id === jid)
+    .slice().sort((a, b) => (b.year || 0) - (a.year || 0))
+
+  // ===== MC Rating con techo FIJO (0–100), comparable entre temporadas =====
+  // Se divide la eficiencia de cada jugador entre la MÁS ALTA de toda la historia
+  // cargada (no la del año). Así el 100 lo toca solo la mejor campaña de siempre,
+  // el líder de cada año saca su número real, y un año flojo no empata con uno duro.
+  // Auto-actualizable: se recalibra solo cuando el robot mete temporadas nuevas.
+  // Es un rating PROPIO de la liga; a futuro podrá emparejarse al perfil del
+  // jugador si ese jugador se registra en la app (eso es otro módulo aparte).
+  const effDe = (s) => {
+    if (!s) return 0
+    const e = Number(s.efficiency)
+    if (s.efficiency != null && !Number.isNaN(e) && e > 0) return e
+    return (Number(s.points) || 0) + (Number(s.rebounds) || 0) + (Number(s.assists) || 0) + (Number(s.steals) || 0) + (Number(s.blocks) || 0) - (Number(s.turnovers) || 0)
+  }
+  const maxEffHist = Math.max(1, ...(tempStats.length ? tempStats : statsSeason).map(effDe))
+  const mcRatingDe = (s) => Math.round(100 * Math.pow(Math.max(0, effDe(s)) / maxEffHist, 0.85))
+  const ratingJugador = (jid) => mcRatingDe(statsPorJugador[jid])
+  // El techo es GLOBAL (la mejor campaña de todas las temporadas), así que el
+  // cálculo es el mismo en cualquier año y los años quedan comparables.
+  const ratingEnAnno = (s) => mcRatingDe(s)
+
+  // Roster de un equipo EN la temporada seleccionada (devuelve filas de stats;
+  // la identidad del jugador se toma de `jugadores` por su jugador_id).
+  const rosterDe = (eqId) => statsSeason.filter((s) => s.equipo_id === eqId)
+
+  const VistaEquipos = () => {
+    const stSeason = standing.filter((s) => s.temporada_id === temporadaSel)
+    let ids = stSeason.length
+      ? stSeason.map((s) => s.equipo_id).filter((id) => equipos[id])
+      : [...new Set(statsSeason.map((s) => s.equipo_id).filter((id) => equipos[id]))]
+    if (!ids.length) ids = Object.keys(equipos)
+    ids = [...new Set(ids)]
+    if (!ids.length) return <Vacio txt="Los equipos aparecerán aquí." />
+    return (
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(148px, 1fr))', gap: 12 }}>
+        {ids.map((id) => {
+          const eq = equipos[id]
+          const n = rosterDe(id).length
+          return (
+            <div key={id} onClick={() => setEquipoSel(id)} style={{ background: T.panel, border: `1px solid ${T.borde}`, borderRadius: 16, padding: '18px 14px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 9, cursor: 'pointer', textAlign: 'center' }}>
+              <Escudo id={id} nombre={eq?.name} size={56} />
+              <div style={{ fontSize: 13.5, fontWeight: 800, color: T.texto, lineHeight: 1.2 }}>{eq?.name || '—'}</div>
+              <div style={{ fontSize: 11, color: T.tenue }}>{n} {n === 1 ? 'jugador' : 'jugadores'}</div>
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+
+  const DetalleEquipo = ({ id, cerrar }) => {
+    const eq = equipos[id]
+    const roster = rosterDe(id).slice().sort((a, b) => (Number(b.points) || 0) - (Number(a.points) || 0))
+    const st = standing.find((s) => s.equipo_id === id && s.temporada_id === temporadaSel)
+    const n1 = (v) => (v == null ? '—' : Math.round(v * 10) / 10)
+    return (
+      <div onClick={cerrar} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 65, background: 'rgba(0,0,0,0.62)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+        <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 540, background: T.fondo, borderTopLeftRadius: 22, borderTopRightRadius: 22, border: `1px solid ${T.borde}`, maxHeight: '90vh', overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
+          <div style={{ display: 'flex', height: 3 }}>
+            <span style={{ flex: 1, background: '#1B3A8C' }} />
+            <span style={{ flex: 1, background: '#ffffff' }} />
+            <span style={{ flex: 1, background: '#CE1126' }} />
+          </div>
+          <div style={{ padding: '14px 18px calc(env(safe-area-inset-bottom) + 22px)' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}><span onClick={cerrar} style={{ fontSize: 24, color: T.tenue, cursor: 'pointer', lineHeight: 1 }}>×</span></div>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', marginTop: -6, marginBottom: 16 }}>
+              <Escudo id={id} nombre={eq?.name} size={72} />
+              <div style={{ fontSize: 19, fontWeight: 900, color: T.texto, marginTop: 10 }}>{eq?.name || '—'}</div>
+              {st && <div style={{ fontSize: 12.5, color: T.tenue, marginTop: 3 }}>{st.won}-{st.lost} · {st.position}º lugar</div>}
+              <div style={{ fontSize: 11.5, color: T.tenue, marginTop: 3 }}>{roster.length} {roster.length === 1 ? 'jugador' : 'jugadores'}</div>
+            </div>
+            {!roster.length ? <Vacio txt="Sin jugadores cargados para este equipo." /> : (
+              <div style={{ background: T.panel, border: `1px solid ${T.borde}`, borderRadius: 16, overflow: 'hidden' }}>
+                {roster.map((s, i) => {
+                  const p = jugadores[s.jugador_id] || {}
+                  return (
+                  <div key={s.jugador_id} onClick={() => abrirJugador({ id: s.jugador_id, nombre: p.nombre, apellido: p.apellido, image_url: p.image_url, equipo_id: s.equipo_id, posicion_nombre: p.posicion_nombre, shirt_number: p.shirt_number })} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', borderBottom: i < roster.length - 1 ? `1px solid ${T.linea}` : 'none', cursor: 'pointer' }}>
+                    <Foto url={p.image_url} nombre={p.nombre} size={38} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13.5, fontWeight: 700, color: T.texto, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.nombre || 'Jugador'} {p.apellido || ''}</div>
+                      <div style={{ fontSize: 11, color: T.tenue }}>{p.posicion_nombre || ''}{p.shirt_number != null ? ` · #${p.shirt_number}` : ''}</div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 11, alignItems: 'center' }}>
+                      <div style={{ textAlign: 'center' }}><div style={{ fontSize: 14, fontWeight: 900, color: T.texto, fontVariantNumeric: 'tabular-nums' }}>{n1(s.points)}</div><div style={{ fontSize: 9, fontWeight: 700, color: T.tenue }}>PTS</div></div>
+                      <div style={{ textAlign: 'center' }}><div style={{ fontSize: 14, fontWeight: 800, color: T.texto2, fontVariantNumeric: 'tabular-nums' }}>{n1(s.rebounds)}</div><div style={{ fontSize: 9, fontWeight: 700, color: T.tenue }}>REB</div></div>
+                      <div style={{ textAlign: 'center' }}><div style={{ fontSize: 14, fontWeight: 800, color: T.texto2, fontVariantNumeric: 'tabular-nums' }}>{n1(s.assists)}</div><div style={{ fontSize: 9, fontWeight: 700, color: T.tenue }}>AST</div></div>
+                      <div style={{ textAlign: 'center', minWidth: 30 }}><div style={{ fontSize: 14, fontWeight: 900, color: '#E8B23A', fontVariantNumeric: 'tabular-nums' }}>{mcRatingDe(s)}</div><div style={{ fontSize: 9, fontWeight: 700, color: T.tenue }}>RAT</div></div>
+                    </div>
+                  </div>
+                  )
+                })}
+              </div>
+            )}
+            <div style={{ marginTop: 12, fontSize: 10.5, color: T.tenue, textAlign: 'center' }}>Promedios de temporada · toca un jugador para ver su perfil</div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   const VistaLideres = () => {
-    const lista = lideres.filter((l) => l.categoria === catSel).sort((a, b) => a.rank - b.rank)
+    const esRating = catSel === 'mcrating'
+    let lista
+    if (esRating) {
+      lista = statsSeason
+        .map((s) => {
+          const info = jugadores[s.jugador_id] || {}
+          return { jugador_id: s.jugador_id, nombre: info.nombre, apellido: info.apellido, image_url: info.image_url, equipo_id: s.equipo_id, _rating: mcRatingDe(s) }
+        })
+        .filter((x) => x._rating > 0)
+        .sort((a, b) => b._rating - a._rating)
+        .map((x, i) => ({ ...x, rank: i + 1 }))
+        .slice(0, 25)
+    } else {
+      lista = lideres.filter((l) => l.temporada_id === temporadaSel && l.categoria === catSel).sort((a, b) => a.rank - b.rank)
+    }
     const cat = CATS.find((c) => c.id === catSel)
     const lider = lista[0]
     const resto = lista.slice(1)
+    const valDe = (l) => (esRating ? l._rating : valorLider(l).toFixed(1))
+    const subLabel = esRating ? 'MC Rating' : 'por juego'
     return (
       <>
         <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 6, marginBottom: 16, WebkitOverflowScrolling: 'touch' }}>
@@ -436,8 +632,8 @@ export default function PantallaLNB({ onVolver, onAccion }) {
                 <div style={{ fontSize: 12.5, color: T.tenue, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{equipos[lider.equipo_id]?.name || ''}</div>
               </div>
               <div style={{ position: 'relative', textAlign: 'right', flexShrink: 0 }}>
-                <div style={{ fontSize: 30, fontWeight: 900, color: T.texto, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{valorLider(lider).toFixed(1)}</div>
-                <div style={{ fontSize: 9.5, fontWeight: 700, color: T.tenue, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 2 }}>por juego</div>
+                <div style={{ fontSize: 30, fontWeight: 900, color: T.texto, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{valDe(lider)}</div>
+                <div style={{ fontSize: 9.5, fontWeight: 700, color: T.tenue, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 2 }}>{subLabel}</div>
               </div>
             </div>
             {resto.length > 0 && (
@@ -452,7 +648,7 @@ export default function PantallaLNB({ onVolver, onAccion }) {
                         <div style={{ fontSize: 14, fontWeight: 700, color: T.texto, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{[l.nombre, l.apellido].filter(Boolean).join(' ')}</div>
                         <div style={{ fontSize: 11.5, color: T.tenue, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{eq?.name || ''}</div>
                       </div>
-                      <div style={{ fontSize: 17, fontWeight: 900, color: T.texto, fontVariantNumeric: 'tabular-nums' }}>{valorLider(l).toFixed(1)}</div>
+                      <div style={{ fontSize: 17, fontWeight: 900, color: T.texto, fontVariantNumeric: 'tabular-nums' }}>{valDe(l)}</div>
                     </div>
                   )
                 })}
@@ -510,6 +706,26 @@ export default function PantallaLNB({ onVolver, onAccion }) {
     const topJug = (eq, n = 3) => Object.values(jugadores).filter((p) => p.equipo_id === eq?.equipo_id).sort((a, b) => (b.efficiency ?? b.points ?? 0) - (a.efficiency ?? a.points ?? 0)).slice(0, n)
     const maxQ = Math.max(1, ...[1, 2, 3, 4].flatMap((q) => [Number(A?.['period_' + q]) || 0, Number(B?.['period_' + q]) || 0]))
     const colA = T.accion2, colB = T.accion
+    const box = juegoJugadores[j.id] || []
+    const n1b = (v) => (v == null ? '—' : v)
+    // Ganador del partido → su escudo va de marca de agua detrás del marcador.
+    const ganador = A?.es_ganador ? A : (B?.es_ganador ? B : null)
+    const urlGan = urlImg(equipos[ganador?.equipo_id]?.image_url)
+    const LadoRes = ({ eq }) => {
+      const gana = eq?.es_ganador
+      return (
+        <div style={{ flex: 1, textAlign: 'center', minWidth: 0 }}>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
+            <div style={{ borderRadius: 13, padding: gana ? 3 : 0, background: gana ? `linear-gradient(135deg, ${T.accion2}, ${T.accion})` : 'transparent', boxShadow: gana ? '0 4px 14px rgba(0,0,0,0.18)' : 'none' }}>
+              <Escudo id={eq?.equipo_id} nombre={eq?.nombre} size={gana ? 56 : 48} />
+            </div>
+          </div>
+          <div style={{ fontSize: 13, fontWeight: gana ? 800 : 700, color: gana ? T.texto : T.texto2, marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{abrev(eq)}</div>
+          <div style={{ fontSize: 40, fontWeight: 900, color: gana ? T.texto : T.tenue, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{eq?.total_score ?? '-'}</div>
+          {fin && gana && <div style={{ marginTop: 7, display: 'inline-block', fontSize: 9, fontWeight: 800, letterSpacing: 0.8, textTransform: 'uppercase', color: '#fff', background: `linear-gradient(135deg, ${T.accion2}, ${T.accion})`, padding: '2px 9px', borderRadius: 10 }}>Ganó</div>}
+        </div>
+      )
+    }
     const filaQ = (eq) => (
       <div style={{ display: 'flex', alignItems: 'center', padding: '11px 0' }}>
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
@@ -533,17 +749,12 @@ export default function PantallaLNB({ onVolver, onAccion }) {
               <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.5, textTransform: 'uppercase', color: vivo ? T.accion : T.tenue }}>{vivo ? `En vivo${j.period ? ` · ${cuarto(j.period)}` : ''}` : (fin ? 'Final' : 'Próximo')}</span>
               <span onClick={cerrar} style={{ fontSize: 24, color: T.tenue, cursor: 'pointer', lineHeight: 1, padding: '0 4px' }}>×</span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 20 }}>
-              <div style={{ flex: 1, textAlign: 'center', minWidth: 0 }}>
-                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}><Escudo id={A?.equipo_id} nombre={A?.nombre} size={54} /></div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: T.texto2, marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{abrev(A)}</div>
-                <div style={{ fontSize: 36, fontWeight: 900, color: A?.es_ganador ? T.texto : T.tenue, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{A?.total_score ?? '-'}</div>
-              </div>
-              <div style={{ fontSize: 12, fontWeight: 800, color: T.tenue, letterSpacing: 1 }}>VS</div>
-              <div style={{ flex: 1, textAlign: 'center', minWidth: 0 }}>
-                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}><Escudo id={B?.equipo_id} nombre={B?.nombre} size={54} /></div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: T.texto2, marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{abrev(B)}</div>
-                <div style={{ fontSize: 36, fontWeight: 900, color: B?.es_ganador ? T.texto : T.tenue, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{B?.total_score ?? '-'}</div>
+            <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 18, border: `1px solid ${T.borde}`, background: `linear-gradient(135deg, ${hexA(T.accion2, 0.13)}, ${hexA(T.accion, 0.06)})`, padding: '18px 14px 16px', marginBottom: 20 }}>
+              {urlGan && <img src={urlGan} alt="" aria-hidden="true" style={{ position: 'absolute', right: '-6%', top: '50%', transform: 'translateY(-50%)', width: 220, height: 220, objectFit: 'contain', opacity: T.esClaro ? 0.08 : 0.12, pointerEvents: 'none' }} />}
+              <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                <LadoRes eq={A} />
+                <span style={{ fontSize: 11, fontWeight: 800, color: T.tenue, letterSpacing: 1, flexShrink: 0 }}>VS</span>
+                <LadoRes eq={B} />
               </div>
             </div>
             <div style={{ background: T.panel, border: `1px solid ${T.borde}`, borderRadius: 14, padding: '2px 14px' }}>
@@ -605,7 +816,52 @@ export default function PantallaLNB({ onVolver, onAccion }) {
               </div>
             )}
 
-            {(topJug(A).length > 0 || topJug(B).length > 0) && (
+            {box.length > 0 && (
+              <div style={{ marginTop: 22 }}>
+                <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5, color: T.tenue, marginBottom: 12 }}>Box score del partido</div>
+                {[A, B].map((eq, i) => {
+                  const filas = box.filter((x) => x.equipo_id === eq?.equipo_id).sort((a, b) => (Number(b.points) || 0) - (Number(a.points) || 0))
+                  if (!filas.length) return null
+                  return (
+                    <div key={i} style={{ marginBottom: 16 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                        <Escudo id={eq?.equipo_id} nombre={eq?.nombre} size={18} />
+                        <span style={{ fontSize: 11.5, fontWeight: 800, color: T.texto2, textTransform: 'uppercase', letterSpacing: 0.3 }}>{abrev(eq)}</span>
+                      </div>
+                      <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', margin: '0 -2px' }}>
+                        <div style={{ minWidth: 372 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', padding: '6px 2px', borderBottom: `1px solid ${T.linea}` }}>
+                            <span style={{ flex: 1, minWidth: 116, fontSize: 9.5, fontWeight: 800, color: T.tenue, textTransform: 'uppercase', letterSpacing: 0.3 }}>Jugador</span>
+                            {['MIN', 'PTS', 'REB', 'AST', 'FG', '3P'].map((h) => <span key={h} style={{ width: 42, textAlign: 'center', fontSize: 9.5, fontWeight: 800, color: h === 'PTS' ? T.texto : T.tenue }}>{h}</span>)}
+                          </div>
+                          {filas.map((x) => {
+                            const pj = jugadores[x.jugador_id] || {}
+                            const fg = (x.fg_att != null && Number(x.fg_att) > 0) ? `${x.fg_made ?? 0}-${x.fg_att}` : '—'
+                            const tp = (x.three_att != null && Number(x.three_att) > 0) ? `${x.three_made ?? 0}-${x.three_att}` : '—'
+                            return (
+                              <div key={x.jugador_id} onClick={() => abrirJugador({ id: x.jugador_id, nombre: pj.nombre, apellido: pj.apellido, image_url: pj.image_url, equipo_id: x.equipo_id, posicion_nombre: pj.posicion_nombre, shirt_number: pj.shirt_number })} style={{ display: 'flex', alignItems: 'center', padding: '8px 2px', cursor: 'pointer', borderBottom: `1px solid ${T.linea}` }}>
+                                <div style={{ flex: 1, minWidth: 116, display: 'flex', alignItems: 'center', gap: 9 }}>
+                                  <Foto url={pj.image_url} nombre={pj.nombre} size={30} />
+                                  <span style={{ fontSize: 12.5, fontWeight: 700, color: T.texto, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{`${pj.nombre || ''} ${pj.apellido || ''}`.trim() || '—'}</span>
+                                </div>
+                                <span style={{ width: 42, textAlign: 'center', fontSize: 12.5, color: T.texto2, fontVariantNumeric: 'tabular-nums' }}>{n1b(x.minutes)}</span>
+                                <span style={{ width: 42, textAlign: 'center', fontSize: 13.5, fontWeight: 900, color: T.texto, fontVariantNumeric: 'tabular-nums' }}>{n1b(x.points)}</span>
+                                <span style={{ width: 42, textAlign: 'center', fontSize: 12.5, color: T.texto2, fontVariantNumeric: 'tabular-nums' }}>{n1b(x.rebounds)}</span>
+                                <span style={{ width: 42, textAlign: 'center', fontSize: 12.5, color: T.texto2, fontVariantNumeric: 'tabular-nums' }}>{n1b(x.assists)}</span>
+                                <span style={{ width: 42, textAlign: 'center', fontSize: 11.5, color: T.tenue, fontVariantNumeric: 'tabular-nums' }}>{fg}</span>
+                                <span style={{ width: 42, textAlign: 'center', fontSize: 11.5, color: T.tenue, fontVariantNumeric: 'tabular-nums' }}>{tp}</span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            {box.length === 0 && (topJug(A).length > 0 || topJug(B).length > 0) && (
               <div style={{ marginTop: 22 }}>
                 <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5, color: T.tenue }}>Jugadores a seguir</div>
                 <div style={{ fontSize: 10.5, color: T.tenue, marginTop: 2, marginBottom: 13 }}>Promedios de temporada</div>
@@ -639,7 +895,7 @@ export default function PantallaLNB({ onVolver, onAccion }) {
             )}
 
             {(j.home_location_name || j.date) && <div style={{ marginTop: 16, fontSize: 12, color: T.tenue, textAlign: 'center' }}>{[j.home_location_name, fechaHora(j.date)].filter(Boolean).join(' · ')}</div>}
-            <div style={{ marginTop: 12, fontSize: 10.5, color: T.tenue, textAlign: 'center', lineHeight: 1.5 }}>Promedios de temporada. El box score por jugador de cada partido llegará cuando el robot cargue las líneas individuales.</div>
+            <div style={{ marginTop: 12, fontSize: 10.5, color: T.tenue, textAlign: 'center', lineHeight: 1.5 }}>{box.length > 0 ? 'Box score oficial del partido.' : 'Promedios de temporada. El box score por jugador de cada partido llegará cuando el robot cargue las líneas individuales.'}</div>
           </div>
         </div>
       </div>
@@ -652,23 +908,26 @@ export default function PantallaLNB({ onVolver, onAccion }) {
   const PerfilJugador = ({ p, cerrar }) => {
     if (!p) return null
     const full = jugadores[p.id] || {}
-    const eq = equipos[full.equipo_id || p.equipo_id]
+    const sea = statsPorJugador[p.id] || null
+    const annoSel = (temporadas.find((t) => t.id === temporadaSel) || {}).year
+    const eq = equipos[(sea && sea.equipo_id) || full.equipo_id || p.equipo_id]
     const nombre = [full.nombre || p.nombre, full.apellido || p.apellido].filter(Boolean).join(' ')
     const f1 = (v) => (v == null || v === '' ? '-' : Number(v).toFixed(1))
     const pct = (v) => (v == null || v === '' ? '-' : Math.round(Number(v) * 100) + '%')
-    const tieneStats = full.points != null || full.rebounds != null || full.assists != null
-    const filas = CATS.map((c) => {
-      const e = lideres.find((l) => l.jugador_id === p.id && l.categoria === c.id)
+    const tieneStats = sea && (sea.points != null || sea.rebounds != null || sea.assists != null)
+    const filas = CATS.filter((c) => c.id !== 'mcrating').map((c) => {
+      const e = lideres.find((l) => l.jugador_id === p.id && l.categoria === c.id && l.temporada_id === temporadaSel)
       return e ? { cat: c.txt, rank: e.rank, average: e.average, total: e.total } : null
     }).filter(Boolean)
+    const hist = historialDe(p.id)
     const pos = full.posicion_nombre || p.posicion_nombre
     const num = full.shirt_number != null ? full.shirt_number : p.shirt_number
     const sub = [eq?.name, pos, num != null ? `#${num}` : null].filter(Boolean).join(' · ')
-    const grid = [
-      ['Min', f1(full.minutes)], ['Robos', f1(full.steals)], ['Tapones', f1(full.blocks)],
-      ['Faltas', f1(full.personal_fouls)], ['Pérdidas', f1(full.turnovers)], ['Eficiencia', f1(full.efficiency)],
-    ]
-    const pcts = [['% Campo', pct(full.fg_pct)], ['% Triples', pct(full.three_pct)], ['% Libres', pct(full.ft_pct)]]
+    const grid = sea ? [
+      ['Min', f1(sea.minutes)], ['Robos', f1(sea.steals)], ['Tapones', f1(sea.blocks)],
+      ['Faltas', f1(sea.personal_fouls)], ['Pérdidas', f1(sea.turnovers)], ['Eficiencia', f1(sea.efficiency)],
+    ] : []
+    const pcts = sea ? [['% Campo', pct(sea.fg_pct)], ['% Triples', pct(sea.three_pct)], ['% Libres', pct(sea.ft_pct)]] : []
     const Caja = ({ lbl, val }) => (
       <div style={{ background: T.panel, border: `1px solid ${T.borde}`, borderRadius: 12, padding: '11px 6px', textAlign: 'center' }}>
         <div style={{ fontSize: 17, fontWeight: 900, color: T.texto, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{val}</div>
@@ -676,7 +935,7 @@ export default function PantallaLNB({ onVolver, onAccion }) {
       </div>
     )
     return (
-      <div onClick={cerrar} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 60, background: 'rgba(0,0,0,0.62)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+      <div onClick={cerrar} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 80, background: 'rgba(0,0,0,0.62)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
         <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 540, background: T.fondo, borderTopLeftRadius: 22, borderTopRightRadius: 22, border: `1px solid ${T.borde}`, maxHeight: '90vh', overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
           <div style={{ display: 'flex', height: 3 }}>
             <span style={{ flex: 1, background: '#1B3A8C' }} />
@@ -684,7 +943,13 @@ export default function PantallaLNB({ onVolver, onAccion }) {
             <span style={{ flex: 1, background: '#CE1126' }} />
           </div>
           <div style={{ padding: '12px 18px calc(env(safe-area-inset-bottom) + 22px)' }}>
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 12 }}>
+              {tieneStats && (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: `linear-gradient(135deg, ${T.accion2}, ${T.accion})`, borderRadius: 12, padding: '5px 13px', boxShadow: '0 4px 12px rgba(0,0,0,0.18)' }}>
+                  <div style={{ fontSize: 21, fontWeight: 900, color: '#fff', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{ratingJugador(p.id)}</div>
+                  <div style={{ fontSize: 8.5, fontWeight: 800, color: 'rgba(255,255,255,0.92)', letterSpacing: 1.2, textTransform: 'uppercase', marginTop: 2 }}>Rating</div>
+                </div>
+              )}
               <span onClick={cerrar} style={{ fontSize: 24, color: T.tenue, cursor: 'pointer', lineHeight: 1, padding: '0 4px' }}>×</span>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', marginTop: -2, marginBottom: 18 }}>
@@ -693,13 +958,13 @@ export default function PantallaLNB({ onVolver, onAccion }) {
               </div>
               <div style={{ fontSize: 22, fontWeight: 900, color: T.texto, lineHeight: 1.15 }}>{nombre || '—'}</div>
               {sub && <div style={{ fontSize: 13, color: T.tenue, marginTop: 5 }}>{sub}</div>}
-              {full.count_matches != null && <div style={{ fontSize: 11.5, color: T.tenue, marginTop: 3 }}>{full.count_matches} juegos esta temporada</div>}
+              {sea && sea.count_matches != null && <div style={{ fontSize: 11.5, color: T.tenue, marginTop: 3 }}>{sea.count_matches} juegos en {annoSel || 'la temporada'}</div>}
             </div>
             {tieneStats ? (
               <>
-                <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.8, textTransform: 'uppercase', color: T.accion, margin: '0 2px 10px' }}>Promedios de la temporada</div>
+                <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.8, textTransform: 'uppercase', color: T.accion, margin: '0 2px 10px' }}>Promedios {annoSel || 'de la temporada'}</div>
                 <div style={{ display: 'flex', gap: 9, marginBottom: 10 }}>
-                  {[['Puntos', full.points], ['Rebotes', full.rebounds], ['Asistencias', full.assists]].map(([lbl, val]) => (
+                  {[['Puntos', sea.points], ['Rebotes', sea.rebounds], ['Asistencias', sea.assists]].map(([lbl, val]) => (
                     <div key={lbl} style={{ flex: 1, background: `linear-gradient(160deg, ${hexA(T.accion2, 0.16)}, ${hexA(T.accion, 0.08)})`, border: `1px solid ${T.borde}`, borderRadius: 14, padding: '15px 6px', textAlign: 'center' }}>
                       <div style={{ fontSize: 27, fontWeight: 900, color: T.texto, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{f1(val)}</div>
                       <div style={{ fontSize: 10, fontWeight: 700, color: T.tenue, textTransform: 'uppercase', letterSpacing: 0.4, marginTop: 7 }}>{lbl}</div>
@@ -714,7 +979,7 @@ export default function PantallaLNB({ onVolver, onAccion }) {
                 </div>
               </>
             ) : (
-              <div style={{ textAlign: 'center', padding: '20px', color: T.tenue, fontSize: 13.5, lineHeight: 1.5 }}>Este jugador todavía no tiene estadísticas registradas esta temporada.</div>
+              <div style={{ textAlign: 'center', padding: '20px', color: T.tenue, fontSize: 13.5, lineHeight: 1.5 }}>Sin estadísticas registradas en {annoSel || 'esta temporada'}.</div>
             )}
             {filas.length > 0 && (
               <>
@@ -728,6 +993,36 @@ export default function PantallaLNB({ onVolver, onAccion }) {
                     </div>
                   ))}
                 </div>
+              </>
+            )}
+            {hist.length > 0 && (
+              <>
+                <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.8, textTransform: 'uppercase', color: T.accion, margin: '18px 2px 10px' }}>Trayectoria por temporada</div>
+                <div style={{ background: T.panel, border: `1px solid ${T.borde}`, borderRadius: 16, overflow: 'hidden' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', padding: '9px 14px', borderBottom: `1px solid ${T.linea}`, fontSize: 10, fontWeight: 800, letterSpacing: 0.4, textTransform: 'uppercase', color: T.tenue }}>
+                    <span style={{ width: 46 }}>Año</span>
+                    <span style={{ flex: 1 }}>Equipo</span>
+                    <span style={{ width: 34, textAlign: 'center' }}>PTS</span>
+                    <span style={{ width: 34, textAlign: 'center' }}>REB</span>
+                    <span style={{ width: 34, textAlign: 'center' }}>AST</span>
+                    <span style={{ width: 38, textAlign: 'center' }}>RAT</span>
+                  </div>
+                  {hist.map((h, i) => {
+                    const he = equipos[h.equipo_id]
+                    const on = h.temporada_id === temporadaSel
+                    return (
+                      <div key={h.temporada_id} onClick={() => setTemporadaSel(h.temporada_id)} style={{ display: 'flex', alignItems: 'center', padding: '11px 14px', borderBottom: i < hist.length - 1 ? `1px solid ${T.linea}` : 'none', cursor: 'pointer', background: on ? hexA(T.accion2, 0.1) : 'transparent' }}>
+                        <span style={{ width: 46, fontSize: 13.5, fontWeight: 900, color: on ? T.accion2 : T.texto, fontVariantNumeric: 'tabular-nums' }}>{h.year}</span>
+                        <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, color: T.texto2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{he?.name || '—'}</span>
+                        <span style={{ width: 34, textAlign: 'center', fontSize: 13, fontWeight: 800, color: T.texto, fontVariantNumeric: 'tabular-nums' }}>{f1(h.points)}</span>
+                        <span style={{ width: 34, textAlign: 'center', fontSize: 13, color: T.texto2, fontVariantNumeric: 'tabular-nums' }}>{f1(h.rebounds)}</span>
+                        <span style={{ width: 34, textAlign: 'center', fontSize: 13, color: T.texto2, fontVariantNumeric: 'tabular-nums' }}>{f1(h.assists)}</span>
+                        <span style={{ width: 38, textAlign: 'center', fontSize: 13.5, fontWeight: 900, color: '#E8B23A', fontVariantNumeric: 'tabular-nums' }}>{ratingEnAnno(h, h.year)}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+                <div style={{ marginTop: 8, fontSize: 10.5, color: T.tenue, textAlign: 'center' }}>Toca una temporada para verla en toda la pantalla</div>
               </>
             )}
           </div>
@@ -837,8 +1132,28 @@ export default function PantallaLNB({ onVolver, onAccion }) {
             </div>
           ) : (
             <>
+              {tab !== 'noticias' && temporadas.length > 0 && (
+                <div style={{ position: 'sticky', top: 0, zIndex: 5, margin: esEscritorio ? '-24px -30px 18px' : '-18px -15px 16px', padding: esEscritorio ? '13px 30px' : '11px 15px', background: hexA(T.fondo, 0.92), backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', borderBottom: `1px solid ${T.linea}` }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, maxWidth: esEscritorio ? 980 : 820, margin: '0 auto' }}>
+                    <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 0.8, textTransform: 'uppercase', color: T.tenue, flexShrink: 0 }}>Temporada</span>
+                    <div style={{ display: 'flex', gap: 7, overflowX: 'auto', WebkitOverflowScrolling: 'touch', paddingBottom: 2 }}>
+                      {temporadas.map((t) => {
+                        const on = t.id === temporadaSel
+                        const actual = temporada && t.id === temporada.id
+                        return (
+                          <button key={t.id} onClick={() => setTemporadaSel(t.id)} style={{ position: 'relative', flexShrink: 0, padding: '7px 15px', borderRadius: 20, fontSize: 13.5, fontWeight: 900, cursor: 'pointer', fontVariantNumeric: 'tabular-nums', border: `1px solid ${on ? 'transparent' : T.borde}`, background: on ? `linear-gradient(135deg, ${T.accion2}, ${T.accion})` : T.chip, color: on ? '#fff' : T.texto2, boxShadow: on ? '0 3px 10px rgba(0,0,0,0.18)' : 'none' }}>
+                            {t.year}
+                            {actual && <span style={{ position: 'absolute', top: -3, right: -3, width: 8, height: 8, borderRadius: '50%', background: '#34c77b', border: `1.5px solid ${T.fondo}` }} />}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
               {tab === 'juegos' && <VistaJuegos />}
               {tab === 'tabla' && <VistaTabla />}
+              {tab === 'equipos' && <VistaEquipos />}
               {tab === 'lideres' && <VistaLideres />}
               {tab === 'noticias' && <VistaNoticias />}
               <div style={{ textAlign: 'center', fontSize: 10, color: T.tenue, marginTop: 24, letterSpacing: 0.3 }}>Datos oficiales de la Liga Nacional de Baloncesto · se actualizan solos</div>
@@ -848,6 +1163,7 @@ export default function PantallaLNB({ onVolver, onAccion }) {
       </div>
 
       {juegoSel && <DetalleJuego j={juegoSel} cerrar={() => setJuegoSel(null)} />}
+      {equipoSel && <DetalleEquipo id={equipoSel} cerrar={() => setEquipoSel(null)} />}
       {jugadorSel && <PerfilJugador p={jugadorSel} cerrar={() => setJugadorSel(null)} />}
       {noticiaSel && <NoticiaModal n={noticiaSel} cerrar={() => setNoticiaSel(null)} />}
     </div>

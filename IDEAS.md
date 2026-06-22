@@ -173,6 +173,19 @@ Look de red social deportiva moderna, columna única centrada (máx ~480px, cent
 - **"Anotar" central = marcar juegos/torneos** (son cosas DISTINTAS al "+").
 - **Temas (5)** — actualiza la regla 1.7: **noche** (azul dominicano, default) · **día** (claro) · **dorado** · **larimar** (azul-verde oscuro) · **negro**. Selector discreto (botón en el header que los cicla). En `localStorage('mc_tema')`.
 
+### 1.17 REGLA DE PRESERVACIÓN — NO BORRAR FUNCIONALIDAD (candado de proceso)
+> **El problema que esto resuelve:** al cambiar de sesión/ventana, Jarvis a veces edita encima de una versión vieja y se PIERDE funcionalidad que ya estaba construida (tabs, módulos, ratings). Esto frustra y nos hace retroceder.
+
+**Reglas obligatorias para Jarvis en CADA sesión nueva:**
+1. **Antes de tocar una pantalla, leerla completa y hacer inventario** de lo que YA tiene (tabs, módulos, botones, lógica). No asumir; verificar en el archivo real.
+2. **NO se cambia, quita, ni "mejora" NADA que no se haya pedido.** Si Vladimir no dio la orden de cambiar algo, ese algo se queda **idéntico**. Solo se toca lo que él ordena en esta sesión.
+3. **Siempre bajar la versión fresca del repo antes de editar.** Vladimir hace `git push` de su local antes de que Jarvis edite. **El repo manda.**
+4. **Entregar el archivo COMPLETO** y verificar el conteo de líneas / que las piezas viejas siguen presentes antes de entregar.
+5. **Anotar TODO en este cuaderno**, hasta lo más mínimo que hablemos, y **consultarlo siempre** al empezar y antes de cada cambio.
+6. **Auditoría periódica:** cada cierto tiempo, revisar archivo por archivo contra este cuaderno (Vladimir da acceso a su GitHub para esto). No es cada sesión; es de control.
+
+**Frase ancla:** *"Si no se pidió, no se toca. Si ya funcionaba, se preserva."*
+
 ---
 
 ## 2. LO QUE NO FUNCIONA — no repetir estos errores
@@ -214,6 +227,23 @@ Look de red social deportiva moderna, columna única centrada (máx ~480px, cent
 **Síntoma:** se activa el botón de foto y "no hace nada".
 **Causa:** hay DOS lugares para publicar: (1) `PantallaPublicar.jsx` (con R al final) — la pantalla COMPLETA/separada que el usuario abre para publicar; y (2) el composer dentro de `PantallaPublica.jsx` (el techado). Vladimir usa **PantallaPublicar** (la separada). Si solo se activa el botón en una, la otra sigue muerta.
 **Regla:** cuando se trabaje en "publicar", confirmar en CUÁL de las dos pantallas, y mantener las dos consistentes. Lo que MUESTRA las publicaciones (carrusel de fotos) vive en PantallaPublica (el feed).
+
+### 2.8 Tabla nueva en Supabase: el robot da 403 "permission denied"
+**Síntoma:** el robot (service key) sube todo bien menos la tabla nueva → `HTTP 403 · 42501 · permission denied for table X`.
+**Causa:** crear la tabla y ponerle RLS con política de `SELECT` NO le da permiso de **escritura** al `service_role`. Falta el GRANT a nivel de tabla.
+**Cura:** después de crear cualquier tabla nueva, correr en el SQL Editor:
+```sql
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.NOMBRE_TABLA TO service_role;
+GRANT SELECT ON public.NOMBRE_TABLA TO anon, authenticated;
+```
+**Regla:** toda tabla nueva = crear + RLS/política de lectura + estos dos GRANT. Los tres pasos juntos.
+
+### 2.9 Cargar datos de un sitio Next.js (lecciones del robot histórico LNB)
+Tres tropiezos que ya resolvimos al raspar `lnb.do`. Aplican a cualquier scraping futuro (NBA, BSN):
+1. **Los JSON de `/_next/data/...` IGNORAN los query params.** Probamos `?competition=4`, `?season=4`, etc. y siempre devolvía el año actual. → Para datos por temporada/filtro hay que usar la **API REST de verdad** (en LNB: `https://lnb.do/api`). Cómo se encontró: husmeando los chunks JS del sitio (las "linternas" de descubrimiento).
+2. **PostgREST: `PGRST102 "All object keys must match"`.** Al subir un array, TODAS las filas deben tener exactamente las mismas columnas. Si un campo viene `undefined`, `JSON.stringify` lo borra y rompe el lote. → **Cura:** normalizar antes de subir — sacar la unión de llaves de todas las filas y rellenar las que falten con `null` (y `undefined`→`null`). Se metió ese normalizador en la función `upsert`.
+3. **`23502 null value in column "id"`.** Un juego "fantasma" venía sin id desde la API. → **Cura:** saltar (`continue`) cualquier registro sin id antes de empujarlo (`if (!m || m.id == null) continue;` y `if (tm.id == null) continue;`).
+**Regla:** al raspar, siempre (a) confirmar la ruta real antes de codificar — no adivinar, usar una linterna desechable; (b) normalizar filas antes del upsert; (c) saltar registros sin clave primaria.
 
 ---
 
@@ -319,6 +349,55 @@ Métrica **SEPARADA del rating**. El **rating** mide NIVEL/calidad (qué tan fue
 ---
 
 ### 3.2 LIGAS
+
+**Idea L-005 — Box score por jugador por partido** · `HECHO ✅ (jun 2026)`
+Ruta del detalle: `/_next/data/${buildId}/partido/x/${id}.json` → líneas en `match.teams[].players[].statistics` (mismos nombres que el róster). Robot Fase 5 las carga a la tabla `lnb_juego_jugadores` (2,420 líneas, 101 juegos). La app las muestra en el detalle del juego; si faltan, cae al respaldo de promedios. Pendiente futuro: NBA con el mismo patrón (robot → tabla `*_juego_jugadores`).
+
+---
+
+### 🏀 L-006 — LNB: DOCUMENTACIÓN TÉCNICA MAESTRA (la fuente de datos completa) · `HECHO ✅ (jun 2026)`
+
+> Esta es la referencia única de cómo entra la data de la LNB. Si algo se rompe o se va a replicar (NBA, BSN), se lee esto primero. Molde reutilizable.
+
+**DE DÓNDE SALE LA DATA — dos caminos, ambos GRATIS:**
+`lnb.do` es un sitio **Next.js**. Hay dos formas de leerlo:
+1. **JSON de Next** (`/_next/data/${buildId}/...json`). El `buildId` se saca fresco de la portada (`<script id="__NEXT_DATA__">`), así nunca se rompe cuando la liga actualiza. Lo usa **`robot-lnb.js`** (año actual): `estadisticas.json`, `calendario.json`, `equipo/x/{id}.json`, `partido/x/{id}.json`.
+2. **API REST pública** — base **`https://lnb.do/api`**. Lo usa **`robot-lnb-historico.js`** (todos los años). Es la única forma de pedir años viejos (ver lección 2.9).
+
+**LOS ENDPOINTS DE LA API (`https://lnb.do/api`):** todos devuelven `{ok, data, pagination?}`.
+- `/public/competition` → todas las temporadas. **IDs: 2022=1, 2023=2, 2024=3, 2025=4, 2026=5.**
+- `/public/competition/current` → temporada actual.
+- `/public/match?competition_id={id}&page={p}` → juegos de un año (PAGINADO; leer `pagination.pages`).
+- `/public/match/{id}` → **detalle del juego CON box score**: `data.teams[].players[].statistics`.
+- `/public/competition/{id}/match/dates` → fechas con juegos de un año (`{date, count}`).
+- `/public/standing/last/competition/{id}` → tabla (¡SOLO la actual tiene datos; años viejos = `[]`!).
+- `/public/standing/bracket/competition/{id}` → los playoffs (stages/series) del año.
+- `/public/player/{id}/statistics` → **estadísticas del jugador SEPARADAS POR AÑO** (array, una entrada por temporada). De aquí sale el promedio por año.
+- `/public/player/leaders?competition_id={id}&type={t}` → líderes por año. `type` = points · assists · rebounds · blocks · steals · efficiency · threes.
+- `/public/player/team/{teamId}` → róster actual de un equipo.
+
+**NOMBRES DE LOS CAMPOS de `statistics` (iguales en TODOS lados):** `points, rebounds, assists, minutes, steals, blocks, personal_fouls, turnovers, field_goals_attempted/made/percent, three_points_attempted/made/percent, free_throw_attempted/made/percent`. (`efficiency` solo en algunos.) En Supabase los guardamos como `fg_*`, `three_*`, `ft_*`.
+
+**TABLAS EN SUPABASE (todas con lectura pública + GRANT, ver 2.8):**
+- `lnb_temporadas` (id) · `lnb_equipos` (id) · `lnb_jugadores` (id; identidad + stats del año actual).
+- `lnb_standing` (temporada_id, equipo_id) · `lnb_lideres` (temporada_id, categoria, rank).
+- `lnb_juegos` (id) · `lnb_juego_equipos` (juego_id, equipo_id).
+- `lnb_juego_jugadores` (juego_id, jugador_id) → **box score por partido**.
+- `lnb_jugador_temporada` (jugador_id, temporada_id) → **promedios por año** (rating por año se calcula en la app).
+- `lnb_noticias` (id) · `lnb_jugador_semana` (id).
+
+**LOS DOS ROBOTS:**
+- **`robot-lnb.js`** — año ACTUAL. Vía JSON de Next. Fases 1+4 (data + rósters) + Fase 5 (box score vía `partido/x/{id}`). Se corre seguido (idealmente diario/2x al día) con la service key por terminal.
+- **`robot-lnb-historico.js`** — TODOS los años viejos (2022–2025) vía la API REST. Trae juegos, box scores (~9,000 líneas), líderes, tabla W-L calculada, y los promedios por año de cada jugador (679 jugadores, 857 filas). Se corre una vez (o de vez en cuando). NO toca el robot normal.
+- **Las "linternas"** (`robot-lnb-*-descubrir*.js`) son DESECHABLES: solo sirvieron para descubrir rutas/estructura. No son robots; se botan.
+
+**EL MC RATING (cómo se calcula):** la app NO lo guarda; lo **recalcula en vivo** cada vez que se abre la pantalla, con los stats que haya en Supabase. Fórmula: `100 * pow(eff / maxEff_liga, 0.85)`, donde `eff = points + rebounds + assists + steals + blocks − turnovers` (o la columna `efficiency` si viene). Relativo al mejor de esa liga/año. → **se actualiza solo** con cada corrida del robot. Misma fórmula en Líderes y en el badge del perfil (helper compartido `mcRatingDe`).
+
+**ESTRUCTURA DE LA PANTALLA `PantallaLNB.jsx`:** tabs Juegos · Tabla · Equipos · Líderes · Noticias. Líderes arranca en MC Rating (1ra categoría). Detalle del juego muestra box score real si existe (si no, promedios). Perfil del jugador con badge de rating arriba-derecha (zIndex 80, por encima de todo). Modales: DetalleJuego z60 · DetalleEquipo z65 · PerfilJugador z80.
+
+**PENDIENTE (lo único que falta para cerrar la LNB):** el **selector de año** en la pantalla, para cambiar entre 2022–2026 y ver juegos+box score, líderes, equipos y rating de cada temporada (usando `lnb_jugador_temporada`, `lnb_lideres` y `lnb_standing` filtrados por `temporada_id`).
+
+---
 
 **Idea L-001 — Integración de la LNB (robot de datos, GRATIS)** · `FASE 1 HECHA ✅ (faltan fases 2 y 3)`
 
