@@ -1,0 +1,28 @@
+name: Robot LNB
+
+# Corre el robot SOLO, en la nube de GitHub. No necesita tu computadora prendida.
+# La llave secreta NO va aqui: se guarda aparte en los "Secrets" del repo.
+
+on:
+  schedule:
+    # Las horas estan en UTC. Republica Dominicana es UTC-4 (no cambia en el año).
+    - cron: '*/15 21-23,0-5 * * *'   # Ventana de juegos: ~5:00 pm a 1:59 am RD, cada 15 min
+    - cron: '0 13,17 * * *'          # Refresco de dia: ~9:00 am y 1:00 pm RD
+  workflow_dispatch:                 # Boton para correrlo a mano cuando tu quieras
+
+jobs:
+  correr-robot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Bajar el codigo del repo
+        uses: actions/checkout@v4
+
+      - name: Preparar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Correr el robot
+        run: node robot-lnb.js
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
