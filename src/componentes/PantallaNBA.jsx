@@ -115,6 +115,45 @@ function Avatar({ foto, abv, color, size = 46, radio = 12 }) {
   )
 }
 
+// ====== lector de noticia (modal desde abajo) — A NIVEL DE MÓDULO ======
+// Estar afuera del componente le da identidad estable: cuando la pantalla se
+// redibuja (p.ej. el carrusel), React lo ACTUALIZA en vez de rearmarlo, así
+// el scroll de lectura no se reinicia.
+function ModalNoticia({ n, cerrar }) {
+  if (!n) return null
+  return (
+    <div onClick={cerrar} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 70, background: 'rgba(0,0,0,0.66)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 540, background: T.fondo, borderTopLeftRadius: 22, borderTopRightRadius: 22, border: `1px solid ${T.borde}`, maxHeight: '90vh', overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
+        <div style={{ display: 'flex', height: 3 }}>
+          <span style={{ flex: 1, background: T.vino }} />
+          <span style={{ flex: 1, background: T.rojo }} />
+          <span style={{ flex: 1, background: T.oro }} />
+        </div>
+        {n.imagen && (
+          <div style={{ width: '100%', height: 210, background: '#000' }}>
+            <img src={n.imagen} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} onError={(e) => { const p = e.currentTarget.parentElement; if (p) p.style.display = 'none' }} />
+          </div>
+        )}
+        <div style={{ padding: '16px 18px calc(env(safe-area-inset-bottom) + 24px)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <span style={{ fontFamily: DISP, fontSize: 11, fontWeight: 800, letterSpacing: 0.5, textTransform: 'uppercase', color: T.oroLt }}>{n.fuente}{n.tiempo ? ` · ${n.tiempo}` : ''}</span>
+            <span onClick={cerrar} style={{ fontSize: 24, color: T.tenue, cursor: 'pointer', lineHeight: 1, padding: '0 4px' }}>×</span>
+          </div>
+          <h2 style={{ fontFamily: DISP, fontSize: 22, fontWeight: 800, lineHeight: 1.2, color: T.texto, margin: '0 0 14px' }}>{n.titulo}</h2>
+          {n.cuerpo
+            ? n.cuerpo.split('\n').filter((p) => p.trim()).map((p, i) => (
+              <p key={i} style={{ fontSize: 14.5, color: T.texto2, lineHeight: 1.65, margin: '0 0 12px' }}>{p}</p>
+            ))
+            : <p style={{ fontSize: 14, color: T.tenue, lineHeight: 1.6 }}>{n.resumen || 'Toca abajo para leer la noticia completa.'}</p>}
+          {n.enlace && (
+            <a href={n.enlace} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginTop: 8, fontFamily: DISP, fontSize: 13, fontWeight: 800, letterSpacing: 0.4, textTransform: 'uppercase', color: '#fff', background: `linear-gradient(135deg, ${T.vino}, ${T.rojo})`, padding: '11px 18px', borderRadius: 12, textDecoration: 'none' }}>Leer en NBAManiacs ›</a>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function PantallaNBA({ onVolver }) {
   // ---- 3 niveles: teléfono / tablet (iPad) / escritorio ----
   const calcVista = () => {
@@ -143,8 +182,9 @@ export default function PantallaNBA({ onVolver }) {
   const [clasif, setClasif] = useState(CLASIF)
   const [lideres, setLideres] = useState(LIDERES)
   const [equipos, setEquipos] = useState(EQUIPOS_DEMO)
-  const [noticias, setNoticias] = useState(NOTICIAS)
+  const [noticias, setNoticias] = useState([]) // se llena con el RSS real de NBAManiacs
   const [noticiaSel, setNoticiaSel] = useState(null) // noticia abierta en el lector
+  const [slideIdx, setSlideIdx] = useState(0) // slide activo del carrusel de portada
   useEffect(() => {
     let vivo = true
     getScoreboard().then((j) => { if (vivo && j && j.length) setJuegos(j) }).catch(() => {})
@@ -154,6 +194,15 @@ export default function PantallaNBA({ onVolver }) {
     getNoticias().then((n) => { if (vivo && n && n.length) setNoticias(n) }).catch(() => {})
     return () => { vivo = false }
   }, [])
+
+  // carrusel de portada: pasa solo cada 6 segundos (las 5 noticias de arriba).
+  // Se PAUSA mientras hay una noticia abierta, para no redibujar al leer.
+  useEffect(() => {
+    const count = Math.min(5, noticias.length)
+    if (count <= 1 || noticiaSel) return
+    const id = setInterval(() => setSlideIdx((i) => (i + 1) % count), 6000)
+    return () => clearInterval(id)
+  }, [noticias.length, noticiaSel])
 
   const fecha = new Date().toLocaleDateString('es-DO', { weekday: 'long', day: 'numeric', month: 'long' })
 
@@ -201,22 +250,25 @@ export default function PantallaNBA({ onVolver }) {
     )
   }
 
-  // ----- noticia destacada -----
-  const tarjetaDestacada = (n) => (
-    <div key={n.id} style={{ background: T.panel, border: `1px solid ${T.borde}`, borderRadius: 16, overflow: 'hidden', display: 'flex', minHeight: 104, boxShadow: '0 8px 22px rgba(0,0,0,.28)' }}>
-      <div style={{ width: 118, flexShrink: 0, position: 'relative', background: n.foto ? '#000' : `linear-gradient(140deg, ${T.vino}, #3a0a18)` }}>
-        {n.foto && <img src={n.foto} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
-        <div style={{ position: 'absolute', bottom: 8, left: 8, display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(8,5,9,.66)', borderRadius: 14, padding: '3px 8px', backdropFilter: 'blur(4px)' }}>
-          <span>🔥</span><b style={{ fontFamily: DISP, fontSize: 11, color: T.oroLt }}>{n.indice}</b>
+  // ----- noticia destacada (real, se toca y abre el lector) -----
+  const tarjetaDestacada = (n) => {
+    const img = n.imagen || n.foto
+    return (
+      <div key={n.id} onClick={() => setNoticiaSel(n)} style={{ background: T.panel, border: `1px solid ${T.borde}`, borderRadius: 16, overflow: 'hidden', display: 'flex', minHeight: 104, boxShadow: '0 8px 22px rgba(0,0,0,.28)', cursor: 'pointer' }}>
+        <div style={{ width: 118, flexShrink: 0, position: 'relative', background: img ? '#000' : `linear-gradient(140deg, ${T.vino}, #3a0a18)` }}>
+          {img && <img src={img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { e.currentTarget.style.display = 'none' }} />}
+          <div style={{ position: 'absolute', bottom: 8, left: 8, display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(8,5,9,.66)', borderRadius: 14, padding: '3px 8px', backdropFilter: 'blur(4px)' }}>
+            <span>🔥</span><b style={{ fontFamily: DISP, fontSize: 11, color: T.oroLt }}>{n.indice}</b>
+          </div>
+        </div>
+        <div style={{ padding: '12px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 0 }}>
+          <div style={{ fontFamily: DISP, fontWeight: 800, fontSize: 10, letterSpacing: 1.3, textTransform: 'uppercase', color: n.breaking ? T.rojo : '#7fb3ff', marginBottom: 4 }}>{n.tag}</div>
+          <h4 style={{ fontFamily: DISP, fontWeight: 700, fontSize: 16, lineHeight: 1.12, color: T.texto, margin: 0 }}>{n.titulo}</h4>
+          <div style={{ fontSize: 10.5, color: T.tenue, marginTop: 6 }}>{n.fuente} · {n.tiempo}</div>
         </div>
       </div>
-      <div style={{ padding: '12px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 0 }}>
-        <div style={{ fontFamily: DISP, fontWeight: 800, fontSize: 10, letterSpacing: 1.3, textTransform: 'uppercase', color: n.hot ? T.rojo : '#7fb3ff', marginBottom: 4 }}>{n.tag}</div>
-        <h4 style={{ fontFamily: DISP, fontWeight: 700, fontSize: 16, lineHeight: 1.12, color: T.texto, margin: 0 }}>{n.titulo}</h4>
-        <div style={{ fontSize: 10.5, color: T.tenue, marginTop: 6 }}>{n.fuente} · {n.tiempo}</div>
-      </div>
-    </div>
-  )
+    )
+  }
 
   // ----- tabla de clasificación -----
   const tablaClasif = (lista, full) => (
@@ -273,61 +325,56 @@ export default function PantallaNBA({ onVolver }) {
     )
   }
 
-  // ----- lector de noticia DENTRO de la app (modal desde abajo) -----
-  const ModalNoticia = ({ n, cerrar }) => {
-    if (!n) return null
+  // (el lector de noticias ModalNoticia ahora vive a nivel de módulo, abajo,
+  //  para que NO se reinicie el scroll cuando la pantalla se redibuja)
+
+  // ============== PORTADA (carrusel de bombazos reales) ==============
+  // Reparte las noticias reales: las 5 más recientes = carrusel de portada;
+  // las siguientes = "Lo más importante"; el resto = "Más noticias".
+  // NOTA: el Índice MC aquí es PROVISIONAL (por recencia). El motor real de
+  // relevancia lo montamos después y reemplaza este número sin tocar el diseño.
+  const conIndice = noticias.map((n, i) => ({ ...n, indice: Math.max(72, 98 - i * 3), breaking: i === 0 }))
+  const portadaItems = conIndice.slice(0, 5)
+  const destacadas = conIndice.slice(5, 9)
+  const masNoticiasHoy = conIndice.slice(9)
+
+  const portada = () => {
+    if (!portadaItems.length) {
+      return (
+        <div style={{ borderRadius: 20, overflow: 'hidden', border: `1px solid ${T.borde}`, marginTop: 4, height: grande ? 280 : 230, display: 'grid', placeItems: 'center', background: `linear-gradient(125deg, #0a0507 0%, ${T.vino} 60%, ${T.rojo} 100%)`, color: '#e7d6da', fontFamily: DISP, letterSpacing: 1, fontSize: 13 }}>
+          Cargando bombazos de NBAManiacs…
+        </div>
+      )
+    }
+    const i = slideIdx % portadaItems.length
+    const n = portadaItems[i]
+    const meta = [n.tiempo, n.fuente].filter(Boolean)
     return (
-      <div onClick={cerrar} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 70, background: 'rgba(0,0,0,0.66)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
-        <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 540, background: T.fondo, borderTopLeftRadius: 22, borderTopRightRadius: 22, border: `1px solid ${T.borde}`, maxHeight: '90vh', overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
-          <div style={{ display: 'flex', height: 3 }}>
-            <span style={{ flex: 1, background: T.vino }} />
-            <span style={{ flex: 1, background: T.rojo }} />
-            <span style={{ flex: 1, background: T.oro }} />
+      <div style={{ borderRadius: 20, overflow: 'hidden', position: 'relative', border: `1px solid ${T.borde}`, boxShadow: '0 22px 54px rgba(0,0,0,.5)', marginTop: 4 }}>
+        <div onClick={() => setNoticiaSel(n)} style={{ height: grande ? 280 : 230, position: 'relative', background: n.imagen ? '#000' : `linear-gradient(125deg, #0a0507 0%, ${T.vino} 60%, ${T.rojo} 100%)`, cursor: 'pointer' }}>
+          {n.imagen && <img src={n.imagen} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { e.currentTarget.style.display = 'none' }} />}
+          <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(80% 60% at 80% 26%, rgba(249,160,27,.22), transparent 58%)` }} />
+          {n.breaking && <div style={{ position: 'absolute', top: 14, left: 14, display: 'flex', alignItems: 'center', gap: 7, background: T.rojo, color: '#fff', fontFamily: DISP, fontWeight: 900, fontSize: 11, letterSpacing: 1.5, padding: '6px 11px', borderRadius: 7, boxShadow: `0 6px 18px ${T.rojo}66` }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: '#fff' }} />BOMBAZO</div>}
+          <div style={{ position: 'absolute', top: 14, right: 14, display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(8,5,9,.55)', border: `1px solid ${T.oro}`, borderRadius: 20, padding: '5px 10px', backdropFilter: 'blur(6px)' }}>
+            <span style={{ fontSize: 9, color: '#d8c9bf', textTransform: 'uppercase', letterSpacing: 1 }}>Índice MC</span>
+            <b style={{ fontFamily: DISP, fontSize: 13, color: T.oro }}>{n.indice}</b><span>🔥</span>
           </div>
-          {n.imagen && (
-            <div style={{ width: '100%', height: 210, background: '#000' }}>
-              <img src={n.imagen} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} onError={(e) => { const p = e.currentTarget.parentElement; if (p) p.style.display = 'none' }} />
-            </div>
-          )}
-          <div style={{ padding: '16px 18px calc(env(safe-area-inset-bottom) + 24px)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <span style={{ fontFamily: DISP, fontSize: 11, fontWeight: 800, letterSpacing: 0.5, textTransform: 'uppercase', color: T.oroLt }}>{n.fuente}{n.tiempo ? ` · ${n.tiempo}` : ''}</span>
-              <span onClick={cerrar} style={{ fontSize: 24, color: T.tenue, cursor: 'pointer', lineHeight: 1, padding: '0 4px' }}>×</span>
-            </div>
-            <h2 style={{ fontFamily: DISP, fontSize: 22, fontWeight: 800, lineHeight: 1.2, color: T.texto, margin: '0 0 14px' }}>{n.titulo}</h2>
-            {n.cuerpo
-              ? n.cuerpo.split('\n').filter((p) => p.trim()).map((p, i) => (
-                <p key={i} style={{ fontSize: 14.5, color: T.texto2, lineHeight: 1.65, margin: '0 0 12px' }}>{p}</p>
-              ))
-              : <p style={{ fontSize: 14, color: T.tenue, lineHeight: 1.6 }}>{n.resumen || 'Toca abajo para leer la noticia completa.'}</p>}
-            {n.enlace && (
-              <a href={n.enlace} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginTop: 8, fontFamily: DISP, fontSize: 13, fontWeight: 800, letterSpacing: 0.4, textTransform: 'uppercase', color: '#fff', background: `linear-gradient(135deg, ${T.vino}, ${T.rojo})`, padding: '11px 18px', borderRadius: 12, textDecoration: 'none' }}>Leer en NBAManiacs ›</a>
-            )}
+          <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: grande ? '46px 24px 24px' : '34px 18px 22px', background: 'linear-gradient(180deg, transparent, rgba(8,5,9,.55) 45%, rgba(8,5,9,.95))' }}>
+            {n.tag && <div style={{ fontFamily: DISP, fontWeight: 800, fontSize: 11, letterSpacing: 1.5, color: T.oroLt, textTransform: 'uppercase' }}>{n.tag}</div>}
+            <h3 style={{ fontFamily: DISP, fontWeight: 900, fontSize: grande ? 29 : 22, lineHeight: 1.08, margin: '5px 0 7px', color: '#fff', maxWidth: 720, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{n.titulo}</h3>
+            <div style={{ fontSize: 11.5, color: '#cbbfc6', display: 'flex', gap: 10, flexWrap: 'wrap' }}>{meta.map((m, k) => <span key={k}>{k > 0 && <span style={{ marginRight: 10, opacity: .5 }}>•</span>}{m}</span>)}</div>
           </div>
         </div>
+        {portadaItems.length > 1 && (
+          <div style={{ position: 'absolute', bottom: 13, right: 16, display: 'flex', gap: 6, zIndex: 2 }}>
+            {portadaItems.map((_, k) => (
+              <span key={k} onClick={(e) => { e.stopPropagation(); setSlideIdx(k) }} style={{ width: k === i ? 20 : 7, height: 7, borderRadius: 4, background: k === i ? T.oro : 'rgba(255,255,255,.45)', cursor: 'pointer', transition: 'width .25s' }} />
+            ))}
+          </div>
+        )}
       </div>
     )
   }
-
-  // ============== PORTADA (hero) ==============
-  const portada = () => (
-    <div style={{ borderRadius: 20, overflow: 'hidden', position: 'relative', border: `1px solid ${T.borde}`, boxShadow: '0 22px 54px rgba(0,0,0,.5)', marginTop: 4 }}>
-      <div style={{ height: grande ? 280 : 230, position: 'relative', background: PORTADA.foto ? '#000' : `linear-gradient(125deg, #0a0507 0%, ${T.vino} 60%, ${T.rojo} 100%)` }}>
-        {PORTADA.foto && <img src={PORTADA.foto} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
-        <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(80% 60% at 80% 26%, rgba(249,160,27,.22), transparent 58%)` }} />
-        {PORTADA.breaking && <div style={{ position: 'absolute', top: 14, left: 14, display: 'flex', alignItems: 'center', gap: 7, background: T.rojo, color: '#fff', fontFamily: DISP, fontWeight: 900, fontSize: 11, letterSpacing: 1.5, padding: '6px 11px', borderRadius: 7, boxShadow: `0 6px 18px ${T.rojo}66` }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: '#fff' }} />BOMBAZO</div>}
-        <div style={{ position: 'absolute', top: 14, right: 14, display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(8,5,9,.55)', border: `1px solid ${T.oro}`, borderRadius: 20, padding: '5px 10px', backdropFilter: 'blur(6px)' }}>
-          <span style={{ fontSize: 9, color: '#d8c9bf', textTransform: 'uppercase', letterSpacing: 1 }}>Índice MC</span>
-          <b style={{ fontFamily: DISP, fontSize: 13, color: T.oro }}>{PORTADA.indice}</b><span>🔥</span>
-        </div>
-        <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: grande ? '40px 24px 18px' : '30px 18px 16px', background: 'linear-gradient(180deg, transparent, rgba(8,5,9,.55) 45%, rgba(8,5,9,.95))' }}>
-          <div style={{ fontFamily: DISP, fontWeight: 800, fontSize: 11, letterSpacing: 1.5, color: T.oroLt, textTransform: 'uppercase' }}>{PORTADA.tag}</div>
-          <h3 style={{ fontFamily: DISP, fontWeight: 900, fontSize: grande ? 30 : 25, lineHeight: 1.06, margin: '5px 0 7px', color: '#fff', maxWidth: 720 }}>{PORTADA.titulo}</h3>
-          <div style={{ fontSize: 11.5, color: '#cbbfc6', display: 'flex', gap: 10, flexWrap: 'wrap' }}>{PORTADA.meta.map((m, i) => <span key={i}>{i > 0 && <span style={{ marginRight: 10, opacity: .5 }}>•</span>}{m}</span>)}</div>
-        </div>
-      </div>
-    </div>
-  )
 
   // ============== contenido por pestaña ==============
   const strip = (children) => (
@@ -336,21 +383,44 @@ export default function PantallaNBA({ onVolver }) {
       : <div style={{ display: 'flex', gap: 11, overflowX: 'auto', overflowY: 'hidden', paddingBottom: 4, WebkitOverflowScrolling: 'touch' }}>{children}</div>
   )
 
+  const bloqueMasNoticias = (lista) => {
+    if (!lista.length) {
+      if (noticias.length) return null // ya salieron arriba; no dejamos hueco
+      return (
+        <>
+          {eyebrow('Más', 'noticias')}
+          <div style={{ padding: '22px 0', textAlign: 'center', color: T.tenue, fontSize: 13 }}>Cargando noticias de NBAManiacs…</div>
+        </>
+      )
+    }
+    return (
+      <>
+        {eyebrow('Más', 'noticias')}
+        <div>{lista.map(filaNoticia)}</div>
+      </>
+    )
+  }
+
   const vistaHoy = () => (
     <>
       {portada()}
       {eyebrow('En', 'vivo y de hoy', 'Todos')}
       {strip(juegos.map(tarjetaJuego))}
 
-      {eyebrow('Lo más', 'importante', 'Ver más')}
-      <div style={{ display: 'grid', gridTemplateColumns: grande ? '1fr 1fr' : '1fr', gap: 11 }}>{DESTACADAS.map(tarjetaDestacada)}</div>
+      {destacadas.length > 0 && (
+        <>
+          {eyebrow('Lo más', 'importante', 'Ver más')}
+          <div style={{ display: 'grid', gridTemplateColumns: grande ? '1fr 1fr' : '1fr', gap: 11 }}>{destacadas.map(tarjetaDestacada)}</div>
+        </>
+      )}
 
       {esEscritorio ? (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, alignItems: 'start' }}>
           <div style={{ minWidth: 0 }}>
             {eyebrow('Clasificación', '', 'Completa')}
             {toggleConf()}
             {tablaClasif(clasif[conf], false)}
+            {bloqueMasNoticias(masNoticiasHoy)}
           </div>
           <div style={{ minWidth: 0 }}>
             {eyebrow('Líderes de la', 'liga', 'Todos')}
@@ -364,11 +434,9 @@ export default function PantallaNBA({ onVolver }) {
           {tablaClasif(clasif[conf], false)}
           {eyebrow('Líderes de la', 'liga', 'Todos')}
           {strip(lideres.map(tarjetaLider))}
+          {bloqueMasNoticias(masNoticiasHoy)}
         </>
       )}
-
-      {eyebrow('Más', 'noticias')}
-      <div>{noticias.map(filaNoticia)}</div>
     </>
   )
 

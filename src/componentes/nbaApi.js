@@ -4,7 +4,12 @@
 // para que la pantalla solo cambie el estado y se pinte igual.
 //
 // Puertas de ESPN abiertas al teléfono (CORS *): scoreboard y news.
-// (Clasificación y líderes se traerán luego por el robot de Supabase.)
+// En el teléfono usamos HTTP NATIVO (CapacitorHttp), que sale por código
+// nativo y NO lo frena el CORS del WebView. Así el teléfono también puede
+// pedir clasificación, líderes y el RSS de NBAManiacs directo (sin proxy).
+// En web (la compu) se usa el fetch normal de siempre.
+
+import { Capacitor, CapacitorHttp } from '@capacitor/core'
 
 const BASE = 'https://site.api.espn.com/apis/site/v2/sports/basketball/nba'
 
@@ -18,8 +23,19 @@ const normAbv = (a) => {
   return NORM[x] || x
 }
 
-// fetch con tope de tiempo, para que nunca se quede colgado
+// fetch con tope de tiempo, para que nunca se quede colgado.
+// En el teléfono va por HTTP nativo (salta el CORS del WebView).
 async function getJson(url, ms = 10000) {
+  if (Capacitor.isNativePlatform()) {
+    const resp = await CapacitorHttp.get({
+      url,
+      headers: { accept: 'application/json' },
+      connectTimeout: ms,
+      readTimeout: ms,
+    })
+    if (resp.status < 200 || resp.status >= 300) throw new Error('HTTP ' + resp.status)
+    return typeof resp.data === 'string' ? JSON.parse(resp.data) : resp.data
+  }
   const ctrl = new AbortController()
   const t = setTimeout(() => ctrl.abort(), ms)
   try {
@@ -329,46 +345,76 @@ function imagenDe(item, html) {
   const m = /<img[^>]+src=["']([^"']+)["']/i.exec(html || '')
   return m ? m[1] : ''
 }
+// Convierte el XML del RSS en nuestra forma de NOTICIAS (compartido).
+function parseRssNoticias(xml, limite, patro) {
+  const doc = new DOMParser().parseFromString(xml, 'text/xml')
+  const items = Array.from(doc.querySelectorAll('item'))
+  const out = []
+  for (const it of items) {
+    const titulo = (it.querySelector('title')?.textContent || '').trim()
+    const enlace = (it.querySelector('link')?.textContent || '').trim()
+    const fecha = it.querySelector('pubDate')?.textContent || ''
+    const desc = it.querySelector('description')?.textContent || ''
+    const full = hijoTexto(it, 'content:encoded') || desc
+    const catArr = Array.from(it.querySelectorAll('category')).map((c) => (c.textContent || '').trim()).filter(Boolean)
+    const cats = catArr.join(' ')
+    const tag = catArr[0] || 'NBA'
+    if (!titulo) continue
+    if (patro.test(titulo) || patro.test(desc) || patro.test(cats)) continue
+    const cuerpo = quitarHtml(full)
+    const resumen = quitarHtml(desc).slice(0, 180)
+    out.push({
+      id: enlace || String(out.length),
+      titulo,
+      tag,
+      fuente: 'NBAManiacs',
+      tiempo: tiempoRel(fecha),
+      imagen: imagenDe(it, full),
+      resumen,
+      cuerpo,
+      foto: null,
+      enlace,
+    })
+    if (out.length >= limite) break
+  }
+  return out
+}
+
 export async function getNoticias(limite = 24) {
   const RSS = 'https://www.nbamaniacs.com/feed/'
+  const patro = /patrocinad|colaboraci[oó]n|sponsored|in collaboration|publicidad/i
+
+  // TELÉFONO: pide el RSS directo por HTTP nativo (sin CORS, sin proxy flojo).
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const resp = await CapacitorHttp.get({
+        url: RSS,
+        headers: {
+          accept: 'application/rss+xml, application/xml, text/xml',
+          // Muchos feeds de WordPress/Cloudflare bloquean el pedido si no
+          // parece un navegador. Nos presentamos como Safari de iPhone.
+          'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
+        },
+        connectTimeout: 15000,
+        readTimeout: 15000,
+      })
+      const xml = typeof resp.data === 'string' ? resp.data : ''
+      const out = parseRssNoticias(xml, limite, patro)
+      if (out.length) return out
+    } catch (e) { /* si el directo falla, cae a los convertidores de abajo */ }
+  }
+
+  // WEB (o respaldo): el navegador no deja leer el RSS directo; pasa por proxy.
   const proxies = [
     (u) => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
     (u) => 'https://corsproxy.io/?url=' + encodeURIComponent(u),
   ]
-  const patro = /patrocinad|colaboraci[oó]n|sponsored|in collaboration|publicidad/i
   for (const mk of proxies) {
     try {
       const r = await fetch(mk(RSS))
       if (!r.ok) continue
       const xml = await r.text()
-      const doc = new DOMParser().parseFromString(xml, 'text/xml')
-      const items = Array.from(doc.querySelectorAll('item'))
-      if (!items.length) continue
-      const out = []
-      for (const it of items) {
-        const titulo = (it.querySelector('title')?.textContent || '').trim()
-        const enlace = (it.querySelector('link')?.textContent || '').trim()
-        const fecha = it.querySelector('pubDate')?.textContent || ''
-        const desc = it.querySelector('description')?.textContent || ''
-        const full = hijoTexto(it, 'content:encoded') || desc
-        const cats = Array.from(it.querySelectorAll('category')).map((c) => c.textContent || '').join(' ')
-        if (!titulo) continue
-        if (patro.test(titulo) || patro.test(desc) || patro.test(cats)) continue
-        const cuerpo = quitarHtml(full)
-        const resumen = quitarHtml(desc).slice(0, 180)
-        out.push({
-          id: enlace || String(out.length),
-          titulo,
-          fuente: 'NBAManiacs',
-          tiempo: tiempoRel(fecha),
-          imagen: imagenDe(it, full),
-          resumen,
-          cuerpo,
-          foto: null,
-          enlace,
-        })
-        if (out.length >= limite) break
-      }
+      const out = parseRssNoticias(xml, limite, patro)
       if (out.length) return out
     } catch (e) { /* probar el siguiente convertidor */ }
   }
