@@ -49,7 +49,9 @@ export async function publicarJuego(resultado) {
   // Armar título y texto desde la estadística (inteligencia básica)
   const jugadores = resultado.jugadores || []
   const totalEq = (eq) => jugadores.filter((j) => j.equipo === eq).reduce((a, j) => a + (j.pts || 0), 0)
-  const totalA = totalEq(0), totalB = totalEq(1)
+  // Si vienen totales oficiales (ej. la LNB), mandan esos; si no, se suman del box.
+  const totalA = resultado.totalA != null ? Number(resultado.totalA) : totalEq(0)
+  const totalB = resultado.totalB != null ? Number(resultado.totalB) : totalEq(1)
   const hayEmpate = totalA === totalB
 
   // destacado = más puntos
@@ -119,6 +121,7 @@ export async function publicarJuego(resultado) {
     datos: {
       nombreA: resultado.nombreA, nombreB: resultado.nombreB,
       logoA: resultado.logoA || null, logoB: resultado.logoB || null,
+      logoUrlA: resultado.logoUrlA || null, logoUrlB: resultado.logoUrlB || null,
       totalA, totalB, hayEmpate,
       jugadores: jugadoresGuardar,
       momentos,

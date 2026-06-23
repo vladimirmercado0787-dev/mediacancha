@@ -633,6 +633,93 @@ Hecho en: logo de torneo, foto de perfil (forma círculo). Falta enchufar en: eq
 - Modales centrados en computadora (JuegoJugadores)
 - Responsive de torneos a 3 niveles
 
+### L-007 · Modos de anotación, cascadas, ratings y reloj  `PENDIENTE`
+
+*Decidido con Vladimir (sesión del anotador). Es la arquitectura COMPLETA de la pizarra. El motor actual `PantallaJuegoVivo.jsx` ya tiene la base (dos modos jugada/jugador, cascada de asistencia, deshacer/corregir, sustituciones, reloj, narrador) — esto lo COMPLETA sin romperlo.*
+
+**Filosofía:** anotar en vivo tiene que ser RÁPIDO. Tocar un punto exacto en la cancha por cada tiro pide demasiada puntería/memoria muscular para el día a día → el mapa de tiros es OPCIONAL, no el principal. El modo de dos toques manda.
+
+**TRES MODOS (se eligen en la config del juego):**
+
+1. **Rápido** — liviano, el de todos los días.
+   - Lleva SOLO: los puntos y **quién los metió**. Nada más. (Igual se elige el jugador, no es solo marcador de equipo.)
+   - Dos sabores: **Normal (liga)** = dobles y triples, SIN botón de "1 punto"… *a menos* que se prendan **faltas acumulativas**, y ahí aparece el **tiro libre de 1 punto**. **Americano** = uno y dos.
+   - El tiro libre de 1 punto (con faltas acumulativas) aplica a normal y americano.
+   - **SIN rating.** Solo historial: ganados/perdidos, contra quién, %. (perfil de liga normal)
+   - Nota en la UI: *"Ideal para juegos informales en cancha."*
+
+2. **Fogueo** — la pizarra COMPLETA (todas las cascadas + estadística final). **CON rating de fogueo.**
+
+3. **Torneo** — la MISMA pizarra que fogueo, idéntica. Lo único distinto: **dónde/cómo se guarda el rating** (rating de torneo). El **torneo profesional** se mide **aparte**.
+
+**RATINGS:** rápido NO · fogueo SÍ · torneo SÍ · profesional aparte.
+
+**CASCADAS (fogueo/torneo). Flujo = elegir jugador → opción:**
+- **Tiro fallado:** jugador → "Tiro fallado" → **¿de dos o de tres?** (para los %) → **¿quién cogió el rebote?**. El rebote vive DENTRO del tiro fallado (NO botón suelto — el rebote solo existe cuando hay un fallo). En el paso del rebote: jugadores de **ambos equipos** + salida **"Outside / se fue afuera"**. **Ofensivo/defensivo sale solo** comparando el equipo del tirador vs. el del reboteador.
+- **Asistencia** (como ya está): quién la dio → a quién → de cuántos puntos.
+- **Tiro libre:** botón **"Va a la línea de tiro libre"**.
+  - **Seguro anti-error:** si marcan tiro libre SIN falta previa, pregunta **"¿de quién fue la falta / técnica?"** y la registra → nunca queda un tiro libre huérfano (pizarra 100% cuadrada).
+  - → **¿cuántos tiros?** (1/2/3) → **¿quién tira?** (mismo jugador si es falta normal; **cualquiera del equipo contrario** si es técnica) → marcar cada tiro **encestó (+1)/falló**, uno por uno.
+  - **REBOTE SOLO EN EL ÚLTIMO TIRO LIBRE.** Los anteriores no tienen rebote (bola muerta, se la devuelven al tirador). Si falla el último → engancha rebote + outside, igual que el de cancha.
+- **Deshacer / Corregir** en TODA la cadena (ya existe; asegurar que cada eslabón nuevo se pueda deshacer).
+
+**ESTADÍSTICA FINAL (fogueo/torneo):** todo el cuadro — tiros tirados, fallados (equipo y jugador), cuántos de dos, cuántos de tres, **% por jugador**, etc.
+
+**MAPA DE TIROS (opcional, modos detallados):**
+- Media cancha **VERTICAL** (canasto arriba), imagen de fondo. Componente `MapaTiros.jsx` (captura por % + pintado de puntos). Asset: `src/assets/media_cancha_half_vertical.png`. (La imagen subida es de baja resolución → conviene regenerarla en alta.)
+- El **2 o 3 sale de la ZONA** donde se toca (dentro del arco = 2, detrás = 3), con botón **corregir** por si cae en la raya (la cancha es artística, el arco no es reglamentario exacto).
+- Puntos por color de equipo; relleno = encestó, aro = falló. Filtrable por equipo/jugador. Alimenta resultado, perfil y **PDF**.
+- Es una capa que se prende/apaga; NO estorba al modo rápido.
+
+**RELOJ:**
+- **Manual / externo:** la app NO ofrece minutos por jugador (no tiene de dónde sacarlos). Al final → Finalizar juego.
+- **Sincronizado:** se le **asigna a un usuario registrado** (su pantalla de reloj: cronómetro grande, cuartos, iniciar/pausar, marcador espejo). Usa **Supabase Realtime** (ÚNICO paso que no es copiar/pegar: prender Realtime en el panel de Supabase). El reloj manda "corriendo/pausado/cuarto"; el anotador manda "quién está en cancha". Cruzando los dos → **minutos jugados** = (reloj corriendo) × (jugadores enCancha); el cambio ajusta quién acumula.
+- **Razón:** el reloj sincronizado es la ÚNICA forma de llevar los **minutos jugados por jugador** (un reloj externo nunca te los da). Por eso: minutos SOLO con reloj sincronizado, y solo en fogueo/torneo. Manual = sin minutos. La config lo decide sola.
+
+**TODO va en la CONFIGURACIÓN DEL JUEGO** (modo, normal/americano, faltas acumulativas, mapa sí/no, reloj manual/sincronizado + a quién).
+
+**Respetar siempre los chequeos:** template oficial (1.3), safe-area (1.15), preservación — no borrar lo que sirve (1.17), grants de tablas nuevas (2.8).
+
+**PENDIENTE — orden sugerido de implementación:** (1) cascada de rebote en tiro fallado → (2) tiro libre con falta-respaldo → (3) estadística final completa → (4) mapa de tiros opcional → (5) reloj sincronizado (Realtime). Cada pieza es un archivo que Vladimir pega; velocidad NO es el cuello de botella.
+
 ---
 
-*Fin del cuaderno. Las ideas nuevas se agregan en su módulo de la sección 3.*
+*Fin del cuaderno. Las ideas nuevas se agregan en su módulo de la sección 3.*### L-008 · Vista de escritorio (computadora) — auditoría + pendientes  `PRIORIDAD 2`
+
+*Anotado por Vladimir tras notar que el desarrollo se enfocó casi todo en teléfono y el escritorio quedó inconsistente. Auditoría hecha el 23 jun 2026 sobre 21 pantallas/componentes del repo. **Esto hay que arreglarlo (prioridad 2).***
+
+**REGLA NUEVA (a partir de ahora):** toda pantalla nueva o editada se entrega **responsive desde el principio** (teléfono + escritorio) en el mismo momento, con el patrón `esEscritorio`. No dejarlo para después — eso fue lo que se dejó de hacer y generó toda esta inconsistencia.
+
+**PATRÓN OFICIAL DE ESCRITORIO (el que YA existe y hay que aplicar parejo en todas):**
+- Detección por JS: `const [esEscritorio, setEsEscritorio] = useState(window.innerWidth >= 900)` + listener `resize`. (Ninguna pantalla usa `@media` CSS; todo es JS `innerWidth`. Mantener ese patrón parejo.)
+- En escritorio: ensanchar el contenedor (maxWidth mayor, p.ej. 720–980), agrandar fuentes y paddings, quitar `paddingTop: env(safe-area-inset-top)`, y convertir las hojas que suben desde abajo (bottom-sheets) en **modales centrados** (`alignItems: center`, `padding: 20`, bordes redondeados completos).
+
+**ESTADO ACTUAL — ✅ YA adaptadas a escritorio:**
+- `PantallaPublica` (hasta ~1700px, modales centrados) · `PantallaLNB` (980/820) · `PantallaResultados` (760) · `PantallaPerfil` (perfil propio) · `PantallaTorneos` · `PantallaLigas` (720) · `PantallaJuegoJugadores` (parcial) · `TarjetaResultado` · `BottomSheet` (se centra en desktop).
+
+**ESTADO ACTUAL — ❌ SIN adaptar (se ven como columna de teléfono o "teléfono flotando" en monitor grande):**
+- **Flujo de anotar juego:** `PantallaJuegoConfig`, `PantallaJuegoVivo` (está `position: fixed` a 480px → en pantalla grande se ve un teléfono en el centro), `PantallaJuegoResultado`.
+- `PantallaPerfilAjeno` — **inconsistencia fea:** el perfil PROPIO sí tiene escritorio, el AJENO no. Se ven distintos.
+- `PantallaBuscar` — resultados en una sola columna angosta; en desktop pedirían rejilla/grid.
+- `PantallaLogin`, `PantallaRegistro`, `PantallaCrearTorneo`, `PantallaPublicar` — formularios sin trato de escritorio.
+- `App.jsx` (el armazón) — sin layout de escritorio; la navegación es estilo teléfono (no hay barra lateral/superior de computadora). Verificar dónde vive la nav y darle versión desktop.
+
+**FALTANTES DE FUNCIONALIDAD (no solo estética) — observación de Vladimir:**
+- En la **Pantalla Pública** faltan cosas que debieron ponerse según se avanzaba: el **carrusel** de pantalla NO está, **no se cargaron los datos de la LNB**, y "muchas cosas más". Hay que revisar la Pantalla Pública a fondo y completar lo que falta (carrusel + datos LNB + secciones faltantes). Auditar exactamente qué módulos faltan cuando se trabaje.
+
+**DECISIÓN DE VLADIMIR (resuelta):**
+- **Día a día = teléfono** (en la cancha, en la mano). **Anotar un TORNEO = computadora o iPad** — más cómodo, en mesa, con calma. Por eso el flujo de juego (Config/Vivo/Resultado) **SÍ debe adaptarse a escritorio Y a tablet**, no se deja phone-only.
+- Las **TRES vistas tienen que estar bien sincronizadas**: teléfono, **iPad (tablet)** y computadora. Esto es requisito, no opcional.
+
+**TRES NIVELES (no dos):** el patrón actual `esEscritorio` (≥900px) es binario (teléfono/escritorio) y deja al **iPad en tierra de nadie** (iPad vertical ≈768px, horizontal ≈1024px). Hay que pasar a **3 niveles**: teléfono / **tablet (iPad)** / escritorio. Alinear los cortes con los **3 niveles que ya usa `PantallaTorneos`** (mantener parejo en toda la app). El iPad debe verse cómodo para anotar — botones grandes, dos columnas donde quepan, nada de "teléfono estirado" ni "teléfono flotando".
+
+**QUÉ SE DEBE HACER — plan en orden sugerido:**
+1. **Armazón / App + navegación de escritorio** (barra superior o lateral; contenedor consistente para toda la app).
+2. **Inconsistencias rápidas:** `PerfilAjeno` (espejar `Perfil`), `Login`, `Registro`, `Buscar` (con grid), `CrearTorneo`, `Publicar` — aplicarles el patrón `esEscritorio`.
+3. **Pantalla Pública:** completar la funcionalidad faltante (carrusel, datos LNB, secciones) y revisar su escritorio.
+4. **Flujo de juego (Config/Vivo/Resultado):** adaptarlo a **iPad y escritorio** (confirmado — es donde se anotarán los torneos), con botones cómodos para anotar en tablet. Las tres vistas sincronizadas.
+5. Dejar todas con un patrón parejo de **3 niveles** (teléfono / tablet / escritorio); a futuro evaluar `@media` CSS si conviene.
+
+**Respetar siempre los chequeos:** template oficial (1.3), safe-area (1.15), preservación — no borrar lo que sirve (1.17), grants de tablas nuevas (2.8).
+
+---

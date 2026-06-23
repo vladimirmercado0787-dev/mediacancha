@@ -112,10 +112,10 @@ export default function PantallaPerfilAjeno({ usuarioId, onVolver, onMensaje }) 
     <div style={wrap}>
       <Velo />
       <div style={scrollArea}>
-        <div style={{ position: 'relative', zIndex: 1, maxWidth: 560, margin: '0 auto', padding: '16px 16px 50px' }}>
+        <div style={{ position: 'relative', zIndex: 1, maxWidth: 560, margin: '0 auto', padding: 'calc(env(safe-area-inset-top) + 14px) 16px calc(env(safe-area-inset-bottom) + 50px)' }}>
         {/* nav */}
         <div style={{ background: T.navDorada, borderRadius: 14, padding: '11px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, boxShadow: '0 6px 18px rgba(156,101,24,.3)' }}>
-          <span onClick={() => onVolver && onVolver()} style={{ color: '#2a1c08', fontWeight: 800, fontSize: 13, cursor: 'pointer' }}>← Volver</span>
+          <span onClick={() => onVolver && onVolver()} style={{ color: '#2a1c08', fontWeight: 800, fontSize: 13, cursor: 'pointer', padding: '6px 10px', margin: '-6px -10px', borderRadius: 8 }}>← Volver</span>
           <span style={{ color: '#2a1c08', fontWeight: 800, fontSize: 14 }}>Perfil</span>
           <span style={{ width: 40 }} />
         </div>

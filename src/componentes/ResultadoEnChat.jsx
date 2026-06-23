@@ -100,8 +100,8 @@ export default function ResultadoEnChat({ datos, mio, onVerJuego, onFijar, fijad
       </div>
 
       {/* Marcador */}
-      {filaEquipo(nombreA, totalA, d.logoA, '#e0563f', ganaA, ganaB)}
-      {filaEquipo(nombreB, totalB, d.logoB, '#4a90d0', ganaB, ganaA)}
+      {filaEquipo(nombreA, totalA, d.logoUrlA || d.logoA, '#e0563f', ganaA, ganaB)}
+      {filaEquipo(nombreB, totalB, d.logoUrlB || d.logoB, '#4a90d0', ganaB, ganaA)}
 
       {/* Figura del partido */}
       {figura && (

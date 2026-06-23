@@ -17,6 +17,7 @@
     "@capacitor/status-bar": "^8.0.2",
     "@independo/capacitor-voice-recorder": "^8.3.1",
     "@supabase/supabase-js": "^2.108.1",
+    "jspdf": "^4.2.1",
     "react": "^19.2.6",
     "react-dom": "^19.2.6"
   },

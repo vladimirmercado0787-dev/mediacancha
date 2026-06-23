@@ -104,7 +104,7 @@ export default function PantallaBuscar({ onVolver, onVerPerfil }) {
       <div style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none', background: T.veil }} />
       <div style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none', background: `radial-gradient(360px 280px at 50% 6%, ${T.glow1}, transparent 65%)` }} />
 
-      <div style={{ position: 'relative', zIndex: 1, maxWidth: 620, margin: '0 auto', padding: '16px 16px 50px' }}>
+      <div style={{ position: 'relative', zIndex: 1, maxWidth: 620, margin: '0 auto', padding: 'calc(env(safe-area-inset-top) + 14px) 16px calc(env(safe-area-inset-bottom) + 50px)' }}>
         {/* nav */}
         <div style={{ background: T.surf, border: `1px solid ${T.bd}`, borderRadius: 16, padding: '11px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, position: 'relative', overflow: 'hidden', backdropFilter: 'blur(10px)' }}>
           <span style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, display: 'flex' }}><span style={{ flex: 1, background: TRI_AZUL }} /><span style={{ flex: 1, background: '#fff' }} /><span style={{ flex: 1, background: TRI_ROJO }} /></span>

@@ -325,6 +325,82 @@ export default function PantallaPublica({ onAccion, haySesion }) {
   const [composerAbierto, setComposerAbierto] = useState(false)
   const [fotosComposer, setFotosComposer] = useState([])  // [{ blob, previa }] fotos elegidas para publicar
 
+  // Destacados de la semana para el carrusel de arriba. Hoy se nutre de la LNB
+  // (jugador de la semana, líderes y portada de noticias). Mañana se le enchufan
+  // más ligas y torneos: solo es agregar fuentes a esta misma lista.
+  const [destacados, setDestacados] = useState([])
+  useEffect(() => {
+    let vivo = true
+    const lnbImg = (u) => (u ? (String(u).startsWith('http') ? u : 'https://lnb-media.sfo3.cdn.digitaloceanspaces.com/' + u) : null)
+    ;(async () => {
+      try {
+        const { data: temps } = await supabase.from('lnb_temporadas').select('*').order('year', { ascending: false })
+        const actual = (temps || []).find((t) => t.current) || (temps || [])[0]
+        if (!actual) return
+        const [eqR, jsR, ldR, jtR, jgR, ntR] = await Promise.all([
+          supabase.from('lnb_equipos').select('*'),
+          supabase.from('lnb_jugador_semana').select('*').limit(1),
+          supabase.from('lnb_lideres').select('*').eq('temporada_id', actual.id).eq('rank', 1),
+          supabase.from('lnb_jugador_temporada').select('*').eq('temporada_id', actual.id),
+          supabase.from('lnb_jugadores').select('*'),
+          supabase.from('lnb_noticias').select('*').order('created_at', { ascending: false }).limit(3),
+        ])
+        const eMap = {}; (eqR.data || []).forEach((e) => { eMap[e.id] = e })
+        const nomEq = (id) => eMap[id]?.name || ''
+        const jMap = {}; (jgR.data || []).forEach((p) => { jMap[p.id] = p })
+        const sMap = {}; (jtR.data || []).forEach((s) => { sMap[s.jugador_id] = s })
+        const effDe = (s) => {
+          if (!s) return 0
+          const e = Number(s.efficiency)
+          if (s.efficiency != null && !Number.isNaN(e) && e > 0) return e
+          return (Number(s.points) || 0) + (Number(s.rebounds) || 0) + (Number(s.assists) || 0) + (Number(s.steals) || 0) + (Number(s.blocks) || 0) - (Number(s.turnovers) || 0)
+        }
+        const maxEff = Math.max(1, ...(jtR.data || []).map(effDe))
+        const ratingDe = (jid) => { const s = sMap[jid]; return s ? Math.round(100 * Math.pow(Math.max(0, effDe(s)) / maxEff, 0.85)) : null }
+        const f1 = (v) => (v == null || v === '' ? null : Number(v).toFixed(1).replace(/\.0$/, ''))
+        const cartaBase = (jid, extra) => {
+          const p = jMap[jid] || extra || {}
+          const s = sMap[jid] || {}
+          const stats = [[f1(s.points), 'Puntos'], [f1(s.rebounds), 'Rebotes'], [f1(s.assists), 'Asist.'], [f1(s.efficiency), 'Efic.']].filter((x) => x[0] != null)
+          return {
+            nombre: [p.nombre, p.apellido].filter(Boolean).join(' ') || 'Jugador',
+            foto: lnbImg(p.image_url),
+            equipo: nomEq(p.equipo_id || s.equipo_id),
+            pos: p.posicion_nombre || null, num: p.shirt_number != null ? p.shirt_number : null,
+            rating: ratingDe(jid), stats,
+          }
+        }
+        const cards = []
+        const js = (jsR.data || [])[0]
+        if (js) {
+          const jid = js.jugador_id || js.id
+          const base = cartaBase(jid, js)
+          // respaldo a los campos del propio registro si no hay stats por temporada
+          if (!base.stats.length) {
+            base.stats = [[f1(js.points), 'Puntos'], [f1(js.rebounds), 'Rebotes'], [f1(js.assists), 'Asist.'], [f1(js.efficiency), 'Efic.']].filter((x) => x[0] != null)
+          }
+          if (base.rating == null && js.rating != null) base.rating = js.rating
+          if (!base.foto) base.foto = lnbImg(js.image_url)
+          cards.push({ tipo: 'semana', label: js.label || 'Jugador de la semana', ...base })
+        }
+        const cats = [['points', 'Líder en puntos'], ['rebounds', 'Líder en rebotes'], ['assists', 'Líder en asistencias'], ['efficiency', 'Más eficiente']]
+        cats.forEach(([cat, label]) => {
+          const l = (ldR.data || []).find((x) => x.categoria === cat)
+          if (!l) return
+          const base = cartaBase(l.jugador_id, l)
+          if (!base.foto) base.foto = lnbImg(l.image_url)
+          if (!base.stats.length && l.average != null) base.stats = [[Number(l.average).toFixed(1), label.split(' ').pop()]]
+          cards.push({ tipo: 'lider', label, ...base })
+        })
+        ;(ntR.data || []).slice(0, 2).forEach((n) => cards.push({
+          tipo: 'noticia', titulo: n.title, resumen: n.excerpt, foto: lnbImg(n.image_url),
+        }))
+        if (vivo) setDestacados(cards)
+      } catch (e) { /* si la LNB aún no tiene datos, el carrusel simplemente no sale */ }
+    })()
+    return () => { vivo = false }
+  }, [])
+
   const recargarTechado = async () => {
     const res = await leerTechado()
     const pubs = res.data || []
@@ -1359,33 +1435,75 @@ export default function PantallaPublica({ onAccion, haySesion }) {
   }
 
   // Tarjeta "Jugador de la semana" (estilo del mockup; datos de muestra hasta tener el rating)
-  const JugadorSemana = () => (
-    <div style={{ marginTop: 18 }}>
-      <div style={{ position: 'relative', borderRadius: 20, overflow: 'hidden', border: `1px solid ${T.navActivoBorde}`, background: T.vidrio, minHeight: 196, boxShadow: T.esClaro ? '0 12px 30px rgba(20,24,30,.1)' : '0 14px 34px rgba(0,0,0,.4)' }}>
-        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 4, display: 'flex', zIndex: 3 }}><i style={{ flex: 1, background: '#1b3a8c' }} /><i style={{ flex: 1, background: '#fff' }} /><i style={{ flex: 1, background: '#ce1126' }} /></div>
-        <div style={{ position: 'absolute', right: -12, top: 6, fontFamily: '"Arial Narrow", Impact, sans-serif', fontStyle: 'italic', fontWeight: 700, fontSize: 178, lineHeight: 0.8, color: T.esClaro ? 'rgba(27,58,140,.06)' : 'rgba(255,255,255,.05)', zIndex: 1, letterSpacing: -8 }}>7</div>
-        <div style={{ position: 'absolute', top: 12, right: 14, textAlign: 'center', zIndex: 3, background: T.navActivoBg, border: `1px solid ${T.navActivoBorde}`, borderRadius: 15, padding: '5px 12px 6px' }}>
-          <div style={{ fontFamily: '"Arial Narrow", Impact, sans-serif', fontStyle: 'italic', fontWeight: 700, fontSize: 38, lineHeight: 0.82, color: T.acento }}>92</div>
-          <div style={{ fontFamily: '"Arial Narrow", Impact, sans-serif', fontWeight: 700, fontSize: 8, letterSpacing: 1.5, color: '#ce1126', marginTop: 2 }}>MC RATING</div>
-        </div>
-        <div style={{ position: 'relative', zIndex: 2, padding: '15px 16px 16px', height: '100%', display: 'flex', flexDirection: 'column' }}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, alignSelf: 'flex-start', fontFamily: '"Arial Narrow", Impact, sans-serif', fontStyle: 'italic', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, fontSize: 10, color: T.acento, background: T.navActivoBg, border: `1px solid ${T.navActivoBorde}`, padding: '4px 10px', borderRadius: 30 }}>★ Jugador de la semana<span style={{ opacity: 0.65, marginLeft: 5 }}>· muestra</span></span>
-          <div style={{ marginTop: 'auto' }}>
-            <div style={{ fontFamily: '"Arial Narrow", Impact, sans-serif', fontStyle: 'italic', fontWeight: 700, fontSize: 30, lineHeight: 0.95, textTransform: 'uppercase', color: T.textoFuerte }}>Starling<br />Mejía</div>
-            <div style={{ fontSize: 11.5, color: T.subTexto, marginTop: 5, fontWeight: 600 }}>Metros de Santiago · Escolta · <b style={{ color: T.acento }}>#7</b></div>
-            <div style={{ display: 'flex', gap: 7, marginTop: 12 }}>
-              {[['24.3', 'Puntos'], ['6.1', 'Rebotes'], ['5.4', 'Asist.'], ['22', 'Efic.']].map((s, i) => (
-                <div key={i} style={{ flex: 1, background: T.esClaro ? 'rgba(0,0,0,.03)' : 'rgba(255,255,255,.05)', border: `1px solid ${T.navActivoBorde}`, borderRadius: 10, padding: '7px 5px', textAlign: 'center' }}>
-                  <div style={{ fontFamily: '"Arial Narrow", Impact, sans-serif', fontWeight: 700, fontSize: 18, color: T.acento, fontStyle: 'italic' }}>{s[0]}</div>
-                  <div style={{ fontSize: 8, color: T.tenue, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', marginTop: 2 }}>{s[1]}</div>
-                </div>
-              ))}
-            </div>
-          </div>
+  const CarruselDestacados = () => {
+    const [activo, setActivo] = useState(0)
+    if (!destacados.length) return null
+    const total = destacados.length
+    const alScroll = (e) => {
+      const el = e.currentTarget; if (!el.firstChild) return
+      const w = el.firstChild.offsetWidth + 12
+      setActivo(Math.max(0, Math.min(total - 1, Math.round(el.scrollLeft / w))))
+    }
+    const chrome = (key, children, onClick) => (
+      <div key={key} onClick={onClick} style={{ scrollSnapAlign: 'start', flex: '0 0 88%', maxWidth: 460, cursor: 'pointer' }}>
+        <div style={{ position: 'relative', borderRadius: 20, overflow: 'hidden', border: `1px solid ${T.navActivoBorde}`, background: T.vidrio, minHeight: 196, boxShadow: T.esClaro ? '0 12px 30px rgba(20,24,30,.1)' : '0 14px 34px rgba(0,0,0,.4)' }}>
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 4, display: 'flex', zIndex: 3 }}><i style={{ flex: 1, background: '#1b3a8c' }} /><i style={{ flex: 1, background: '#fff' }} /><i style={{ flex: 1, background: '#ce1126' }} /></div>
+          {children}
         </div>
       </div>
-    </div>
-  )
+    )
+    const cardJugador = (c, i) => chrome(i, <>
+      {c.rating != null && (
+        <div style={{ position: 'absolute', top: 12, right: 14, textAlign: 'center', zIndex: 3, background: T.navActivoBg, border: `1px solid ${T.navActivoBorde}`, borderRadius: 15, padding: '5px 12px 6px' }}>
+          <div style={{ fontFamily: '"Arial Narrow", Impact, sans-serif', fontStyle: 'italic', fontWeight: 700, fontSize: 38, lineHeight: 0.82, color: T.acento }}>{c.rating}</div>
+          <div style={{ fontFamily: '"Arial Narrow", Impact, sans-serif', fontWeight: 700, fontSize: 8, letterSpacing: 1.5, color: '#ce1126', marginTop: 2 }}>MC RATING</div>
+        </div>
+      )}
+      <div style={{ position: 'relative', zIndex: 2, padding: '15px 16px 16px', height: '100%', display: 'flex', flexDirection: 'column' }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, alignSelf: 'flex-start', fontFamily: '"Arial Narrow", Impact, sans-serif', fontStyle: 'italic', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, fontSize: 10, color: T.acento, background: T.navActivoBg, border: `1px solid ${T.navActivoBorde}`, padding: '4px 10px', borderRadius: 30 }}>★ {c.label}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 13, marginTop: 13 }}>
+          <div style={{ width: 64, height: 64, borderRadius: '50%', flexShrink: 0, overflow: 'hidden', display: 'grid', placeItems: 'center', boxShadow: `0 0 0 2px ${T.acento}`, background: c.foto ? `url(${c.foto}) center/cover` : (T.esClaro ? 'rgba(0,0,0,.06)' : 'rgba(255,255,255,.06)') }}>
+            {!c.foto && <svg width="36" height="36" viewBox="0 0 24 24" fill={T.tenue}><path d="M12 12a4 4 0 100-8 4 4 0 000 8zm0 1.6c-3.4 0-6.4 1.8-6.4 4.6V20h12.8v-1.8c0-2.8-3-4.6-6.4-4.6z" /></svg>}
+          </div>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontFamily: '"Arial Narrow", Impact, sans-serif', fontStyle: 'italic', fontWeight: 700, fontSize: 26, lineHeight: 0.95, textTransform: 'uppercase', color: T.textoFuerte, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.nombre || 'Jugador'}</div>
+            <div style={{ fontSize: 11.5, color: T.subTexto, marginTop: 4, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{[c.equipo, c.pos].filter(Boolean).join(' · ')}{c.num != null && <> · <b style={{ color: T.acento }}>#{c.num}</b></>}</div>
+          </div>
+        </div>
+        {c.stats && c.stats.length > 0 && (
+          <div style={{ display: 'flex', gap: 7, marginTop: 'auto', paddingTop: 14 }}>
+            {c.stats.map((s, k) => (
+              <div key={k} style={{ flex: 1, background: T.esClaro ? 'rgba(0,0,0,.03)' : 'rgba(255,255,255,.05)', border: `1px solid ${T.navActivoBorde}`, borderRadius: 10, padding: '7px 5px', textAlign: 'center' }}>
+                <div style={{ fontFamily: '"Arial Narrow", Impact, sans-serif', fontWeight: 700, fontSize: 18, color: T.acento, fontStyle: 'italic' }}>{s[0]}</div>
+                <div style={{ fontSize: 8, color: T.tenue, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', marginTop: 2 }}>{s[1]}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </>, () => click('ligas'))
+    const cardNoticia = (c, i) => chrome(i, <>
+      {c.foto && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundImage: `url(${c.foto})`, backgroundSize: 'cover', backgroundPosition: 'center', zIndex: 1, opacity: 0.55 }} />}
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: T.esClaro ? 'linear-gradient(180deg, rgba(255,255,255,.25), rgba(255,255,255,.92))' : 'linear-gradient(180deg, rgba(8,10,14,.35), rgba(8,10,14,.92))', zIndex: 2 }} />
+      <div style={{ position: 'relative', zIndex: 3, padding: '15px 16px 16px', minHeight: 196, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+        <span style={{ alignSelf: 'flex-start', fontFamily: '"Arial Narrow", Impact, sans-serif', fontStyle: 'italic', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, fontSize: 10, color: '#fff', background: '#ce1126', padding: '4px 10px', borderRadius: 30, marginBottom: 'auto' }}>Noticia</span>
+        <div style={{ fontFamily: '"Arial Narrow", Impact, sans-serif', fontStyle: 'italic', fontWeight: 700, fontSize: 24, lineHeight: 1, textTransform: 'uppercase', color: T.textoFuerte }}>{c.titulo || 'Noticia de la LNB'}</div>
+        {c.resumen && <div style={{ fontSize: 12, color: T.subTexto, marginTop: 6, fontWeight: 600, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{c.resumen}</div>}
+      </div>
+    </>, () => click('ligas'))
+    return (
+      <div style={{ marginTop: 18 }}>
+        <div onScroll={alScroll} style={{ display: 'flex', gap: 12, overflowX: 'auto', scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', margin: '0 -2px', padding: '0 2px' }}>
+          {destacados.map((c, i) => c.tipo === 'noticia' ? cardNoticia(c, i) : cardJugador(c, i))}
+        </div>
+        {total > 1 && (
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 10 }}>
+            {destacados.map((_, i) => <span key={i} style={{ width: i === activo ? 18 : 6, height: 6, borderRadius: 3, background: i === activo ? T.acento : T.navActivoBorde, transition: 'width .2s' }} />)}
+          </div>
+        )}
+      </div>
+    )
+  }
 
   // ===== VISTA ESCRITORIO / TABLET =====
   if (esEscritorio) {
@@ -1559,8 +1677,7 @@ export default function PantallaPublica({ onAccion, haySesion }) {
         <div style={{ maxWidth: 480, margin: '0 auto', padding: '4px 16px 130px' }}>
         {!haySesion && <div style={{ marginTop: 14 }}><Bienvenida /></div>}
         <Historias />
-        <JugadorSemana />
-        {haySesion && Composer()}
+        <CarruselDestacados />
         <div style={{ marginTop: 22 }}><SecHead titulo="El Techado" icono="techado" accion={{ txt: 'Ver todo →', fn: () => click('techado') }} /><span style={{ display: 'block', fontSize: 11.5, color: T.tenue, margin: '-6px 2px 10px' }}>Tu zona, primero</span><ListaTechado /></div>
         <div style={{ marginTop: 22 }}><SecHead titulo="Torneos populares" accion={{ txt: 'Ver todos →', fn: () => click('torneos') }} /><ListaTorneos /></div>
         <div style={{ marginTop: 22 }}><SecHead titulo="Ranking nacional" accion={{ txt: 'Ver todo →', fn: () => click('rankings') }} /><ListaRanking n={5} /></div>

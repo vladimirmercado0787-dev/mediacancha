@@ -2,6 +2,7 @@ import { useState } from 'react'
 import fondoJuego from '../assets/fondo-juego.png'
 import LogoEquipo from './LogoEquipo'
 import { publicarJuego } from '../techado'
+import { compartirPdfResultado } from '../generarPdfResultado'
 
 const SUP_OSCURA = {
   esClaro: false, fondo: '#08090c', textoFuerte: '#f4f7f9', textoBody: '#eef3f6', tenue: '#9aa7b2',
@@ -77,6 +78,7 @@ export default function PantallaJuegoResultado({ resultado, onNuevo, onInicio, o
 
   const [publicado, setPublicado] = useState(false)
   const [publicando, setPublicando] = useState(false)
+  const [pdfCargando, setPdfCargando] = useState(false)
   const publicar = async () => {
     if (publicado || publicando) return
     setPublicando(true)
@@ -84,6 +86,13 @@ export default function PantallaJuegoResultado({ resultado, onNuevo, onInicio, o
     if (!res.error) setPublicado(true)
     else alert(res.error)
     setPublicando(false)
+  }
+  const compartirPdf = async () => {
+    if (pdfCargando) return
+    setPdfCargando(true)
+    try { await compartirPdfResultado(resultado) }
+    catch (e) { alert('No se pudo generar el PDF. Intenta de nuevo.') }
+    setPdfCargando(false)
   }
 
   const jugadores = resultado?.jugadores || []
@@ -102,6 +111,14 @@ export default function PantallaJuegoResultado({ resultado, onNuevo, onInicio, o
   // momentos destacados (capturados en vivo: rachas, parciales, hitos, manuales)
   const momentosLista = resultado?.momentos || []
   const iconoMomento = (tipo) => ({ racha: '🔥', parcial: '💥', mejorJuego: '⭐', cambioMando: '🔄', empate: '🤝', manual: '⭐' }[tipo] || '🏀')
+
+  // ===== DESGLOSE POR CUARTO (sale del historial, que guarda el cuarto de cada jugada) =====
+  const historial = resultado?.historial || []
+  const totalCuartos = resultado?.cuartos || 1
+  const hayCuartos = totalCuartos > 1 && historial.some((h) => h.cuarto)
+  const cuartosArr = Array.from({ length: totalCuartos }, (_, i) => i + 1)
+  const ptsCuartoEq = (q, eq) => historial.filter((h) => h.cuarto === q && h.equipo === eq).reduce((a, h) => a + ((h.suma && h.suma.pts) || 0), 0)
+  const ptsCuartoJug = (q, jid) => historial.filter((h) => h.cuarto === q && h.jugId === jid).reduce((a, h) => a + ((h.suma && h.suma.pts) || 0), 0)
 
   const cols = [{ id: 'pts', t: 'PTS', fuerte: true }]
   COL_DEFS.forEach((c) => { if (statsActivas.includes(c.id)) cols.push(c) })
@@ -179,7 +196,7 @@ export default function PantallaJuegoResultado({ resultado, onNuevo, onInicio, o
       <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: T.veloGrad }} />
       <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: `radial-gradient(ellipse 80% 44% at 50% 8%, ${T.glow}, transparent 70%)` }} />
 
-      <button onClick={cambiarTema} title={`Tema: ${T.nombre}`} style={{ position: 'fixed', top: 16, right: 16, zIndex: 5, display: 'flex', alignItems: 'center', gap: 7, background: T.esClaro ? 'rgba(255,255,255,.6)' : 'rgba(20,18,16,.7)', border: `1px solid ${T.acento}55`, color: T.acento, fontSize: 11.5, fontWeight: 700, padding: '7px 11px', borderRadius: 10, cursor: 'pointer', backdropFilter: 'blur(8px)' }}>
+      <button onClick={cambiarTema} title={`Tema: ${T.nombre}`} style={{ position: 'fixed', top: 'calc(env(safe-area-inset-top) + 12px)', right: 16, zIndex: 5, display: 'flex', alignItems: 'center', gap: 7, background: T.esClaro ? 'rgba(255,255,255,.6)' : 'rgba(20,18,16,.7)', border: `1px solid ${T.acento}55`, color: T.acento, fontSize: 11.5, fontWeight: 700, padding: '7px 11px', borderRadius: 10, cursor: 'pointer', backdropFilter: 'blur(8px)' }}>
         <span style={{ width: 12, height: 12, borderRadius: '50%', background: T.boton, display: 'inline-block' }} />{T.nombre}
       </button>
 
@@ -201,7 +218,7 @@ export default function PantallaJuegoResultado({ resultado, onNuevo, onInicio, o
         </div>
       )}
 
-      <div style={{ position: 'relative', zIndex: 1, maxWidth: 480, margin: '0 auto', padding: '26px 14px 40px' }}>
+      <div style={{ position: 'relative', zIndex: 1, maxWidth: 480, margin: '0 auto', padding: 'calc(env(safe-area-inset-top) + 22px) 14px calc(env(safe-area-inset-bottom) + 40px)' }}>
 
         {!hayEmpate ? (
           <div style={{ textAlign: 'center', marginBottom: 18 }}>
@@ -265,6 +282,70 @@ export default function PantallaJuegoResultado({ resultado, onNuevo, onInicio, o
           </div>
         )}
 
+        {hayCuartos && placa(
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.6, textTransform: 'uppercase', color: T.acento, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>📊 Puntos por cuarto</div>
+
+            {/* Parciales por equipo */}
+            <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', marginBottom: 16 }}>
+              <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 60 + (totalCuartos + 1) * 46 }}>
+                <thead>
+                  <tr>
+                    <th style={{ textAlign: 'left', fontSize: 9.5, fontWeight: 800, color: C.tenue, textTransform: 'uppercase', letterSpacing: 0.4, padding: '0 8px 8px 2px' }}>Equipo</th>
+                    {cuartosArr.map((q) => <th key={q} style={{ width: 46, fontSize: 10.5, fontWeight: 800, color: C.tenue, padding: '0 0 8px' }}>{q}º</th>)}
+                    <th style={{ width: 46, fontSize: 10.5, fontWeight: 900, color: T.acento, padding: '0 0 8px' }}>Tot</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[0, 1].map((eq) => {
+                    const nombreEq = eq === 0 ? resultado?.nombreA : resultado?.nombreB
+                    const esGana = !hayEmpate && ganadorEq === eq
+                    return (
+                      <tr key={eq} style={{ borderTop: `1px solid ${T.lineaFila}` }}>
+                        <td style={{ textAlign: 'left', fontSize: 12.5, fontWeight: 800, color: esGana ? T.acento : C.texto, fontFamily: DISP, textTransform: 'uppercase', letterSpacing: 0.3, padding: '10px 8px 10px 2px', whiteSpace: 'nowrap', maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis' }}>{nombreEq}</td>
+                        {cuartosArr.map((q) => <td key={q} style={{ textAlign: 'center', fontSize: 14, fontWeight: 700, color: C.texto, padding: '10px 0' }}>{ptsCuartoEq(q, eq)}</td>)}
+                        <td style={{ textAlign: 'center', fontSize: 17, fontWeight: 900, fontFamily: DISP, color: esGana ? T.acento : C.texto, padding: '10px 0' }}>{totalEq(eq)}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Puntos por jugador, por cuarto */}
+            {[0, 1].map((eq) => {
+              const lista = jugadores.filter((j) => j.equipo === eq && (j.pts || 0) > 0)
+              if (!lista.length) return null
+              const nombreEq = eq === 0 ? resultado?.nombreA : resultado?.nombreB
+              return (
+                <div key={eq} style={{ marginTop: eq === 0 ? 4 : 18 }}>
+                  <div style={{ fontSize: 10, fontWeight: 800, color: C.tenue, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 }}>{nombreEq}</div>
+                  <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+                    <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 110 + (totalCuartos + 1) * 40 }}>
+                      <thead>
+                        <tr>
+                          <th style={{ textAlign: 'left', fontSize: 9.5, fontWeight: 800, color: C.tenue, padding: '0 6px 6px 2px' }}>Jugador</th>
+                          {cuartosArr.map((q) => <th key={q} style={{ width: 40, fontSize: 10, fontWeight: 800, color: C.tenue, padding: '0 0 6px' }}>{q}º</th>)}
+                          <th style={{ width: 40, fontSize: 10, fontWeight: 900, color: T.acento, padding: '0 0 6px' }}>Tot</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {lista.map((j) => (
+                          <tr key={j.id} style={{ borderTop: `1px solid ${T.lineaFila}` }}>
+                            <td style={{ textAlign: 'left', fontSize: 12.5, color: C.texto, padding: '8px 6px 8px 2px', whiteSpace: 'nowrap', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis' }}>{j.numero ? <span style={{ color: C.tenue, fontSize: 11 }}>#{j.numero} </span> : null}{j.nombre || ('#' + j.numero)}</td>
+                            {cuartosArr.map((q) => { const v = ptsCuartoJug(q, j.id); return <td key={q} style={{ textAlign: 'center', fontSize: 13, fontWeight: 600, color: v ? C.texto : C.tenue, padding: '8px 0' }}>{v || '·'}</td> })}
+                            <td style={{ textAlign: 'center', fontSize: 14, fontWeight: 900, fontFamily: DISP, color: T.acento, padding: '8px 0' }}>{j.pts || 0}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
         {placa(
           <>
             {tablaEquipo(0, resultado?.nombreA, resultado?.logoA, !hayEmpate && ganadorEq === 0)}
@@ -274,8 +355,14 @@ export default function PantallaJuegoResultado({ resultado, onNuevo, onInicio, o
           </>
         )}
 
-        <div style={{ textAlign: 'center', fontSize: 12, color: C.tenue, marginBottom: 16, lineHeight: 1.5 }}>
-          📸 Haz una captura si quieres guardar este resultado.<br />Los juegos rápidos se borran del historial a las 24 horas.
+        <button
+          onClick={compartirPdf}
+          disabled={pdfCargando}
+          style={{ width: '100%', marginBottom: 12, borderRadius: 13, padding: 15, cursor: pdfCargando ? 'default' : 'pointer', fontWeight: 800, fontSize: 15, border: 'none', background: T.boton, color: '#1a1205', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+          {pdfCargando ? 'Generando PDF…' : '📄 Compartir resultado en PDF'}
+        </button>
+        <div style={{ textAlign: 'center', fontSize: 11.5, color: C.tenue, marginBottom: 16, lineHeight: 1.5 }}>
+          Un documento para abrir, imprimir o enviar.<br />Los juegos rápidos se borran del historial a las 24 horas.
         </div>
 
         <button

@@ -19,6 +19,7 @@ import PantallaCrearTorneo from './componentes/PantallaCrearTorneo'
 import { guardarJuegoDelDia } from './historialDia'
 import PantallaLigas from './componentes/PantallaLigas'
 import PantallaLNB from './componentes/PantallaLNB'
+import PantallaNBA from './componentes/PantallaNBA'
 import { StatusBar, Style } from '@capacitor/status-bar'
 
 function App() {
@@ -230,7 +231,7 @@ function App() {
     return (
       <PantallaLigas
         onVolver={() => setVista('publica')}
-        onAccion={(id) => { if (id === 'lnb') setVista('lnb') }}
+        onAccion={(id) => { if (id === 'lnb') setVista('lnb'); else if (id === 'nba') setVista('nba') }}
       />
     )
   }
@@ -244,6 +245,12 @@ function App() {
           else if (id === 'perfil') { setDestinoTrasLogin('perfil'); setVista(sesion ? 'perfil' : 'login') }
         }}
       />
+    )
+  }
+
+  if (vista === 'nba') {
+    return (
+      <PantallaNBA onVolver={() => setVista('ligas')} />
     )
   }
 

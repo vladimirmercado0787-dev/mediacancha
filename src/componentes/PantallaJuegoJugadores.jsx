@@ -103,6 +103,18 @@ export default function PantallaJuegoJugadores({ config, onListo, onVolver }) {
   const [eligiendoQuinteto, setEligiendoQuinteto] = useState(false)
   const [titA, setTitA] = useState([]) // índices de jugA titulares
   const [titB, setTitB] = useState([])
+  const [miPerfil, setMiPerfil] = useState(null) // el usuario logueado, para auto-elegirse
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
+        const { data } = await supabase.from('perfiles').select('id, nombre, apellido, codigo_unico, foto_url, municipio').eq('id', user.id).maybeSingle()
+        if (data) setMiPerfil(data)
+      } catch (e) {}
+    })()
+  }, [])
 
   useEffect(() => {
     (async () => {
@@ -290,11 +302,11 @@ export default function PantallaJuegoJugadores({ config, onListo, onVolver }) {
       <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: T.veloGrad }} />
       <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: `radial-gradient(ellipse 60% 40% at 50% 15%, ${T.glow}, transparent 70%)` }} />
 
-      <button onClick={cambiarTema} title={`Tema: ${T.nombre}`} style={{ position: 'fixed', top: 16, right: 16, zIndex: 5, display: 'flex', alignItems: 'center', gap: 7, background: T.esClaro ? 'rgba(255,255,255,.6)' : 'rgba(20,18,16,.7)', border: `1px solid ${T.acento}55`, color: T.acento, fontSize: 11.5, fontWeight: 700, padding: '7px 11px', borderRadius: 10, cursor: 'pointer', backdropFilter: 'blur(8px)' }}>
+      <button onClick={cambiarTema} title={`Tema: ${T.nombre}`} style={{ position: 'fixed', top: 'calc(env(safe-area-inset-top) + 12px)', right: 16, zIndex: 5, display: 'flex', alignItems: 'center', gap: 7, background: T.esClaro ? 'rgba(255,255,255,.6)' : 'rgba(20,18,16,.7)', border: `1px solid ${T.acento}55`, color: T.acento, fontSize: 11.5, fontWeight: 700, padding: '7px 11px', borderRadius: 10, cursor: 'pointer', backdropFilter: 'blur(8px)' }}>
         <span style={{ width: 12, height: 12, borderRadius: '50%', background: T.boton, display: 'inline-block' }} />{T.nombre}
       </button>
 
-      <div style={{ position: 'relative', zIndex: 1, maxWidth: 560, margin: '0 auto', padding: '20px 16px 40px' }}>
+      <div style={{ position: 'relative', zIndex: 1, maxWidth: 560, margin: '0 auto', padding: 'calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 40px)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
           <span onClick={() => onVolver && onVolver()} style={{ color: C.tenue, fontSize: 14, cursor: 'pointer' }}>← Atrás</span>
           <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1, textTransform: 'uppercase', ...ORO }}>{config?.formato || ''} · {config?.nombreJuego || 'Juego rápido'}</span>
@@ -360,6 +372,23 @@ export default function PantallaJuegoJugadores({ config, onListo, onVolver }) {
                 {dupAviso && <div style={{ marginTop: 8, fontSize: 12.5, color: '#e0563f', fontWeight: 700 }}>⚠ {dupAviso}</div>}
               </div>
               <div style={{ overflowY: 'auto', padding: '0 10px 24px', minHeight: 0 }}>
+                {miPerfil && (() => {
+                  const yo = miPerfil
+                  const yaEsta = idUsado(yo.id)
+                  return (
+                    <>
+                      <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1, color: T.acento, padding: '4px 6px 8px' }}>Tú</div>
+                      <button disabled={yaEsta} onClick={() => asignarPerfil(yo)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left', background: yaEsta ? 'transparent' : (T.esClaro ? 'rgba(176,122,38,0.07)' : 'rgba(232,182,90,0.07)'), border: `1px solid ${yaEsta ? T.inputBorde : T.acento + '55'}`, borderRadius: 12, padding: '10px 8px', cursor: yaEsta ? 'default' : 'pointer', opacity: yaEsta ? 0.45 : 1, marginBottom: 6 }}>
+                        <div style={{ width: 40, height: 40, borderRadius: '50%', flexShrink: 0, background: yo.foto_url ? `url(${yo.foto_url}) center/cover` : colorAvatar(yo.nombre), display: 'grid', placeItems: 'center', color: '#fff', fontWeight: 800, fontSize: 14 }}>{!yo.foto_url && inicialesDe(yo.nombre, yo.apellido)}</div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 14.5, fontWeight: 700, color: T.textoFuerte, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{`${yo.nombre || ''} ${yo.apellido || ''}`.trim()} <span style={{ fontSize: 10.5, fontWeight: 800, color: '#1a1205', background: T.acento, borderRadius: 6, padding: '1px 6px', marginLeft: 4 }}>TÚ</span></div>
+                          <div style={{ fontSize: 11.5, color: C.tenue, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{yo.municipio ? `${yo.municipio} · ` : ''}{yo.codigo_unico || ''}</div>
+                        </div>
+                        {yaEsta ? <span style={{ color: C.tenue, fontSize: 11, fontWeight: 700, flexShrink: 0 }}>Ya estás</span> : <span style={{ color: T.acento, fontSize: 20, flexShrink: 0 }}>＋</span>}
+                      </button>
+                    </>
+                  )
+                })()}
                 {(() => {
                   const usarBusqueda = bq.trim().length >= 2
                   const lista = usarBusqueda ? bResultados : siguiendo

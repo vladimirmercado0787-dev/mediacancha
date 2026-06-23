@@ -86,6 +86,8 @@ export default function TarjetaResultado({ datos, fuente = 'rapido', tiempo, aut
   const hayEmpate = totalA === totalB
   const ganoA = !hayEmpate && totalA > totalB
   const ganoB = !hayEmpate && totalB > totalA
+  const logoGan = ganoA ? d.logoA : (ganoB ? d.logoB : null)
+  const logoUrlGan = ganoA ? d.logoUrlA : (ganoB ? d.logoUrlB : null)
 
   // destacado = más puntos (desempate reb, ast)
   let destacado = null
@@ -125,11 +127,11 @@ export default function TarjetaResultado({ datos, fuente = 'rapido', tiempo, aut
   const ANCHO_NOM_T = 104, ANCHO_COL_T = 46
 
   // escudo con marcador GRANDE al lado (estilo mockup) — crece en computadora
-  const fila = (nombre, total, gano, logoId, alinearDer) => (
+  const fila = (nombre, total, gano, logoId, alinearDer, logoUrl) => (
     <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: esAncho ? 14 : 11, flexDirection: alinearDer ? 'row-reverse' : 'row', textAlign: alinearDer ? 'right' : 'left', minWidth: 0 }}>
-      <div style={{ width: esAncho ? 54 : 44, height: esAncho ? 54 : 44, borderRadius: 13, flexShrink: 0, display: 'grid', placeItems: 'center', color: '#fff', fontWeight: 800, fontSize: esAncho ? 19 : 16, fontFamily: 'ui-monospace, monospace', background: logoId ? (T.esClaro ? '#f5f6f8' : 'rgba(255,255,255,.04)') : colorEquipo(nombre), position: 'relative', boxShadow: '0 6px 16px rgba(20,24,30,.2)', overflow: 'hidden' }}>
+      <div style={{ width: esAncho ? 54 : 44, height: esAncho ? 54 : 44, borderRadius: 13, flexShrink: 0, display: 'grid', placeItems: 'center', color: '#fff', fontWeight: 800, fontSize: esAncho ? 19 : 16, fontFamily: 'ui-monospace, monospace', background: (logoId || logoUrl) ? (T.esClaro ? '#f5f6f8' : 'rgba(255,255,255,.04)') : colorEquipo(nombre), position: 'relative', boxShadow: '0 6px 16px rgba(20,24,30,.2)', overflow: 'hidden' }}>
         {gano && <span style={{ position: 'absolute', top: -13, left: '50%', transform: 'translateX(-50%)', fontSize: 16, zIndex: 2 }}>{F.icono}</span>}
-        {logoId ? <LogoEquipo id={logoId} size={esAncho ? 50 : 40} /> : (nombre || '?').slice(0, 1).toUpperCase()}
+        {(logoId || logoUrl) ? <LogoEquipo id={logoId} url={logoUrl} size={esAncho ? 50 : 40} /> : (nombre || '?').slice(0, 1).toUpperCase()}
       </div>
       <div style={{ minWidth: 0, flex: 1 }}>
         <div style={{ fontSize: esAncho ? 16 : 12.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.2, color: gano ? T.acento : T.textoFuerte, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nombre}</div>
@@ -194,11 +196,18 @@ export default function TarjetaResultado({ datos, fuente = 'rapido', tiempo, aut
         <div style={{ fontSize: esAncho ? 14 : 12.5, color: T.subTexto, marginTop: 5, lineHeight: 1.35 }}>{d.narracion || titular.gancho}</div>
       </div>
 
-      {/* MARCADOR grande: equipo + número a cada lado */}
-      <div style={{ display: 'flex', alignItems: 'center', padding: '14px 16px 12px', gap: 12 }}>
-        {fila(d.nombreA, totalA, ganoA, d.logoA, false)}
-        <div style={{ width: 1, alignSelf: 'stretch', background: T.lineaSuave }} />
-        {fila(d.nombreB, totalB, ganoB, d.logoB, true)}
+      {/* MARCADOR grande: equipo + número a cada lado · agua del logo ganador detrás */}
+      <div style={{ position: 'relative', overflow: 'hidden' }}>
+        {(logoGan || logoUrlGan) && (
+          <div aria-hidden="true" style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', opacity: T.esClaro ? 0.07 : 0.1, pointerEvents: 'none', zIndex: 0 }}>
+            <LogoEquipo id={logoGan} url={logoUrlGan} size={esAncho ? 240 : 200} />
+          </div>
+        )}
+        <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', padding: '14px 16px 12px', gap: 12 }}>
+          {fila(d.nombreA, totalA, ganoA, d.logoA, false, d.logoUrlA)}
+          <div style={{ width: 1, alignSelf: 'stretch', background: T.lineaSuave }} />
+          {fila(d.nombreB, totalB, ganoB, d.logoB, true, d.logoUrlB)}
+        </div>
       </div>
 
       {/* figura del partido */}

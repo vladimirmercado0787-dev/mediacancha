@@ -31,7 +31,21 @@ const ACCIONES_OTRAS = {
   fall: { id: 'fall', ico: '⊘', et: 'Tiro fallado', pts: 0, sub: 'Fallado', pregunta: 'fallo' },
   min: { id: 'min', ico: '⏱', et: 'Minutos', pts: 0, sub: 'Minutos', suma: { min: 1 } },
 }
-const ORDEN_OTRAS = ['reb', 'ast', 'rob', 'tap', 'tl', 'fal', 'per', 'fall', 'min']
+// El rebote NO va aquí: sale solo de la cascada del tiro fallado (no botón suelto).
+const ORDEN_OTRAS = ['ast', 'rob', 'tap', 'tl', 'fal', 'per', 'fall', 'min']
+
+// Acorta nombres largos para que los botones queden parejos: "Vladimir Mercado" -> "Vladimir M."
+const abreviarNombre = (s, max = 13) => {
+  if (!s) return ''
+  s = String(s).trim()
+  if (s.length <= max) return s
+  const p = s.split(/\s+/)
+  if (p.length >= 2) {
+    const corto = p[0] + ' ' + p[p.length - 1][0] + '.'
+    if (corto.length <= max + 1) return corto
+  }
+  return s.slice(0, max - 1) + '…'
+}
 
 // Cada acción con SU color e ícono propios, para distinguirlas de un vistazo
 // en pleno juego. Puntos = familia verde (anotación); cada stat un tono distinto.
@@ -49,6 +63,9 @@ const META_ACCION = {
   fall:{ color: '#fb7185', ico: '🚫' },
   min: { color: '#94a3b8', ico: '⏱️' },
 }
+
+// Etiquetas cortas para la tabla de detalles (box score en vivo)
+const ETIQUETA_STAT = { pts: 'PTS', reb: 'REB', ast: 'AST', rob: 'ROB', tap: 'TAP', fal: 'FAL', per: 'PER', tlm: 'TL', min: 'MIN' }
 
 export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
   const [tema, setTema] = useState(() => {
@@ -72,8 +89,17 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
   }
 
   const statsActivas = config?.statsActivas || ['pts']
+  const estiloPuntos = config?.estiloPuntos || 'normal'
+  // Normal = canastas de 2 y 3. Americano = 1 (dentro) y 2 (fuera).
+  const idsPunto = estiloPuntos === 'americano' ? ['p1', 'p2'] : ['p2', 'p3']
+  const accionesPunto = ACCIONES_PUNTO.filter((a) => idsPunto.includes(a.id))
   const accionesOtras = ORDEN_OTRAS.filter((s) => statsActivas.includes(s)).map((s) => ACCIONES_OTRAS[s])
-  const accionesTodas = [...ACCIONES_PUNTO.map((a) => ({ ...a, suma: a.id === 'p3' ? { pts: 3, m3: 1 } : a.id === 'p2' ? { pts: 2, m2: 1 } : { pts: a.pts } })), ...accionesOtras]
+  const accionesTodas = [...accionesPunto.map((a) => ({ ...a, suma: a.id === 'p3' ? { pts: 3, m3: 1 } : a.id === 'p2' ? { pts: 2, m2: 1 } : { pts: a.pts } })), ...accionesOtras]
+
+  // Límite de faltas para expulsión (si el juego lo lleva). null = no expulsar.
+  const limFaltas = Number(config?.expulsionA) > 0 ? Number(config.expulsionA) : null
+  // Columnas de la tabla de detalles: siempre PTS + las stats activas relevantes.
+  const colsDetalle = ['pts', ...['reb', 'ast', 'rob', 'tap', 'fal', 'per'].filter((s) => statsActivas.includes(s))]
 
   const [jugadores, setJugadores] = useState(config?.jugadores || [])
   const [historial, setHistorial] = useState([])
@@ -115,8 +141,11 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
   // Estado para la asistencia encadenada
   const [asistPaso, setAsistPaso] = useState(null)
   const [subPaso, setSubPaso] = useState(null)
+  const [tlPaso, setTlPaso] = useState(null) // cascada del tiro libre
 
   const [verPizarra, setVerPizarra] = useState(false)
+  const [verDetalles, setVerDetalles] = useState(false)
+  const [expulsion, setExpulsion] = useState(null) // jugador que llegó al límite de faltas
   const [sustituyendo, setSustituyendo] = useState(null)
   const [cambioEquipo, setCambioEquipo] = useState(null)
   const [jugASustituir, setJugASustituir] = useState(null)
@@ -126,6 +155,7 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
   const [avisoFin, setAvisoFin] = useState(null)
 
   const esPorReloj = config?.tipoFin === 'reloj'
+  const relojManual = esPorReloj && config?.relojApp === false
   const totalCuartos = config?.cuartos || 1
   const [cuartoActual, setCuartoActual] = useState(1)
   const [segs, setSegs] = useState(esPorReloj ? (config.minutos || 10) * 60 : 0)
@@ -165,6 +195,15 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
     if (lider >= config.puntosMeta && (!config.porDif2 || dif >= 2)) setAvisoFin('puntos')
   }, [jugadores])
 
+  // Detecta cuándo un jugador llegó al límite de faltas y pide confirmar la expulsión.
+  // Espera a que cierren las cascadas (tiro libre, etc.) para no encimar ventanas.
+  useEffect(() => {
+    if (!limFaltas) return
+    if (expulsion || tlPaso || subPaso || asistPaso || seleccion) return
+    const cand = jugadores.find((j) => !j.expulsado && (j.fal || 0) >= limFaltas)
+    if (cand) { setExpulsion(cand); vibrar([60, 40, 60, 40, 120]) }
+  }, [jugadores, tlPaso, subPaso, asistPaso, seleccion, expulsion, limFaltas])
+
   useEffect(() => {
     if (seleccion) setHojaPrev(seleccion)
   }, [seleccion])
@@ -181,6 +220,13 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
   const vibrar = (patron) => { try { if (navigator.vibrate) navigator.vibrate(patron) } catch (e) {} }
 
   const registrar = (accion, jug) => {
+    if (accion.id === 'tl') {
+      // Tiro libre: arranca la cascada (primero, ¿quién cometió la falta?)
+      vibrar(20)
+      setSeleccion(null)
+      setTlPaso({ fase: 'falta' })
+      return
+    }
     if (accion.encadena) {
       vibrar(20)
       setSeleccion(null)
@@ -197,10 +243,12 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
     const nuevos = aplicarSumaArr(jugadores, jug.id, suma)
     setJugadores(nuevos)
     const nar = narrar({ jugId: jug.id, etiquetaJug: jug.etiqueta, equipo: jug.equipo, accionId: accion.id, suma }, nuevos)
-    setHistorial((prev) => [...prev, { id: 'h' + Date.now() + Math.random().toString(36).slice(2, 6), jugId: jug.id, etiquetaJug: jug.etiqueta, equipo: jug.equipo, accionId: accion.id, etiquetaAccion: accion.et || accion.etiqueta, sub: accion.sub, suma, narracion: nar.texto, tono: nar.tono, extras: nar.extras }])
+    setHistorial((prev) => [...prev, { id: 'h' + Date.now() + Math.random().toString(36).slice(2, 6), cuarto: cuartoActual, jugId: jug.id, etiquetaJug: jug.etiqueta, equipo: jug.equipo, accionId: accion.id, etiquetaAccion: accion.et || accion.etiqueta, sub: accion.sub, suma, narracion: nar.texto, tono: nar.tono, extras: nar.extras }])
     mostrarToast(`${accion.sub} · ${jug.etiqueta}`)
     vibrar((suma.pts && suma.pts > 0) ? 35 : 20)
     setSeleccion(null)
+    // Tras una FALTA, preguntar si hubo tiro libre.
+    if (accion.id === 'fal') setTlPaso({ fase: 'preguntaTL', fouler: jug, equipoTira: jug.equipo === 0 ? 1 : 0 })
   }
 
   const registrarSub = (suma, accionId, etiquetaAccion, sub) => {
@@ -208,10 +256,100 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
     const nuevos = aplicarSumaArr(jugadores, jug.id, suma)
     setJugadores(nuevos)
     const nar = narrar({ jugId: jug.id, etiquetaJug: jug.etiqueta, equipo: jug.equipo, accionId, suma }, nuevos)
-    setHistorial((prev) => [...prev, { id: 'h' + Date.now() + Math.random().toString(36).slice(2, 6), jugId: jug.id, etiquetaJug: jug.etiqueta, equipo: jug.equipo, accionId, etiquetaAccion, sub, suma, narracion: nar.texto, tono: nar.tono, extras: nar.extras }])
+    setHistorial((prev) => [...prev, { id: 'h' + Date.now() + Math.random().toString(36).slice(2, 6), cuarto: cuartoActual, jugId: jug.id, etiquetaJug: jug.etiqueta, equipo: jug.equipo, accionId, etiquetaAccion, sub, suma, narracion: nar.texto, tono: nar.tono, extras: nar.extras }])
     mostrarToast(`${sub} · ${jug.etiqueta}`)
     vibrar(suma.pts ? 35 : 20)
     setSubPaso(null)
+  }
+
+  // ===== CASCADA DEL REBOTE (tiro fallado de cancha) =====
+  // Tras elegir si falló de 2 o de 3: registra el fallo y avanza al paso "¿quién reboteó?"
+  const fallarYRebote = (d) => {
+    const jug = subPaso.jug
+    const suma = d === 3 ? { fa3: 1 } : { fa2: 1 }
+    const nuevos = aplicarSumaArr(jugadores, jug.id, suma)
+    setJugadores(nuevos)
+    const nar = narrar({ jugId: jug.id, etiquetaJug: jug.etiqueta, equipo: jug.equipo, accionId: 'fall', suma }, nuevos)
+    setHistorial((prev) => [...prev, { id: 'h' + Date.now() + Math.random().toString(36).slice(2, 6), cuarto: cuartoActual, jugId: jug.id, etiquetaJug: jug.etiqueta, equipo: jug.equipo, accionId: 'fall', etiquetaAccion: 'Tiro fallado', sub: 'Falló de ' + d, suma, narracion: nar.texto, tono: nar.tono, extras: nar.extras }])
+    vibrar(20)
+    setSubPaso({ jug, equipo: jug.equipo, pregunta: 'fallo', fase: 'rebote', tipoFallo: d, paraTL: false })
+  }
+
+  // Reboteador = jugador, o null si la bola salió afuera (outside).
+  // Ofensivo/defensivo sale solo: mismo equipo del tirador = ofensivo; el otro = defensivo.
+  const registrarRebote = (reboteador) => {
+    const tirador = subPaso.jug
+    if (!reboteador) {
+      setHistorial((prev) => [...prev, { id: 'h' + Date.now() + Math.random().toString(36).slice(2, 6), cuarto: cuartoActual, jugId: null, etiquetaJug: '—', equipo: tirador.equipo, accionId: 'reb_out', etiquetaAccion: 'Rebote', sub: 'Salió afuera', suma: {}, narracion: 'La bola se fue afuera tras el fallo.', tono: 'neutro', extras: null }])
+      mostrarToast('Salió afuera')
+      vibrar(20)
+      setSubPaso(null)
+      return
+    }
+    const ofensivo = reboteador.equipo === tirador.equipo
+    const suma = ofensivo ? { reb: 1, rebo: 1 } : { reb: 1, rebd: 1 }
+    const nuevos = aplicarSumaArr(jugadores, reboteador.id, suma)
+    setJugadores(nuevos)
+    const nar = narrar({ jugId: reboteador.id, etiquetaJug: reboteador.etiqueta, equipo: reboteador.equipo, accionId: 'reb', suma }, nuevos)
+    setHistorial((prev) => [...prev, { id: 'h' + Date.now() + Math.random().toString(36).slice(2, 6), cuarto: cuartoActual, jugId: reboteador.id, etiquetaJug: reboteador.etiqueta, equipo: reboteador.equipo, accionId: 'reb', etiquetaAccion: 'Rebote', sub: ofensivo ? 'Rebote ofensivo' : 'Rebote defensivo', suma, narracion: nar.texto, tono: nar.tono, extras: nar.extras }])
+    mostrarToast(`Rebote ${ofensivo ? 'ofen.' : 'defen.'} · ${reboteador.etiqueta}`)
+    vibrar(25)
+    setSubPaso(null)
+  }
+
+  // ===== CASCADA DEL TIRO LIBRE =====
+  // Helper para anotar una jugada al historial con su cuarto.
+  const anotarHist = (entry) => setHistorial((prev) => [...prev, { id: 'h' + Date.now() + Math.random().toString(36).slice(2, 6), cuarto: cuartoActual, ...entry }])
+
+  // (Entrada A) Desde "Tiro libre": primero se pregunta quién cometió la falta.
+  const tlElegirFalta = (fouler) => {
+    const nuevos = aplicarSumaArr(jugadores, fouler.id, { fal: 1 })
+    setJugadores(nuevos)
+    const nar = narrar({ jugId: fouler.id, etiquetaJug: fouler.etiqueta, equipo: fouler.equipo, accionId: 'fal', suma: { fal: 1 } }, nuevos)
+    anotarHist({ jugId: fouler.id, etiquetaJug: fouler.etiqueta, equipo: fouler.equipo, accionId: 'fal', etiquetaAccion: 'Falta', sub: 'Falta', suma: { fal: 1 }, narracion: nar.texto, tono: nar.tono, extras: nar.extras })
+    vibrar(20)
+    setTlPaso({ fase: 'cuantos', fouler, equipoTira: fouler.equipo === 0 ? 1 : 0 })
+  }
+
+  // (Entrada B) Desde "Falta": ya se registró la falta, se pregunta si hubo tiro libre.
+  const tlRespuestaFalta = (hubo) => {
+    if (!hubo) { setTlPaso(null); return }
+    setTlPaso((p) => ({ ...p, fase: 'cuantos' }))
+  }
+
+  const tlElegirCuantos = (n) => setTlPaso((p) => ({ ...p, fase: 'quien', cuantos: n }))
+  const tlElegirTirador = (tirador) => { vibrar(12); setTlPaso((p) => ({ ...p, fase: 'tirar', tirador, indice: 0 })) }
+
+  const tlMarcarTiro = (encesto) => {
+    const p = tlPaso
+    const tirador = p.tirador
+    const suma = encesto ? { pts: 1, tlm: 1 } : { tlf: 1 }
+    const nuevos = aplicarSumaArr(jugadores, tirador.id, suma)
+    setJugadores(nuevos)
+    const nar = narrar({ jugId: tirador.id, etiquetaJug: tirador.etiqueta, equipo: tirador.equipo, accionId: 'tl', suma }, nuevos)
+    anotarHist({ jugId: tirador.id, etiquetaJug: tirador.etiqueta, equipo: tirador.equipo, accionId: 'tl', etiquetaAccion: 'Tiro libre', sub: `TL ${p.indice + 1}/${p.cuantos} ${encesto ? 'anotado' : 'fallado'}`, suma, narracion: nar.texto, tono: nar.tono, extras: nar.extras })
+    vibrar(encesto ? 30 : 18)
+    const esUltimo = p.indice + 1 >= p.cuantos
+    if (!esUltimo) { setTlPaso({ ...p, indice: p.indice + 1 }); return }
+    // Último tiro: si encestó, listo. Si falló, va al rebote (bola viva).
+    if (encesto) { mostrarToast('Tiros libres listos'); setTlPaso(null) }
+    else { setTlPaso({ ...p, fase: 'rebote' }) }
+  }
+
+  // Rebote tras el ÚLTIMO tiro libre fallado (igual que el de cancha).
+  const tlRebote = (reboteador) => {
+    const tirador = tlPaso.tirador
+    if (!reboteador) {
+      anotarHist({ jugId: null, etiquetaJug: '—', equipo: tirador.equipo, accionId: 'reb_out', etiquetaAccion: 'Rebote', sub: 'Salió afuera', suma: {}, narracion: 'La bola se fue afuera tras el tiro libre.', tono: 'neutro', extras: null })
+      mostrarToast('Salió afuera'); vibrar(20); setTlPaso(null); return
+    }
+    const ofensivo = reboteador.equipo === tirador.equipo
+    const suma = ofensivo ? { reb: 1, rebo: 1 } : { reb: 1, rebd: 1 }
+    const nuevos = aplicarSumaArr(jugadores, reboteador.id, suma)
+    setJugadores(nuevos)
+    const nar = narrar({ jugId: reboteador.id, etiquetaJug: reboteador.etiqueta, equipo: reboteador.equipo, accionId: 'reb', suma }, nuevos)
+    anotarHist({ jugId: reboteador.id, etiquetaJug: reboteador.etiqueta, equipo: reboteador.equipo, accionId: 'reb', etiquetaAccion: 'Rebote', sub: ofensivo ? 'Rebote ofensivo' : 'Rebote defensivo', suma, narracion: nar.texto, tono: nar.tono, extras: nar.extras })
+    mostrarToast(`Rebote ${ofensivo ? 'ofen.' : 'defen.'} · ${reboteador.etiqueta}`); vibrar(25); setTlPaso(null)
   }
 
   const completarAsistencia = (anotador, pts) => {
@@ -227,15 +365,15 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
     const nar = narrar({ jugId: anotador.id, etiquetaJug: anotador.etiqueta, equipo: anotador.equipo, accionId: pts === 3 ? 'p3' : 'p2', suma: sumaAnot, asistDe: asistente.etiqueta }, nuevos)
     const idBase = 'h' + Date.now() + Math.random().toString(36).slice(2, 6)
     setHistorial((prev) => [...prev,
-      { id: idBase + 'a', jugId: anotador.id, etiquetaJug: anotador.etiqueta, equipo: anotador.equipo, accionId: pts === 3 ? 'p3' : 'p2', etiquetaAccion: pts === 3 ? 'Triple' : '2 Puntos', sub: pts === 3 ? 'Triple' : 'Doble', suma: sumaAnot, asistDe: asistente.etiqueta, narracion: nar.texto, tono: nar.tono, extras: nar.extras },
-      { id: idBase + 'b', jugId: asistente.id, etiquetaJug: asistente.etiqueta, equipo: asistente.equipo, accionId: 'ast', etiquetaAccion: 'Asistencia', sub: 'Asist.', suma: { ast: 1 }, asistA: anotador.etiqueta },
+      { id: idBase + 'a', cuarto: cuartoActual, jugId: anotador.id, etiquetaJug: anotador.etiqueta, equipo: anotador.equipo, accionId: pts === 3 ? 'p3' : 'p2', etiquetaAccion: pts === 3 ? 'Triple' : '2 Puntos', sub: pts === 3 ? 'Triple' : 'Doble', suma: sumaAnot, asistDe: asistente.etiqueta, narracion: nar.texto, tono: nar.tono, extras: nar.extras },
+      { id: idBase + 'b', cuarto: cuartoActual, jugId: asistente.id, etiquetaJug: asistente.etiqueta, equipo: asistente.equipo, accionId: 'ast', etiquetaAccion: 'Asistencia', sub: 'Asist.', suma: { ast: 1 }, asistA: anotador.etiqueta },
     ])
     mostrarToast(`${pts} pts ${anotador.etiqueta} · Asist. ${asistente.etiqueta}`)
     vibrar(35)
     setAsistPaso(null)
   }
 
-  const tocarAccion = (accion, equipo) => { vibrar(12); setSeleccion({ tipo: 'accion', equipo, accion }) }
+  const tocarAccion = (accion, equipo) => { vibrar(12); if (accion.id === 'tl') { setSeleccion(null); setTlPaso({ fase: 'falta' }); return } setSeleccion({ tipo: 'accion', equipo, accion }) }
   const tocarJugador = (jug) => { vibrar(12); setSeleccion({ tipo: 'jugador', equipo: jug.equipo, jug }) }
   const elegirJugadorEnHoja = (jug) => { if (seleccion?.accion) registrar(seleccion.accion, jug) }
   const elegirAccionEnHoja = (accion) => { if (seleccion?.jug) registrar(accion, seleccion.jug) }
@@ -250,6 +388,33 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
     setHistorial((prev) => prev.filter((x) => x.id !== h.id))
     mostrarToast('Jugada deshecha')
     vibrar([20, 40, 20])
+  }
+
+  // El anotador CONFIRMA la expulsión: el jugador queda fuera del juego.
+  const confirmarExpulsion = () => {
+    const j = expulsion
+    if (!j) return
+    setJugadores((prev) => prev.map((x) => x.id === j.id ? { ...x, expulsado: true, enCancha: false } : x))
+    anotarHist({ jugId: j.id, etiquetaJug: j.etiqueta, equipo: j.equipo, accionId: 'exp', etiquetaAccion: 'Expulsión', sub: `Expulsado · ${limFaltas} faltas`, suma: {}, narracion: `${j.etiqueta} queda fuera del juego por llegar a ${limFaltas} faltas.`, tono: 'fuego', extras: null })
+    mostrarToast(`Expulsado: ${j.etiqueta}`)
+    vibrar([80, 40, 80])
+    setExpulsion(null)
+  }
+
+  // Fue un error: se quita la última falta de ese jugador y sigue jugando.
+  const corregirExpulsion = () => {
+    const j = expulsion
+    if (!j) return
+    setJugadores((prev) => prev.map((x) => x.id === j.id ? { ...x, fal: Math.max(0, (x.fal || 0) - 1) } : x))
+    setHistorial((prev) => {
+      for (let i = prev.length - 1; i >= 0; i--) {
+        if (prev[i].jugId === j.id && prev[i].accionId === 'fal') return prev.filter((_, k) => k !== i)
+      }
+      return prev
+    })
+    mostrarToast(`Falta quitada · ${j.etiqueta}`)
+    vibrar([20, 40, 20])
+    setExpulsion(null)
   }
 
   const sustituir = (hViejo, accionNueva, jugNuevo) => {
@@ -296,18 +461,18 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
       <button key={a.id} onClick={() => tocarAccion(a, eq)} style={{
         border: `1.5px solid ${m.color}`, borderRadius: 14, cursor: 'pointer',
         background: `linear-gradient(155deg, ${m.color}33, ${m.color}10)`,
-        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 5, minHeight: 0, padding: '6px 2px',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 7, minHeight: 0, padding: '8px 3px',
         boxShadow: `0 3px 12px ${m.color}2e`,
       }}>
         <span style={{
           display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-          width: 36, height: 36, borderRadius: '50%',
+          width: 42, height: 42, borderRadius: '50%',
           background: m.punto ? m.color : `${m.color}40`,
           border: `2px solid ${m.color}`, boxShadow: `0 2px 12px ${m.color}66`,
-          fontSize: m.punto ? 20 : 18, fontWeight: 900, lineHeight: 1,
+          fontSize: m.punto ? 23 : 21, fontWeight: 900, lineHeight: 1,
           color: m.punto ? '#06210f' : '#fff', fontFamily: m.punto ? DISP : 'inherit',
         }}>{m.ico}</span>
-        <span style={{ fontSize: 11, fontWeight: 800, color: T.texto, letterSpacing: 0.2, whiteSpace: 'nowrap' }}>{a.et}</span>
+        <span style={{ fontSize: 12, fontWeight: 800, color: T.texto, letterSpacing: 0.2, whiteSpace: 'nowrap' }}>{a.et}</span>
       </button>
     )
   }
@@ -315,20 +480,20 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
   const jugadorEnCancha = (j) => (
     <button key={j.id} onClick={() => tocarJugador(j)} style={{
       border: `1.5px solid ${EQ[j.equipo].borde}`, borderRadius: 16, cursor: 'pointer', background: T.vidrio,
-      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 2px', minHeight: 0, height: '100%',
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '8px 2px', minHeight: 0, height: '100%', minWidth: 0, overflow: 'hidden',
     }}>
-      <span style={{ fontFamily: DISP, fontSize: 36, fontWeight: 900, lineHeight: 1, color: EQ[j.equipo].acento }}>{j.numero || (j.nombre || '?').slice(0, 1).toUpperCase()}</span>
-      <span style={{ fontSize: 11, color: T.tenue, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', padding: '0 2px' }}>{j.nombre || ('#' + j.numero)}</span>
+      <span style={{ fontFamily: DISP, fontSize: 30, fontWeight: 900, lineHeight: 1, color: EQ[j.equipo].acento }}>{j.numero || (j.nombre || '?').slice(0, 1).toUpperCase()}</span>
+      <span style={{ fontSize: 10.5, color: T.tenue, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', padding: '0 1px' }}>{abreviarNombre(j.nombre || ('#' + j.numero), 9)}</span>
     </button>
   )
 
   const jugadorVertical = (j, onClick) => (
     <button key={j.id} onClick={() => onClick(j)} style={{
       border: `1.5px solid ${EQ[j.equipo].borde}`, borderRadius: 14, cursor: 'pointer', background: VIDRIO_CLARO,
-      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '16px 4px', minHeight: 96,
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '16px 4px', minHeight: 96, minWidth: 0, overflow: 'hidden',
     }}>
       <span style={{ fontFamily: DISP, fontSize: 32, fontWeight: 900, lineHeight: 1, color: EQ[j.equipo].acento }}>{j.numero || (j.nombre || '?').slice(0, 1).toUpperCase()}</span>
-      <span style={{ fontSize: 11, fontWeight: 600, color: TEXTO, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', padding: '0 2px' }}>{j.nombre || ('#' + j.numero)}</span>
+      <span style={{ fontSize: 11, fontWeight: 600, color: TEXTO, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', padding: '0 1px' }}>{abreviarNombre(j.nombre || ('#' + j.numero), 9)}</span>
     </button>
   )
 
@@ -348,6 +513,7 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
             <span style={{ fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', fontWeight: 700, ...ORO }}>{config?.nombreJuego || 'Juego rápido'}</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <span onClick={cambiarTema} title={`Tema: ${T.nombre}`} style={{ width: 16, height: 16, borderRadius: '50%', background: T.boton, cursor: 'pointer', display: 'inline-block', border: '1px solid rgba(255,255,255,.25)' }} />
+              <span onClick={() => setVerDetalles(true)} title="Detalles del juego" style={{ fontSize: 12, fontWeight: 800, color: T.acento, cursor: 'pointer' }}>📊</span>
               <span onClick={() => setVerPizarra(true)} style={{ fontSize: 11, fontWeight: 800, color: T.acento, cursor: 'pointer' }}>📋 {historial.length}</span>
             </div>
           </div>
@@ -359,7 +525,22 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
             </div>
 
             <div style={{ flexShrink: 0, width: 132, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-              {esPorReloj ? (
+              {esPorReloj ? (relojManual ? (
+                <>
+                  {totalCuartos > 1 && (
+                    <div style={{ fontSize: 9.5, fontWeight: 800, color: T.acento, textTransform: 'uppercase', letterSpacing: 1, background: 'rgba(234,182,79,.12)', border: `1px solid ${T.acento}44`, borderRadius: 20, padding: '2px 10px' }}>Cuarto {cuartoActual}/{totalCuartos}</div>
+                  )}
+                  <div style={{ width: '100%', borderRadius: 12, padding: '8px 6px', textAlign: 'center', background: 'linear-gradient(180deg, #05070a, #0a0d11)', border: `1.5px solid ${T.acento}66` }}>
+                    <div style={{ fontSize: 9, color: TENUE, textTransform: 'uppercase', letterSpacing: 1 }}>Reloj afuera</div>
+                    <div style={{ fontSize: 22, fontWeight: 900, color: T.acento, fontFamily: DISP, lineHeight: 1 }}>{cuartoActual}º</div>
+                  </div>
+                  {totalCuartos > 1 && (cuartoActual < totalCuartos ? (
+                    <button onClick={() => setAvisoFin('cuarto')} style={{ width: '100%', fontSize: 12, fontWeight: 800, padding: '9px 4px', borderRadius: 10, border: 'none', cursor: 'pointer', background: 'linear-gradient(150deg,#2fbf71,#1f9156)', color: '#fff', textTransform: 'uppercase', letterSpacing: 0.4, boxShadow: '0 4px 14px rgba(0,0,0,.4)' }}>▶ Finalizar {cuartoActual}º</button>
+                  ) : (
+                    <div style={{ width: '100%', fontSize: 10.5, fontWeight: 700, color: TENUE, textAlign: 'center', padding: '6px 4px' }}>Último cuarto</div>
+                  ))}
+                </>
+              ) : (
                 <>
                   {totalCuartos > 1 && (
                     <div style={{ fontSize: 9.5, fontWeight: 800, color: T.acento, textTransform: 'uppercase', letterSpacing: 1, background: 'rgba(234,182,79,.12)', border: `1px solid ${T.acento}44`, borderRadius: 20, padding: '2px 10px' }}>Cuarto {cuartoActual}/{totalCuartos}</div>
@@ -384,7 +565,7 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
                     boxShadow: segs === 0 ? 'none' : '0 4px 14px rgba(0,0,0,.4)',
                   }}>{corriendo ? '⏸ Pausar' : (segs === 0 ? 'Fin' : (segs === (config.minutos || 10) * 60 ? '▶ Iniciar' : '▶ Seguir'))}</button>
                 </>
-              ) : (
+              )) : (
                 <div style={{ width: '100%', borderRadius: 12, padding: '14px 6px', textAlign: 'center', background: 'linear-gradient(180deg, #05070a, #0a0d11)', border: `1.5px solid ${T.acento}` }}>
                   <div style={{ fontSize: 9.5, color: TENUE, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 2 }}>Juega a</div>
                   <div style={{ fontSize: 38, fontWeight: 800, lineHeight: 1, fontFamily: 'ui-monospace, monospace', color: T.acento, textShadow: `0 0 12px ${T.acento}aa` }}>{metaPuntos}</div>
@@ -405,7 +586,7 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
             <div key={eq} style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '10px 12px', minHeight: 0, background: eq === 0 ? `linear-gradient(180deg, ${EQ[0].suave}, transparent)` : `linear-gradient(0deg, ${EQ[1].suave}, transparent)`, borderTop: eq === 1 ? `1px solid ${BORDE_TENUE}` : 'none' }}>
               {ladoHead(eq)}
               {modo === 'jugada' ? (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 7, flex: 1, minHeight: 0 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gridAutoRows: '1fr', gap: 7, flex: 1, minHeight: 0 }}>
                   {accionesTodas.map((a) => botonAccion(a, eq))}
                 </div>
               ) : (
@@ -553,6 +734,7 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
         const eqColor = EQ[subPaso.equipo]
         const jug = subPaso.jug
         const esFallo = subPaso.pregunta === 'fallo'
+        const esRebote = subPaso.fase === 'rebote'
         return (
           <>
             <div onClick={() => setSubPaso(null)} style={{ position: 'absolute', inset: 0, background: 'rgba(4,5,7,.78)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', zIndex: 22 }} />
@@ -560,18 +742,45 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
               <div style={{ borderRadius: '22px 22px 0 0', background: 'linear-gradient(180deg, rgba(22,24,28,0.98), rgba(12,14,18,0.99))', padding: '16px 16px 30px', minHeight: '40vh' }}>
                 <div style={{ width: 44, height: 5, borderRadius: 3, background: 'rgba(255,255,255,.18)', margin: '0 auto 18px' }} />
                 <div style={{ textAlign: 'center', marginBottom: 6 }}>
-                  <div style={{ fontSize: 13, color: eqColor.acento, fontWeight: 700 }}>{esFallo ? '⊘ Tiro fallado' : '① Tiro libre'} · {jug.etiqueta}</div>
+                  <div style={{ fontSize: 13, color: eqColor.acento, fontWeight: 700 }}>{esRebote ? '⊜ Rebote' : esFallo ? '⊘ Tiro fallado' : '① Tiro libre'} · {jug.etiqueta}</div>
                 </div>
                 <div style={{ fontFamily: DISP, fontSize: 30, fontWeight: 900, textTransform: 'uppercase', color: eqColor.acento, textAlign: 'center', marginBottom: 4 }}>
-                  {esFallo ? '¿De dónde falló?' : '¿Encestó o falló?'}
+                  {esRebote ? '¿Quién cogió el rebote?' : esFallo ? '¿De dónde falló?' : '¿Encestó o falló?'}
                 </div>
                 <div style={{ fontSize: 12, color: TENUE, textAlign: 'center', marginBottom: 18 }}>
-                  {esFallo ? 'Para el porcentaje de tiro' : 'El tiro libre de ' + jug.etiqueta}
+                  {esRebote ? `Falló de ${subPaso.tipoFallo === 3 ? 'tres' : 'dos'} · ofensivo o defensivo sale solo` : esFallo ? 'Para el porcentaje de tiro' : 'El tiro libre de ' + jug.etiqueta}
                 </div>
-                {esFallo ? (
+                {esRebote ? (
+                  <div>
+                    {[0, 1].map((eq) => {
+                      const lista = enCanchaEq(eq)
+                      const esDelTirador = eq === jug.equipo
+                      return (
+                        <div key={eq} style={{ marginBottom: 12 }}>
+                          <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.6, color: EQ[eq].acento, marginBottom: 7, display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ width: 8, height: 8, borderRadius: '50%', background: EQ[eq].fuerte }} />
+                            {eq === 0 ? config?.nombreA : config?.nombreB}
+                            <span style={{ fontSize: 9.5, fontWeight: 700, color: TENUE, letterSpacing: 0.3 }}>· {esDelTirador ? 'ofensivo' : 'defensivo'}</span>
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+                            {lista.map((p) => (
+                              <button key={p.id} onClick={() => registrarRebote(p)} style={{ border: `1.5px solid ${EQ[eq].borde}`, background: 'rgba(255,255,255,.05)', borderRadius: 12, padding: '0 12px', height: 50, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
+                                <span style={{ fontFamily: DISP, fontSize: 16, fontWeight: 900, color: EQ[eq].acento, flexShrink: 0, minWidth: 20, textAlign: 'center' }}>{p.numero ? '#' + p.numero : '·'}</span>
+                                <span style={{ fontSize: 14, fontWeight: 700, color: '#f4f7f9', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, textAlign: 'left' }}>{abreviarNombre(p.etiqueta)}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    })}
+                    <button onClick={() => registrarRebote(null)} style={{ width: '100%', marginTop: 4, border: `1.5px dashed ${TENUE}`, background: 'transparent', color: TENUE, borderRadius: 14, padding: '15px 6px', cursor: 'pointer', fontSize: 14, fontWeight: 700 }}>
+                      ↗ Salió afuera (nadie lo cogió)
+                    </button>
+                  </div>
+                ) : esFallo ? (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 11 }}>
                     {[2, 3].map((d) => (
-                      <button key={d} onClick={() => registrarSub(d === 3 ? { fa3: 1 } : { fa2: 1 }, 'fall', 'Tiro fallado', 'Falló de ' + d)} style={{ border: `1.5px solid ${ROJO}66`, borderRadius: 16, padding: '28px 6px', cursor: 'pointer', background: 'linear-gradient(160deg, rgba(226,75,74,.12), ' + VIDRIO_CLARO + ')', color: TEXTO, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 9, minHeight: 124 }}>
+                      <button key={d} onClick={() => fallarYRebote(d)} style={{ border: `1.5px solid ${ROJO}66`, borderRadius: 16, padding: '28px 6px', cursor: 'pointer', background: 'linear-gradient(160deg, rgba(226,75,74,.12), ' + VIDRIO_CLARO + ')', color: TEXTO, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 9, minHeight: 124 }}>
                         <span style={{ fontFamily: DISP, fontSize: 50, fontWeight: 900, color: ROJO }}>{d}</span>
                         <span style={{ fontSize: 13, fontWeight: 600 }}>Falló de {d === 3 ? 'tres' : 'dos'}</span>
                       </button>
@@ -594,7 +803,125 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
           </>
         )
       })()}
+      {tlPaso && (() => {
+        const fase = tlPaso.fase
+        const eqTira = tlPaso.equipoTira
+        const accent = eqTira != null ? EQ[eqTira].acento : T.acento
+        const chooser = (lista, onPick, eq) => (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+            {lista.map((p) => (
+              <button key={p.id} onClick={() => onPick(p)} style={{ border: `1.5px solid ${EQ[eq].borde}`, background: 'rgba(255,255,255,.05)', borderRadius: 12, padding: '0 12px', height: 50, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
+                <span style={{ fontFamily: DISP, fontSize: 16, fontWeight: 900, color: EQ[eq].acento, flexShrink: 0, minWidth: 20, textAlign: 'center' }}>{p.numero ? '#' + p.numero : '·'}</span>
+                <span style={{ fontSize: 14, fontWeight: 700, color: '#f4f7f9', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, textAlign: 'left' }}>{abreviarNombre(p.etiqueta)}</span>
+              </button>
+            ))}
+          </div>
+        )
+        return (
+          <>
+            <div onClick={() => setTlPaso(null)} style={{ position: 'absolute', inset: 0, background: 'rgba(4,5,7,.78)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', zIndex: 22 }} />
+            <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 23, borderRadius: '24px 24px 0 0', padding: 2, background: accent, maxWidth: 480, margin: '0 auto', boxShadow: '0 -12px 40px rgba(0,0,0,.55)' }}>
+              <div style={{ borderRadius: '22px 22px 0 0', background: 'linear-gradient(180deg, rgba(22,24,28,0.98), rgba(12,14,18,0.99))', padding: '16px 16px 30px', minHeight: '40vh', maxHeight: '82vh', overflowY: 'auto' }}>
+                <div style={{ width: 44, height: 5, borderRadius: 3, background: 'rgba(255,255,255,.18)', margin: '0 auto 16px' }} />
+                <div style={{ textAlign: 'center', marginBottom: 8 }}>
+                  <div style={{ fontSize: 13, color: accent, fontWeight: 700 }}>🎯 Tiro libre</div>
+                </div>
+
+                {fase === 'preguntaTL' && (
+                  <>
+                    <div style={{ fontFamily: DISP, fontSize: 30, fontWeight: 900, textTransform: 'uppercase', color: '#ffffff', textAlign: 'center', marginBottom: 4, textShadow: `0 2px 14px ${T.acento}88` }}>¿Hubo tiro libre?</div>
+                    <div style={{ fontSize: 13, color: '#c3ccd4', textAlign: 'center', marginBottom: 18 }}>Falta de <b style={{ color: T.acento }}>{tlPaso.fouler?.etiqueta}</b></div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 11 }}>
+                      <button onClick={() => tlRespuestaFalta(true)} style={{ border: `1.5px solid ${VERDE}`, borderRadius: 16, padding: '26px 6px', cursor: 'pointer', background: 'linear-gradient(160deg, rgba(47,191,113,.22), ' + VIDRIO_CLARO + ')', color: '#ffffff', fontSize: 15.5, fontWeight: 800, textShadow: '0 1px 6px rgba(0,0,0,.6)' }}>Sí, va a la línea</button>
+                      <button onClick={() => tlRespuestaFalta(false)} style={{ border: `1.5px solid #6b7480`, borderRadius: 16, padding: '26px 6px', cursor: 'pointer', background: VIDRIO_CLARO, color: '#ffffff', fontSize: 15.5, fontWeight: 800, textShadow: '0 1px 6px rgba(0,0,0,.6)' }}>No, solo falta</button>
+                    </div>
+                  </>
+                )}
+
+                {fase === 'falta' && (
+                  <>
+                    <div style={{ fontFamily: DISP, fontSize: 27, fontWeight: 900, textTransform: 'uppercase', color: '#ffffff', textAlign: 'center', marginBottom: 4, textShadow: `0 2px 14px ${T.acento}88` }}>¿De quién fue la falta?</div>
+                    <div style={{ fontSize: 12.5, color: '#c3ccd4', textAlign: 'center', marginBottom: 16 }}>Marca quién la cometió. Se registra la falta y tira el otro equipo.</div>
+                    {[0, 1].map((eq) => (
+                      <div key={eq} style={{ marginBottom: 12 }}>
+                        <div style={{ fontSize: 11.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.6, color: EQ[eq].acento, marginBottom: 7, display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ width: 8, height: 8, borderRadius: '50%', background: EQ[eq].fuerte }} />
+                          {eq === 0 ? config?.nombreA : config?.nombreB}
+                        </div>
+                        {chooser(enCanchaEq(eq), tlElegirFalta, eq)}
+                      </div>
+                    ))}
+                  </>
+                )}
+
+                {fase === 'cuantos' && (
+                  <>
+                    <div style={{ fontFamily: DISP, fontSize: 28, fontWeight: 900, textTransform: 'uppercase', color: '#ffffff', textAlign: 'center', marginBottom: 4, textShadow: `0 2px 14px ${accent}88` }}>¿Cuántos tiros?</div>
+                    <div style={{ fontSize: 12.5, color: '#c3ccd4', textAlign: 'center', marginBottom: 18 }}>Tira {eqTira === 0 ? config?.nombreA : config?.nombreB}</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 11 }}>
+                      {[1, 2, 3].map((n) => (
+                        <button key={n} onClick={() => tlElegirCuantos(n)} style={{ border: `1.5px solid ${accent}88`, borderRadius: 16, padding: '24px 6px', cursor: 'pointer', background: `linear-gradient(160deg, ${accent}22, ${VIDRIO_CLARO})`, color: TEXTO, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
+                          <span style={{ fontFamily: DISP, fontSize: 42, fontWeight: 900, color: accent }}>{n}</span>
+                          <span style={{ fontSize: 12, fontWeight: 700 }}>{n === 1 ? 'tiro' : 'tiros'}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+
+                {fase === 'quien' && (
+                  <>
+                    <div style={{ fontFamily: DISP, fontSize: 26, fontWeight: 900, textTransform: 'uppercase', color: '#ffffff', textAlign: 'center', marginBottom: 4, textShadow: `0 2px 14px ${accent}88` }}>¿Quién tira?</div>
+                    <div style={{ fontSize: 12.5, color: '#c3ccd4', textAlign: 'center', marginBottom: 16 }}>{tlPaso.cuantos} {tlPaso.cuantos === 1 ? 'tiro' : 'tiros'} · {eqTira === 0 ? config?.nombreA : config?.nombreB}</div>
+                    {chooser(enCanchaEq(eqTira), tlElegirTirador, eqTira)}
+                  </>
+                )}
+
+                {fase === 'tirar' && (
+                  <>
+                    <div style={{ fontFamily: DISP, fontSize: 28, fontWeight: 900, textTransform: 'uppercase', color: '#ffffff', textAlign: 'center', marginBottom: 2, textShadow: `0 2px 14px ${accent}88` }}>Tiro {tlPaso.indice + 1} de {tlPaso.cuantos}</div>
+                    <div style={{ fontSize: 13, color: '#c3ccd4', textAlign: 'center', marginBottom: 16 }}>{tlPaso.tirador?.etiqueta} en la línea</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 11 }}>
+                      <button onClick={() => tlMarcarTiro(true)} style={{ border: `1.5px solid ${VERDE}88`, borderRadius: 16, padding: '30px 6px', cursor: 'pointer', background: 'linear-gradient(160deg, rgba(47,191,113,.16), ' + VIDRIO_CLARO + ')', color: TEXTO, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontFamily: DISP, fontSize: 44, fontWeight: 900, color: VERDE }}>✓</span>
+                        <span style={{ fontSize: 13, fontWeight: 700 }}>Encestó (+1)</span>
+                      </button>
+                      <button onClick={() => tlMarcarTiro(false)} style={{ border: `1.5px solid ${ROJO}66`, borderRadius: 16, padding: '30px 6px', cursor: 'pointer', background: 'linear-gradient(160deg, rgba(226,75,74,.12), ' + VIDRIO_CLARO + ')', color: TEXTO, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontFamily: DISP, fontSize: 44, fontWeight: 900, color: ROJO }}>✕</span>
+                        <span style={{ fontSize: 13, fontWeight: 700 }}>Falló</span>
+                      </button>
+                    </div>
+                    {tlPaso.indice + 1 >= tlPaso.cuantos && <div style={{ fontSize: 11, color: TENUE, textAlign: 'center', marginTop: 14 }}>Último tiro — si falla, va el rebote</div>}
+                  </>
+                )}
+
+                {fase === 'rebote' && (
+                  <>
+                    <div style={{ fontFamily: DISP, fontSize: 25, fontWeight: 900, textTransform: 'uppercase', color: '#ffffff', textAlign: 'center', marginBottom: 4, textShadow: `0 2px 14px ${accent}88` }}>¿Quién cogió el rebote?</div>
+                    <div style={{ fontSize: 12.5, color: '#c3ccd4', textAlign: 'center', marginBottom: 16 }}>Falló el último tiro libre · ofensivo o defensivo sale solo</div>
+                    {[0, 1].map((eq) => (
+                      <div key={eq} style={{ marginBottom: 12 }}>
+                        <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.6, color: EQ[eq].acento, marginBottom: 7, display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ width: 8, height: 8, borderRadius: '50%', background: EQ[eq].fuerte }} />
+                          {eq === 0 ? config?.nombreA : config?.nombreB}
+                          <span style={{ fontSize: 9.5, fontWeight: 700, color: TENUE }}>· {eq === tlPaso.tirador?.equipo ? 'ofensivo' : 'defensivo'}</span>
+                        </div>
+                        {chooser(enCanchaEq(eq), tlRebote, eq)}
+                      </div>
+                    ))}
+                    <button onClick={() => tlRebote(null)} style={{ width: '100%', marginTop: 4, border: `1.5px dashed ${TENUE}`, background: 'transparent', color: TENUE, borderRadius: 14, padding: '15px 6px', cursor: 'pointer', fontSize: 14, fontWeight: 700 }}>↗ Salió afuera (nadie lo cogió)</button>
+                  </>
+                )}
+              </div>
+            </div>
+          </>
+        )
+      })()}
       {verPizarra && <ModalPizarra T={T} ORO={ORO} historial={historial} eq={EQ} onCerrar={() => setVerPizarra(false)} onDeshacer={(h) => deshacer(h)} onSustituir={(h) => { setVerPizarra(false); setSustituyendo(h) }} onMomento={(h) => marcarMomento(h)} />}
+
+      {verDetalles && <ModalDetalles T={T} ORO={ORO} eq={EQ} jugadores={jugadores} cols={colsDetalle} etiquetas={ETIQUETA_STAT} nombreA={config?.nombreA || 'Equipo A'} nombreB={config?.nombreB || 'Equipo B'} limFaltas={limFaltas} onCerrar={() => setVerDetalles(false)} />}
+
+      {expulsion && <ModalExpulsion T={T} jugador={expulsion} limite={limFaltas} eqColor={EQ[expulsion.equipo].acento} onExpulsar={confirmarExpulsion} onCorregir={corregirExpulsion} />}
       {sustituyendo && <ModalSustituir T={T} eq={EQ} jugada={sustituyendo} jugadores={jugadores} acciones={accionesTodas} onCancelar={() => setSustituyendo(null)} onConfirmar={(a, j) => sustituir(sustituyendo, a, j)} />}
       {cambioEquipo !== null && <ModalCambio T={T} eq={EQ} equipo={cambioEquipo} nombreEquipo={cambioEquipo === 0 ? config?.nombreA : config?.nombreB} enCancha={enCanchaEq(cambioEquipo)} banca={bancaEq(cambioEquipo)} jugSel={jugASustituir} setJugSel={setJugASustituir} nombre={nuevoNombre} numero={nuevoNumero} setNombre={setNuevoNombre} setNumero={setNuevoNumero} onCancelar={() => { setCambioEquipo(null); setJugASustituir(null); setNuevoNombre(''); setNuevoNumero('') }} onConfirmarRename={aplicarCambio} onConfirmarBanca={cambiarPorBanca} />}
       {confirmarFin && <ModalConfirmar T={T} titulo="¿Terminar el juego?" mensaje="Vas a cerrar el juego y ver el resultado. ¿Seguro?" textoSi="Sí, terminar" textoNo="No, seguir jugando" onSi={() => { vibrar([60, 30, 60, 30, 100]); onTerminar && onTerminar({ ...config, jugadores, historial, momentos }) }} onNo={() => setConfirmarFin(false)} />}
@@ -735,6 +1062,90 @@ function ModalConfirmar({ T, titulo, mensaje, textoSi, textoNo, onSi, onNo }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <button onClick={onSi} style={{ width: '100%', border: 'none', borderRadius: 13, padding: 15, background: T.boton, color: '#1a1205', fontWeight: 800, fontSize: 15, cursor: 'pointer' }}>{textoSi}</button>
             <button onClick={onNo} style={{ width: '100%', border: '1px solid rgba(255,255,255,.16)', borderRadius: 13, padding: 14, background: 'transparent', color: TEXTO2, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>{textoNo}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ===== DETALLES DEL JUEGO: estadística en vivo de cada jugador (box score) =====
+function ModalDetalles({ T, ORO, eq, jugadores, cols, etiquetas, nombreA, nombreB, limFaltas, onCerrar }) {
+  const th = { padding: '7px 8px', fontSize: 10.5, fontWeight: 800, color: TENUE2, textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '1px solid rgba(255,255,255,.1)', textAlign: 'center', whiteSpace: 'nowrap' }
+  const td = { padding: '9px 8px', fontSize: 13, textAlign: 'center', borderBottom: '1px solid rgba(255,255,255,.05)', fontVariantNumeric: 'tabular-nums' }
+  const tabla = (equipo, nombre) => {
+    const js = jugadores.filter((j) => j.equipo === equipo)
+    const tot = {}; cols.forEach((c) => { tot[c] = js.reduce((a, j) => a + (j[c] || 0), 0) })
+    return (
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+          <span style={{ width: 9, height: 9, borderRadius: '50%', background: eq[equipo].fuerte }} />
+          <span style={{ fontFamily: DISP, fontSize: 16, fontWeight: 900, color: eq[equipo].acento, textTransform: 'uppercase', letterSpacing: 0.5 }}>{nombre}</span>
+          <span style={{ marginLeft: 'auto', fontSize: 13, fontWeight: 800, color: TEXTO2 }}>{tot.pts} pts</span>
+        </div>
+        <div style={{ overflowX: 'auto', borderRadius: 12, background: 'rgba(255,255,255,.03)', border: '1px solid rgba(255,255,255,.07)' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 96 + cols.length * 44 }}>
+            <thead><tr>
+              <th style={{ ...th, textAlign: 'left', paddingLeft: 12 }}>Jugador</th>
+              {cols.map((c) => <th key={c} style={th}>{etiquetas[c] || c.toUpperCase()}</th>)}
+            </tr></thead>
+            <tbody>
+              {js.length === 0 ? (
+                <tr><td colSpan={cols.length + 1} style={{ ...td, color: TENUE2, padding: '18px 0' }}>Sin jugadores</td></tr>
+              ) : js.map((j) => (
+                <tr key={j.id}>
+                  <td style={{ ...td, textAlign: 'left', paddingLeft: 12, fontWeight: 700, color: j.expulsado ? TENUE2 : TEXTO2, whiteSpace: 'nowrap' }}>
+                    <span style={{ textDecoration: j.expulsado ? 'line-through' : 'none' }}>{j.etiqueta}</span>
+                    {j.expulsado && <span style={{ marginLeft: 6, fontSize: 9, fontWeight: 800, color: '#fff', background: ROJO2, borderRadius: 5, padding: '1px 5px' }}>EXP</span>}
+                  </td>
+                  {cols.map((c) => {
+                    const v = j[c] || 0
+                    const hot = c === 'fal' && limFaltas && v >= limFaltas
+                    const warn = c === 'fal' && limFaltas && v === limFaltas - 1
+                    return <td key={c} style={{ ...td, fontWeight: c === 'pts' ? 800 : 600, color: hot ? ROJO2 : (warn ? '#fbbf24' : (c === 'pts' ? T.acento : TEXTO2)) }}>{v}</td>
+                  })}
+                </tr>
+              ))}
+              <tr>
+                <td style={{ ...td, textAlign: 'left', paddingLeft: 12, fontWeight: 800, color: TENUE2, borderTop: '1px solid rgba(255,255,255,.12)', borderBottom: 'none' }}>TOTAL</td>
+                {cols.map((c) => <td key={c} style={{ ...td, fontWeight: 800, color: c === 'pts' ? T.acento : TEXTO2, borderTop: '1px solid rgba(255,255,255,.12)', borderBottom: 'none' }}>{tot[c]}</td>)}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )
+  }
+  return (
+    <div style={fondoModal()} onClick={onCerrar}>
+      <div style={cajaModal(T)} onClick={(e) => e.stopPropagation()}>
+        <div style={{ borderRadius: '19px 19px 0 0', background: 'linear-gradient(180deg, #14161a, #0c0e12)', padding: 18, minHeight: 200 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <span style={{ fontSize: 17, fontWeight: 800, ...ORO }}>📊 Detalles del juego</span>
+            <span onClick={onCerrar} style={{ fontSize: 22, color: TENUE2, cursor: 'pointer', lineHeight: 1 }}>×</span>
+          </div>
+          {tabla(0, nombreA)}
+          {tabla(1, nombreB)}
+          <div style={{ fontSize: 11, color: TENUE2, textAlign: 'center', marginTop: 4 }}>Se actualiza en vivo mientras anotas.{limFaltas ? ` Expulsión a las ${limFaltas} faltas.` : ''}</div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ===== EXPULSIÓN: alarma cuando un jugador llega al límite de faltas =====
+function ModalExpulsion({ T, jugador, limite, eqColor, onExpulsar, onCorregir }) {
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(4,5,7,0.88)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div style={{ width: '100%', maxWidth: 360, borderRadius: 20, padding: 1.5, background: `linear-gradient(140deg, ${ROJO2}, #7a1f15)` }}>
+        <div style={{ borderRadius: 19, padding: 24, background: 'linear-gradient(150deg, #1c1410, #120b0a)', textAlign: 'center' }}>
+          <div style={{ fontSize: 34, marginBottom: 6 }}>🟥</div>
+          <div style={{ fontSize: 11, fontWeight: 800, color: ROJO2, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 6 }}>Límite de faltas</div>
+          <div style={{ fontSize: 21, fontWeight: 800, color: TEXTO2, marginBottom: 8, lineHeight: 1.25 }}><span style={{ color: eqColor }}>{jugador.etiqueta}</span> llegó a {limite} faltas</div>
+          <div style={{ fontSize: 14, color: TENUE2, marginBottom: 22, lineHeight: 1.5 }}>Debe quedar fuera del juego. Si fue un error, quita la falta y sigue jugando.</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <button onClick={onExpulsar} style={{ width: '100%', border: 'none', borderRadius: 13, padding: 15, background: `linear-gradient(150deg, ${ROJO2}, #b23a28)`, color: '#fff', fontWeight: 800, fontSize: 15, cursor: 'pointer' }}>Expulsar a {jugador.etiqueta}</button>
+            <button onClick={onCorregir} style={{ width: '100%', border: '1px solid rgba(255,255,255,.18)', borderRadius: 13, padding: 14, background: 'transparent', color: TEXTO2, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>Fue error — quitar la falta</button>
           </div>
         </div>
       </div>

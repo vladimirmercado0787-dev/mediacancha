@@ -105,6 +105,7 @@ export default function PantallaJuegoConfig({ onListo, onVolver, tipoInicial }) 
   const [formato, setFormato] = useState('5v5')
   const [puntosMeta, setPuntosMeta] = useState(21)
   const [porDif2, setPorDif2] = useState(false)
+  const [estiloPuntos, setEstiloPuntos] = useState('normal') // 'normal' = 2 y 3 · 'americano' = 1 y 2
   // fogueo
   const [cuartos, setCuartos] = useState(4)
   const [minutos, setMinutos] = useState(10)
@@ -118,6 +119,7 @@ export default function PantallaJuegoConfig({ onListo, onVolver, tipoInicial }) 
   // anotación + estadísticas
   const [modoAnotacion, setModoAnotacion] = useState('jugada')
   const [statsActivas, setStatsActivas] = useState(['pts'])
+  const [avisoFogueo, setAvisoFogueo] = useState(false)
   const es1v1 = formato === '1v1'
   // Al cambiar a 1v1, quitamos solas las estadísticas que no aplican.
   useEffect(() => {
@@ -209,10 +211,11 @@ export default function PantallaJuegoConfig({ onListo, onVolver, tipoInicial }) 
       reservas: esFogueo ? reservas : null,
       puntosMeta: esFogueo ? null : puntosMeta,
       porDif2: esFogueo ? false : porDif2,
+      estiloPuntos: esFogueo ? 'normal' : estiloPuntos,
       llevarFaltas,
       expulsionA: llevarFaltas ? expulsionA : null,
       bonusCada: (llevarFaltas && esFogueo) ? bonusCada : null,
-      modoAnotacion, statsActivas,
+      modoAnotacion, statsActivas: esFogueo ? statsActivas : ['pts'],
     }
     onListo && onListo(config)
   }
@@ -223,15 +226,14 @@ export default function PantallaJuegoConfig({ onListo, onVolver, tipoInicial }) 
       <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: T.veloGrad }} />
       <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: `radial-gradient(ellipse 60% 40% at 50% 15%, ${T.glow}, transparent 70%)` }} />
 
-      <button onClick={cambiarTema} title={`Tema: ${T.nombre}`} style={{ position: 'fixed', top: 16, right: 16, zIndex: 5, display: 'flex', alignItems: 'center', gap: 7, background: T.esClaro ? 'rgba(255,255,255,.6)' : 'rgba(20,18,16,.7)', border: `1px solid ${T.acento}55`, color: T.acento, fontSize: 11.5, fontWeight: 700, padding: '7px 11px', borderRadius: 10, cursor: 'pointer', backdropFilter: 'blur(8px)' }}>
+      <button onClick={cambiarTema} title={`Tema: ${T.nombre}`} style={{ position: 'fixed', top: 'calc(env(safe-area-inset-top) + 12px)', right: 16, zIndex: 5, display: 'flex', alignItems: 'center', gap: 7, background: T.esClaro ? 'rgba(255,255,255,.6)' : 'rgba(20,18,16,.7)', border: `1px solid ${T.acento}55`, color: T.acento, fontSize: 11.5, fontWeight: 700, padding: '7px 11px', borderRadius: 10, cursor: 'pointer', backdropFilter: 'blur(8px)' }}>
         <span style={{ width: 12, height: 12, borderRadius: '50%', background: T.boton, display: 'inline-block' }} />{T.nombre}
       </button>
 
-      <div style={{ position: 'relative', zIndex: 1, maxWidth: 560, margin: '0 auto', padding: '20px 16px 40px' }}>
+      <div style={{ position: 'relative', zIndex: 1, maxWidth: 560, margin: '0 auto', padding: 'calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 40px)' }}>
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
           <span onClick={() => onVolver && onVolver()} style={{ color: C.tenue, fontSize: 14, cursor: 'pointer' }}>← Inicio</span>
-          <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1, textTransform: 'uppercase', ...ORO }}>{esFogueo ? 'Fogueo' : 'Juego rápido'} · Gratis</span>
         </div>
 
         <h1 style={{ fontFamily: DISP, fontSize: 34, fontWeight: 900, textTransform: 'uppercase', margin: '0 0 4px', color: T.textoFuerte, lineHeight: 0.95 }}>Arma tu juego</h1>
@@ -288,6 +290,22 @@ export default function PantallaJuegoConfig({ onListo, onVolver, tipoInicial }) 
               </span>
               Ganar por diferencia de 2
             </label>
+          </>
+        )}
+
+        {!esFogueo && placa(
+          <>
+            {tituloSeccion('Estilo de puntos')}
+            <div style={{ display: 'flex', gap: 8 }}>
+              {pastilla(estiloPuntos === 'normal', () => setEstiloPuntos('normal'), 'Normal · 2 y 3', 'pn')}
+              {pastilla(estiloPuntos === 'americano', () => setEstiloPuntos('americano'), 'Americano · 1 y 2', 'pa')}
+            </div>
+            <div style={{ fontSize: 12, color: C.tenue, marginTop: 10, lineHeight: 1.5 }}>
+              {estiloPuntos === 'normal'
+                ? 'Como una liga: canastas de 2 y de 3.'
+                : 'Estilo americano: 1 por dentro del arco, 2 por fuera.'}
+              {llevarFaltas ? ' El tiro libre vale 1 punto.' : ''}
+            </div>
           </>
         )}
 
@@ -394,11 +412,24 @@ export default function PantallaJuegoConfig({ onListo, onVolver, tipoInicial }) 
         {placa(
           <>
             {tituloSeccion('¿Qué estadísticas vas a llevar?')}
-            <div style={{ fontSize: 12, color: C.tenue, marginBottom: 12 }}>Puntos siempre va. Activa las que quieras seguir en vivo. Todas están libres.</div>
+            {esFogueo
+              ? <div style={{ fontSize: 12, color: C.tenue, marginBottom: 12 }}>Puntos siempre va. Activa las que quieras seguir en vivo. Todas están libres.</div>
+              : <div style={{ fontSize: 12, color: C.tenue, marginBottom: 12, lineHeight: 1.5 }}>El juego rápido es liviano: <b style={{ color: T.acento }}>solo mide puntos y quién los metió</b>. Las demás estadísticas son del modo Fogueo.</div>}
             {es1v1 && <div style={{ fontSize: 12.5, color: T.acento, marginBottom: 12, fontWeight: 700, lineHeight: 1.5 }}>🏀 Uno-contra-uno: se simplifica solo. Sin asistencia, minutos, pérdidas ni porcentajes — solo lo que de verdad cuenta en un mano a mano.</div>}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {STATS.filter((s) => !(es1v1 && STATS_NO_1V1.includes(s.id))).map((s) => {
                 const activa = statsActivas.includes(s.id)
+                const bloqueada = !esFogueo && !s.obligatorio
+                if (bloqueada) {
+                  return (
+                    <button key={s.id} onClick={() => { setAvisoFogueo(true); if (window.navigator?.vibrate) window.navigator.vibrate(30); clearTimeout(window.__avFog); window.__avFog = setTimeout(() => setAvisoFogueo(false), 2400) }} style={{
+                      borderRadius: 10, padding: '9px 14px', fontSize: 13.5, fontWeight: 700, cursor: 'pointer',
+                      border: `1px dashed ${T.lineaSuave}`, background: 'transparent', color: C.tenue, opacity: 0.6,
+                    }}>
+                      🔒 {s.nombre}
+                    </button>
+                  )
+                }
                 return (
                   <button key={s.id} onClick={() => toggleStat(s.id)} disabled={s.obligatorio} style={{
                     borderRadius: 10, padding: '9px 14px', fontSize: 13.5, fontWeight: 700, cursor: s.obligatorio ? 'default' : 'pointer',
@@ -411,14 +442,19 @@ export default function PantallaJuegoConfig({ onListo, onVolver, tipoInicial }) 
                 )
               })}
             </div>
-            <div style={{ marginTop: 14, padding: '11px 13px', borderRadius: 11, background: statsActivas.length > RECOMENDADO_TEL ? T.glow : T.washTenue, border: `1px solid ${statsActivas.length > RECOMENDADO_TEL ? T.acento : T.lineaSuave}` }}>
+            {!esFogueo && avisoFogueo && (
+              <div style={{ marginTop: 12, padding: '11px 13px', borderRadius: 11, background: T.glow, border: `1px solid ${T.acento}`, fontSize: 12.5, color: T.acento, fontWeight: 700, lineHeight: 1.5 }}>
+                🔒 Esto está en Fogueo. En el juego rápido solo se llevan los puntos.
+              </div>
+            )}
+            {esFogueo && <div style={{ marginTop: 14, padding: '11px 13px', borderRadius: 11, background: statsActivas.length > RECOMENDADO_TEL ? T.glow : T.washTenue, border: `1px solid ${statsActivas.length > RECOMENDADO_TEL ? T.acento : T.lineaSuave}` }}>
               <div style={{ fontSize: 12.5, color: statsActivas.length > RECOMENDADO_TEL ? T.acento : C.tenue, lineHeight: 1.5 }}>
                 Llevas <b>{statsActivas.length}</b> {statsActivas.length === 1 ? 'estadística' : 'estadísticas'}.{' '}
                 {statsActivas.length > RECOMENDADO_TEL
                   ? 'Son bastantes para un teléfono. Para anotar cómodo con tantas, te recomendamos computadora o iPad.'
                   : 'En el teléfono recomendamos hasta seis para anotar cómodo. Para llevar más, mejor desde computadora o iPad.'}
               </div>
-            </div>
+            </div>}
           </>
         )}
 

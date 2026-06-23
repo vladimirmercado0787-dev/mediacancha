@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../supabaseClient'
+import { publicarJuego } from '../techado'
+import CompartirAlChat from './CompartirAlChat'
 
 // ===== Base de las imágenes oficiales de la LNB (escudos y fotos) =====
 const IMG_BASE = 'https://lnb-media.sfo3.cdn.digitaloceanspaces.com/'
@@ -55,6 +57,27 @@ const esProximo = (j) => !esFinal(j) && !esVivo(j)
 const ORD = { 1: '1er', 2: '2do', 3: '3er', 4: '4to' }
 const cuarto = (p) => (ORD[p] ? `${ORD[p]} cuarto` : `${p}º`)
 const abrev = (eq) => String(eq?.nombre || '—').split(' ')[0]
+
+// Colores de cada franquicia de la LNB para vestir la plantilla del ganador.
+// Son tonos vivos que se leen bien sobre oscuro y claro. Fáciles de ajustar:
+// si un color no te cuadra, cámbialo aquí y listo.
+const COLOR_EQUIPO = [
+  { k: 'metros', c: '#2f6fd0' },
+  { k: 'gigantes', c: '#e23b48' },
+  { k: 'caneros', c: '#f0851f' }, { k: 'cañeros', c: '#f0851f' },
+  { k: 'titanes', c: '#29b0e8' },
+  { k: 'reales', c: '#8a5cd6' },
+  { k: 'heroes', c: '#2bb673' }, { k: 'héroes', c: '#2bb673' }, { k: 'moca', c: '#2bb673' },
+  { k: 'marineros', c: '#3a86d4' },
+  { k: 'leones', c: '#d2a23a' },
+  { k: 'soles', c: '#f0b81f' },
+  { k: 'indios', c: '#d2553f' },
+]
+const colorEquipoLNB = (nombre, fallback) => {
+  const n = String(nombre || '').toLowerCase()
+  const hit = COLOR_EQUIPO.find((x) => n.includes(x.k))
+  return hit ? hit.c : fallback
+}
 const valorLider = (l) => (l.average != null ? Number(l.average) : Number(l.total || 0))
 
 // hex -> rgba con alfa
@@ -191,6 +214,9 @@ export default function PantallaLNB({ onVolver, onAccion }) {
   const [tempStats, setTempStats] = useState([])
   const [equipoSel, setEquipoSel] = useState(null)
   const [juegoJugadores, setJuegoJugadores] = useState({})
+  const [aviso, setAviso] = useState('')
+  const [compartiendo, setCompartiendo] = useState(null)
+  const [compartirChat, setCompartirChat] = useState(null)
 
   useEffect(() => {
     let vivo = true
@@ -285,40 +311,122 @@ export default function PantallaLNB({ onVolver, onAccion }) {
   const Vacio = ({ txt }) => <div style={{ textAlign: 'center', padding: '46px 20px', color: T.tenue, fontSize: 13.5, lineHeight: 1.5 }}>{txt}</div>
 
   // ----- tarjeta de juego (lista) -----
-  const FilaEquipo = ({ eq, marc }) => {
+  const FilaEquipo = ({ eq, marc, col }) => {
     const gana = eq?.es_ganador
     const nombre = eq?.nombre || equipos[eq?.equipo_id]?.name || '—'
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <Escudo id={eq?.equipo_id} nombre={eq?.nombre} size={36} />
-        <span style={{ flex: 1, fontSize: 15, fontWeight: gana ? 800 : 600, color: gana ? T.texto : T.texto2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', letterSpacing: 0.2 }}>{nombre}</span>
+        <span style={{ flex: 1, fontSize: 15, fontWeight: gana ? 800 : 600, color: gana ? (col || T.texto) : T.texto2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', letterSpacing: 0.2 }}>{nombre}</span>
         {marc && <span style={{ fontSize: 22, fontWeight: 900, fontVariantNumeric: 'tabular-nums', minWidth: 36, textAlign: 'right', color: gana ? T.texto : T.tenue }}>{eq?.total_score ?? '-'}</span>}
-        {marc && gana && <span style={{ width: 5, height: 5, borderRadius: '50%', background: T.accion, marginLeft: 2, flexShrink: 0 }} />}
+        {marc && gana && <span style={{ width: 5, height: 5, borderRadius: '50%', background: col || T.accion, marginLeft: 2, flexShrink: 0 }} />}
       </div>
     )
   }
+  // Convierte un juego de la LNB al formato que entienden el techado y el chat
+  // (la misma TarjetaResultado de la app). Trae el box score si hace falta.
+  const juegoADatos = async (j) => {
+    let box = juegoJugadores[j.id]
+    if (box === undefined) {
+      const r = await supabase.from('lnb_juego_jugadores').select('*').eq('juego_id', j.id)
+      box = r.data || []
+      setJuegoJugadores((m) => ({ ...m, [j.id]: box }))
+    }
+    const L = j.local, V = j.visitante
+    const nomL = L?.nombre || equipos[L?.equipo_id]?.name || 'Local'
+    const nomV = V?.nombre || equipos[V?.equipo_id]?.name || 'Visitante'
+    const num = (o, ...ks) => { for (const k of ks) { if (o && o[k] != null) return Number(o[k]) || 0 } return 0 }
+    let jug = (box || []).map((bx) => {
+      const p = jugadores[bx.jugador_id] || {}
+      const fgM = num(bx, 'fg_made'), fgA = num(bx, 'fg_att', 'fg_attempted')
+      const tpM = num(bx, 'three_made'), tpA = num(bx, 'three_att', 'three_attempted')
+      const ftM = num(bx, 'ft_made'), ftA = num(bx, 'ft_att', 'ft_attempted')
+      const fa3 = Math.max(0, tpA - tpM)
+      return {
+        nombre: [p.nombre, p.apellido].filter(Boolean).join(' ') || ('#' + (p.shirt_number || '')),
+        numero: p.shirt_number || '', equipo: bx.equipo_id === L?.equipo_id ? 0 : 1,
+        foto_url: urlImg(p.image_url) || null,
+        pts: num(bx, 'points'), reb: num(bx, 'rebounds'), ast: num(bx, 'assists'),
+        rob: num(bx, 'steals'), tap: num(bx, 'blocks'), fal: num(bx, 'personal_fouls', 'fouls'),
+        per: num(bx, 'turnovers'), min: Math.round(num(bx, 'minutes')),
+        m3: tpM, m2: Math.max(0, fgM - tpM), fa3, fa2: Math.max(0, (fgA - fgM) - fa3),
+        tlm: ftM, tlf: Math.max(0, ftA - ftM),
+      }
+    })
+    const tL = L?.total_score != null ? Number(L.total_score) : 0
+    const tV = V?.total_score != null ? Number(V.total_score) : 0
+    // Solo si NO hay box score real caemos a dos filas con el marcador oficial.
+    // (Antes lo borrábamos por cualquier descuadre de un punto; ya no.)
+    if (!jug.length) {
+      jug = [{ nombre: nomL, equipo: 0, pts: tL }, { nombre: nomV, equipo: 1, pts: tV }]
+    }
+    const urlL = urlImg(equipos[L?.equipo_id]?.image_url)
+    const urlV = urlImg(equipos[V?.equipo_id]?.image_url)
+    return {
+      nombreA: nomL, nombreB: nomV, totalA: tL, totalB: tV,
+      logoA: urlL, logoB: urlV, logoUrlA: urlL, logoUrlB: urlV,
+      jugadores: jug, statsActivas: ['pts', 'reb', 'ast'], tipo: 'LNB', tipoJuego: 'LNB',
+    }
+  }
+  const compartirJuego = (j) => setCompartiendo(j)
+  const compartirAfuera = async (j) => {
+    const nom = (e) => e?.nombre || equipos[e?.equipo_id]?.name || '—'
+    const anyo = (temporadas.find((t) => t.id === j.temporada_id) || {}).year || ''
+    const L = j.local, V = j.visitante
+    const texto = `${nom(L)} ${L?.total_score ?? ''} - ${V?.total_score ?? ''} ${nom(V)} · LNB ${anyo}`.trim()
+    setCompartiendo(null)
+    try {
+      if (navigator.share) { await navigator.share({ title: 'Media Cancha · LNB', text: texto }) }
+      else { await navigator.clipboard.writeText(texto); setAviso('Resultado copiado'); setTimeout(() => setAviso(''), 2200) }
+    } catch (_) { /* cancelado */ }
+  }
+  const compartirAlTechado = async (j) => {
+    setCompartiendo(null); setAviso('Publicando…')
+    try {
+      const datos = await juegoADatos(j)
+      const res = await publicarJuego(datos)
+      setAviso(res?.error ? res.error : 'Publicado en tu techado ✓')
+    } catch (_) { setAviso('No se pudo publicar') }
+    setTimeout(() => setAviso(''), 2600)
+  }
+  const compartirAlChatAbrir = async (j) => {
+    setCompartiendo(null)
+    try { setCompartirChat(await juegoADatos(j)) }
+    catch (_) { setAviso('No se pudo preparar'); setTimeout(() => setAviso(''), 2200) }
+  }
   const TarjetaJuego = ({ j }) => {
     const vivo = esVivo(j), fin = esFinal(j), marc = vivo || fin
+    const gan = j.local?.es_ganador ? j.local : (j.visitante?.es_ganador ? j.visitante : null)
+    const col = fin && gan ? colorEquipoLNB(gan.nombre || equipos[gan.equipo_id]?.name, T.accion2) : null
     return (
-      <div onClick={marc ? () => setJuegoSel(j) : undefined} style={{ position: 'relative', background: T.panel, border: `1px solid ${T.borde}`, borderRadius: 16, padding: '14px 15px 14px 17px', marginBottom: 11, overflow: 'hidden', cursor: marc ? 'pointer' : 'default' }}>
-        <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: vivo ? T.accion : (fin ? T.accion2 : T.tenue), opacity: vivo ? 1 : 0.55 }} />
+      <div onClick={marc ? () => setJuegoSel(j) : undefined} style={{ position: 'relative', background: col ? `linear-gradient(100deg, ${hexA(col, T.esClaro ? 0.1 : 0.15)}, ${T.panel} 60%)` : T.panel, border: `1px solid ${col ? hexA(col, 0.32) : T.borde}`, borderRadius: 16, padding: '14px 15px 14px 17px', marginBottom: 11, overflow: 'hidden', cursor: marc ? 'pointer' : 'default' }}>
+        <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, background: vivo ? T.accion : (col || (fin ? T.accion2 : T.tenue)), opacity: vivo ? 1 : (col ? 1 : 0.55) }} />
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 8 }}>
           {vivo ? (
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 800, letterSpacing: 0.5, color: T.accion, textTransform: 'uppercase' }}>
               <span style={{ width: 7, height: 7, borderRadius: '50%', background: T.accion, boxShadow: `0 0 0 3px ${hexA(T.accion, 0.25)}` }} />
               En vivo{j.period ? ` · ${cuarto(j.period)}` : ''}
             </span>
+          ) : fin ? (
+            <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 0.6, textTransform: 'uppercase', color: col || T.tenue, background: col ? hexA(col, 0.16) : 'transparent', border: col ? `1px solid ${hexA(col, 0.4)}` : 'none', padding: col ? '2px 9px' : 0, borderRadius: 7 }}>Final</span>
           ) : (
-            <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.5, color: fin ? T.tenue : T.accion2, textTransform: 'uppercase' }}>{fin ? 'Final' : 'Próximo'}</span>
+            <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.5, color: T.accion2, textTransform: 'uppercase' }}>Próximo</span>
           )}
-          <span style={{ fontSize: 11, fontWeight: 600, color: T.tenue, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '56%' }}>{marc ? (j.home_location_name || soloDia(j.date)) : fechaHora(j.date)}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: T.tenue, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 140 }}>{marc ? (j.home_location_name || soloDia(j.date)) : fechaHora(j.date)}</span>
+            {marc && (
+              <button onClick={(e) => { e.stopPropagation(); compartirJuego(j) }} aria-label="Compartir resultado" style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 9, border: `1px solid ${col ? hexA(col, 0.42) : T.borde}`, background: 'transparent', color: col || T.tenue, cursor: 'pointer', padding: 0 }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><line x1="8.6" y1="13.5" x2="15.4" y2="17.5" /><line x1="15.4" y1="6.5" x2="8.6" y2="10.5" /></svg>
+              </button>
+            )}
+          </div>
         </div>
-        <FilaEquipo eq={j.local} marc={marc} />
+        <FilaEquipo eq={j.local} marc={marc} col={j.local?.es_ganador ? col : null} />
         <div style={{ height: 10 }} />
-        <FilaEquipo eq={j.visitante} marc={marc} />
+        <FilaEquipo eq={j.visitante} marc={marc} col={j.visitante?.es_ganador ? col : null} />
         {marc && (
           <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${T.linea}`, display: 'flex', justifyContent: 'flex-end' }}>
-            <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.3, color: T.accion, textTransform: 'uppercase' }}>Ver por cuartos ›</span>
+            <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.3, color: col || T.accion, textTransform: 'uppercase' }}>Detalles ›</span>
           </div>
         )}
       </div>
@@ -326,27 +434,30 @@ export default function PantallaLNB({ onVolver, onAccion }) {
   }
 
   // ----- tarjeta mini (tira de marcadores) -----
-  const FilaMini = ({ eq, marc }) => {
+  const FilaMini = ({ eq, marc, col }) => {
     const gana = eq?.es_ganador
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
         <Escudo id={eq?.equipo_id} nombre={eq?.nombre} size={20} />
-        <span style={{ flex: 1, fontSize: 12, fontWeight: gana ? 800 : 600, color: gana ? T.texto : T.texto2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{abrev(eq)}</span>
+        <span style={{ flex: 1, fontSize: 12, fontWeight: gana ? 800 : 600, color: gana ? (col || T.texto) : T.texto2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{abrev(eq)}</span>
         {marc && <span style={{ fontSize: 13.5, fontWeight: 900, fontVariantNumeric: 'tabular-nums', color: gana ? T.texto : T.tenue }}>{eq?.total_score ?? '-'}</span>}
       </div>
     )
   }
   const TickerCard = ({ j }) => {
     const vivo = esVivo(j), fin = esFinal(j), marc = vivo || fin
+    const gan = j.local?.es_ganador ? j.local : (j.visitante?.es_ganador ? j.visitante : null)
+    const col = fin && gan ? colorEquipoLNB(gan.nombre || equipos[gan.equipo_id]?.name, T.accion2) : null
     return (
-      <div style={{ flexShrink: 0, width: 152, background: T.panel, border: `1px solid ${T.borde}`, borderRadius: 13, padding: '10px 12px' }}>
-        <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: 0.5, textTransform: 'uppercase', color: vivo ? T.accion : (fin ? T.tenue : T.accion2), marginBottom: 8, display: 'flex', alignItems: 'center', gap: 5 }}>
+      <div onClick={marc ? () => setJuegoSel(j) : undefined} style={{ position: 'relative', flexShrink: 0, width: 152, background: col ? `linear-gradient(135deg, ${hexA(col, T.esClaro ? 0.12 : 0.16)}, ${T.panel} 65%)` : T.panel, border: `1px solid ${col ? hexA(col, 0.34) : T.borde}`, borderRadius: 13, padding: '10px 12px 10px 14px', cursor: marc ? 'pointer' : 'default', overflow: 'hidden' }}>
+        {col && <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: col }} />}
+        <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: 0.5, textTransform: 'uppercase', color: vivo ? T.accion : (col || (fin ? T.tenue : T.accion2)), marginBottom: 8, display: 'flex', alignItems: 'center', gap: 5 }}>
           {vivo && <span style={{ width: 6, height: 6, borderRadius: '50%', background: T.accion }} />}
           {vivo ? 'En vivo' : (fin ? 'Final' : soloDia(j.date))}
         </div>
-        <FilaMini eq={j.local} marc={marc} />
+        <FilaMini eq={j.local} marc={marc} col={j.local?.es_ganador ? col : null} />
         <div style={{ height: 7 }} />
-        <FilaMini eq={j.visitante} marc={marc} />
+        <FilaMini eq={j.visitante} marc={marc} col={j.visitante?.es_ganador ? col : null} />
       </div>
     )
   }
@@ -708,9 +819,11 @@ export default function PantallaLNB({ onVolver, onAccion }) {
     const colA = T.accion2, colB = T.accion
     const box = juegoJugadores[j.id] || []
     const n1b = (v) => (v == null ? '—' : v)
-    // Ganador del partido → su escudo va de marca de agua detrás del marcador.
+    // Ganador del partido → su escudo va de marca de agua detrás del marcador,
+    // y su color de equipo viste la cabecera (igual que la tarjeta de la lista).
     const ganador = A?.es_ganador ? A : (B?.es_ganador ? B : null)
     const urlGan = urlImg(equipos[ganador?.equipo_id]?.image_url)
+    const colGan = ganador ? colorEquipoLNB(ganador.nombre || equipos[ganador.equipo_id]?.name, T.accion2) : null
     const LadoRes = ({ eq }) => {
       const gana = eq?.es_ganador
       return (
@@ -749,8 +862,8 @@ export default function PantallaLNB({ onVolver, onAccion }) {
               <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.5, textTransform: 'uppercase', color: vivo ? T.accion : T.tenue }}>{vivo ? `En vivo${j.period ? ` · ${cuarto(j.period)}` : ''}` : (fin ? 'Final' : 'Próximo')}</span>
               <span onClick={cerrar} style={{ fontSize: 24, color: T.tenue, cursor: 'pointer', lineHeight: 1, padding: '0 4px' }}>×</span>
             </div>
-            <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 18, border: `1px solid ${T.borde}`, background: `linear-gradient(135deg, ${hexA(T.accion2, 0.13)}, ${hexA(T.accion, 0.06)})`, padding: '18px 14px 16px', marginBottom: 20 }}>
-              {urlGan && <img src={urlGan} alt="" aria-hidden="true" style={{ position: 'absolute', right: '-6%', top: '50%', transform: 'translateY(-50%)', width: 220, height: 220, objectFit: 'contain', opacity: T.esClaro ? 0.08 : 0.12, pointerEvents: 'none' }} />}
+            <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 18, border: `1px solid ${colGan ? hexA(colGan, 0.35) : T.borde}`, background: colGan ? `linear-gradient(135deg, ${hexA(colGan, T.esClaro ? 0.16 : 0.2)}, ${hexA(colGan, 0.05)} 70%)` : `linear-gradient(135deg, ${hexA(T.accion2, 0.13)}, ${hexA(T.accion, 0.06)})`, padding: '18px 14px 16px', marginBottom: 20 }}>
+              {urlGan && <img src={urlGan} alt="" aria-hidden="true" style={{ position: 'absolute', right: '-4%', top: '50%', transform: 'translateY(-50%)', width: 230, height: 230, objectFit: 'contain', opacity: T.esClaro ? 0.14 : 0.2, pointerEvents: 'none' }} />}
               <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
                 <LadoRes eq={A} />
                 <span style={{ fontSize: 11, fontWeight: 800, color: T.tenue, letterSpacing: 1, flexShrink: 0 }}>VS</span>
@@ -1166,6 +1279,41 @@ export default function PantallaLNB({ onVolver, onAccion }) {
       {equipoSel && <DetalleEquipo id={equipoSel} cerrar={() => setEquipoSel(null)} />}
       {jugadorSel && <PerfilJugador p={jugadorSel} cerrar={() => setJugadorSel(null)} />}
       {noticiaSel && <NoticiaModal n={noticiaSel} cerrar={() => setNoticiaSel(null)} />}
+      {compartiendo && (
+        <div onClick={() => setCompartiendo(null)} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 150, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 460, background: T.fondo, borderTopLeftRadius: 22, borderTopRightRadius: 22, border: `1px solid ${T.borde}`, padding: '8px 16px calc(env(safe-area-inset-bottom) + 18px)' }}>
+            <div style={{ width: 38, height: 4, borderRadius: 3, background: T.borde, margin: '8px auto 14px' }} />
+            <div style={{ fontSize: 13, fontWeight: 800, color: T.texto, textAlign: 'center', marginBottom: 14 }}>Compartir resultado</div>
+            {[
+              { t: 'Al chat', d: 'Mándalo a una conversación', fn: () => compartirAlChatAbrir(compartiendo), ic: <><circle cx="12" cy="12" r="0" /><path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.8-.9L3 21l1.9-5.7a8.5 8.5 0 0 1-.9-3.8A8.38 8.38 0 0 1 12.5 3 8.38 8.38 0 0 1 21 11.5z" /></> },
+              { t: 'Al techado', d: 'Publícalo en tu muro (24 h)', fn: () => compartirAlTechado(compartiendo), ic: <><path d="M3 11l9-8 9 8" /><path d="M5 10v10h14V10" /></> },
+              { t: 'Compartir afuera', d: 'Otras apps de tu teléfono', fn: () => compartirAfuera(compartiendo), ic: <><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><line x1="8.6" y1="13.5" x2="15.4" y2="17.5" /><line x1="15.4" y1="6.5" x2="8.6" y2="10.5" /></> },
+            ].map((o) => (
+              <button key={o.t} onClick={o.fn} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 13, padding: '13px 14px', marginBottom: 9, background: T.panel, border: `1px solid ${T.borde}`, borderRadius: 14, cursor: 'pointer', textAlign: 'left' }}>
+                <span style={{ width: 38, height: 38, borderRadius: 11, background: hexA(T.accion, 0.14), color: T.accion, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{o.ic}</svg>
+                </span>
+                <span style={{ flex: 1 }}>
+                  <span style={{ display: 'block', fontSize: 14.5, fontWeight: 800, color: T.texto }}>{o.t}</span>
+                  <span style={{ display: 'block', fontSize: 11.5, color: T.tenue, marginTop: 1 }}>{o.d}</span>
+                </span>
+                <span style={{ fontSize: 18, color: T.tenue }}>›</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {compartirChat && (
+        <CompartirAlChat
+          datos={compartirChat}
+          tema={{ acento: T.accion, boton: `linear-gradient(135deg, ${T.accion2}, ${T.accion})` }}
+          onCerrar={() => setCompartirChat(null)}
+          onEnviado={() => { setCompartirChat(null); setAviso('Enviado al chat ✓'); setTimeout(() => setAviso(''), 2200) }}
+        />
+      )}
+      {aviso && (
+        <div style={{ position: 'fixed', left: '50%', bottom: 'calc(env(safe-area-inset-bottom) + 28px)', transform: 'translateX(-50%)', zIndex: 200, background: T.texto, color: T.fondo, fontSize: 13, fontWeight: 700, padding: '10px 18px', borderRadius: 22, boxShadow: '0 8px 24px rgba(0,0,0,0.3)', whiteSpace: 'nowrap' }}>{aviso}</div>
+      )}
     </div>
   )
 }
