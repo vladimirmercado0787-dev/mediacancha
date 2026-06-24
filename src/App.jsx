@@ -20,6 +20,7 @@ import { guardarJuegoDelDia } from './historialDia'
 import PantallaLigas from './componentes/PantallaLigas'
 import PantallaLNB from './componentes/PantallaLNB'
 import PantallaNBA from './componentes/PantallaNBA'
+import ShellEscritorio from './componentes/ShellEscritorio'
 import { StatusBar, Style } from '@capacitor/status-bar'
 
 function App() {
@@ -31,6 +32,13 @@ function App() {
   const [destinoTrasLogin, setDestinoTrasLogin] = useState('perfil')
   const [perfilViendo, setPerfilViendo] = useState(null)
   const [chatCon, setChatCon] = useState(null)
+  const [esEscritorio, setEsEscritorio] = useState(typeof window !== 'undefined' ? window.innerWidth >= 900 : false)
+
+  useEffect(() => {
+    const onResize = () => setEsEscritorio(window.innerWidth >= 900)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSesion(data.session))
@@ -71,6 +79,25 @@ function App() {
     initBarra()
   }, [])
 
+  // Navegación de la barra de escritorio (mismos destinos que la barra de la Pública).
+  const navegar = (id) => {
+    if (id === 'inicio') setVista('publica')
+    else if (id === 'ligas') setVista('ligas')
+    else if (id === 'nba') setVista('nba')
+    else if (id === 'lnb') setVista('lnb')
+    else if (id === 'torneos') setVista('torneosAdmin')
+    else if (id === 'buscar') setVista(sesion ? 'buscar' : 'login')
+    else if (id === 'mensajes') { setChatCon(null); setVista(sesion ? 'chat' : 'login') }
+    else if (id === 'perfil') { setDestinoTrasLogin('perfil'); setVista(sesion ? 'perfil' : 'login') }
+    else if (id === 'entrar') { setDestinoTrasLogin('perfil'); setVista('login') }
+  }
+
+  // En computadora, envuelve una pantalla con la barra superior del armazón.
+  // En teléfono devuelve la pantalla tal cual (la barra no se usa).
+  const conBarra = (nodo) => esEscritorio
+    ? <ShellEscritorio vista={vista} sesion={sesion} onNav={navegar}>{nodo}</ShellEscritorio>
+    : nodo
+
   if (mostrarIntro) {
     return <IntroMediaCancha onFinish={() => setMostrarIntro(false)} />
   }
@@ -88,7 +115,7 @@ function App() {
   }
 
   if (vista === 'buscar') {
-    return (
+    return conBarra(
       <PantallaBuscar
         onVolver={() => setVista('publica')}
         onVerPerfil={(id) => { if (id && sesion?.user?.id === id) { setVista('perfil') } else { setPerfilViendo(id); setVista('perfilAjeno') } }}
@@ -146,7 +173,7 @@ function App() {
   }
 
   if (vista === 'perfilAjeno') {
-    return (
+    return conBarra(
       <PantallaPerfilAjeno
         usuarioId={perfilViendo}
         onVolver={() => setVista('publica')}

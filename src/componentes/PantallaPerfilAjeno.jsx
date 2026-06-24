@@ -31,6 +31,12 @@ export default function PantallaPerfilAjeno({ usuarioId, onVolver, onMensaje }) 
     return 'dorado'
   })
   const T = TEMAS[tema] || TEMAS.dorado
+  const [esEscritorio, setEsEscritorio] = useState(typeof window !== 'undefined' ? window.innerWidth >= 900 : false)
+  useEffect(() => {
+    const onResize = () => setEsEscritorio(window.innerWidth >= 900)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
   const ORO = { background: T.texto, WebkitBackgroundClip: 'text', backgroundClip: 'text', WebkitTextFillColor: 'transparent' }
   const font = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
 
@@ -73,8 +79,12 @@ export default function PantallaPerfilAjeno({ usuarioId, onVolver, onMensaje }) 
     setProcesando(false)
   }
 
-  const wrap = { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, height: '100dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: font, color: T.textoBody, background: T.fondo }
-  const scrollArea = { flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch', position: 'relative', zIndex: 1 }
+  const wrap = esEscritorio
+    ? { position: 'relative', minHeight: '100dvh', fontFamily: font, color: T.textoBody, background: T.fondo }
+    : { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, height: '100dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: font, color: T.textoBody, background: T.fondo }
+  const scrollArea = esEscritorio
+    ? { position: 'relative', zIndex: 1 }
+    : { flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch', position: 'relative', zIndex: 1 }
   const Velo = () => (
     <>
       <div style={{ position: 'fixed', inset: 0, zIndex: 0, backgroundImage: `url(${fondoCancha})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
@@ -112,7 +122,7 @@ export default function PantallaPerfilAjeno({ usuarioId, onVolver, onMensaje }) 
     <div style={wrap}>
       <Velo />
       <div style={scrollArea}>
-        <div style={{ position: 'relative', zIndex: 1, maxWidth: 560, margin: '0 auto', padding: 'calc(env(safe-area-inset-top) + 14px) 16px calc(env(safe-area-inset-bottom) + 50px)' }}>
+        <div style={{ position: 'relative', zIndex: 1, maxWidth: esEscritorio ? 1100 : 560, margin: '0 auto', padding: esEscritorio ? '22px 26px 60px' : 'calc(env(safe-area-inset-top) + 14px) 16px calc(env(safe-area-inset-bottom) + 50px)' }}>
         {/* nav */}
         <div style={{ background: T.navDorada, borderRadius: 14, padding: '11px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, boxShadow: '0 6px 18px rgba(156,101,24,.3)' }}>
           <span onClick={() => onVolver && onVolver()} style={{ color: '#2a1c08', fontWeight: 800, fontSize: 13, cursor: 'pointer', padding: '6px 10px', margin: '-6px -10px', borderRadius: 8 }}>← Volver</span>
@@ -120,6 +130,8 @@ export default function PantallaPerfilAjeno({ usuarioId, onVolver, onMensaje }) 
           <span style={{ width: 40 }} />
         </div>
 
+        <div style={{ display: esEscritorio ? 'flex' : 'block', gap: 22, alignItems: 'flex-start' }}>
+        <div style={{ flex: esEscritorio ? '0 0 360px' : 'auto', minWidth: 0 }}>
         {/* tarjeta principal */}
         <div style={{ borderRadius: 20, padding: 1.5, background: T.borde, marginBottom: 16 }}>
           <div style={{ borderRadius: 19, padding: 20, background: T.tarjetaBg, backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}>
@@ -167,8 +179,10 @@ export default function PantallaPerfilAjeno({ usuarioId, onVolver, onMensaje }) 
           </div>
         </div>
 
+        </div>{/* fin columna izquierda */}
+        <div style={{ flex: 1, minWidth: 0, marginTop: esEscritorio ? 0 : 22 }}>
         {/* SUS PUBLICACIONES */}
-        <div style={{ marginTop: 22 }}>
+        <div>
           <div style={{ fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1, ...ORO, marginBottom: 14, paddingLeft: 2 }}>Publicaciones de {perfil.nombre || 'este jugador'}</div>
           {publicaciones.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '34px 20px', color: T.tenue, background: T.tarjetaBg, border: `1px solid ${T.tarjetaBorde}`, borderRadius: 16 }}>
@@ -205,6 +219,8 @@ export default function PantallaPerfilAjeno({ usuarioId, onVolver, onMensaje }) 
             })
           )}
         </div>
+        </div>{/* fin columna derecha */}
+        </div>{/* fin fila 2 columnas */}
         </div>
       </div>
     </div>

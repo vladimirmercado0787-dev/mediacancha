@@ -14,7 +14,7 @@ import { supabase } from '../supabaseClient'
 //    onEnviado— (paraId) => {}  (opcional) tras enviar con éxito
 // ============================================================================
 
-export default function CompartirAlChat({ datos, tema, onCerrar, onEnviado }) {
+export default function CompartirAlChat({ datos, tema, titulo, onEnviar, onCerrar, onEnviado }) {
   const T = tema || { acento: '#e8b65a', boton: 'linear-gradient(150deg,#f3cf63,#c8842e)' }
   const [chats, setChats] = useState([])
   const [perfiles, setPerfiles] = useState({})
@@ -55,7 +55,7 @@ export default function CompartirAlChat({ datos, tema, onCerrar, onEnviado }) {
   const enviar = async (paraId) => {
     if (enviandoA || enviados.includes(paraId)) return
     setEnviandoA(paraId)
-    const r = await enviarResultado(paraId, datos)
+    const r = await (onEnviar || enviarResultado)(paraId, datos)
     setEnviandoA(null)
     if (r && r.ok) {
       setEnviados((prev) => [...prev, paraId])
@@ -89,7 +89,7 @@ export default function CompartirAlChat({ datos, tema, onCerrar, onEnviado }) {
         {/* Cabecera */}
         <div style={{ flexShrink: 0, padding: '14px 16px 10px', borderBottom: '1px solid rgba(255,255,255,.07)' }}>
           <div style={{ width: 38, height: 4, borderRadius: 2, background: 'rgba(255,255,255,.2)', margin: '0 auto 12px' }} />
-          <div style={{ fontSize: 16, fontWeight: 800, color: '#f4f7f9', textAlign: 'center' }}>Compartir resultado</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: '#f4f7f9', textAlign: 'center' }}>{titulo || 'Compartir resultado'}</div>
           <input value={busca} onChange={(e) => setBusca(e.target.value)} onMouseDown={(e) => e.stopPropagation()} placeholder="Buscar persona…" style={{ width: '100%', boxSizing: 'border-box', marginTop: 12, background: 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.1)', borderRadius: 11, padding: '10px 14px', color: '#f4f7f9', fontSize: 14, outline: 'none' }} />
         </div>
 

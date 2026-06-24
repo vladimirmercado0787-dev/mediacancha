@@ -3,6 +3,8 @@ import { supabase } from '../supabaseClient'
 import { miUsuarioId } from '../social'
 import { leerConversacion, marcarLeido, listaConversaciones, perfilesDe } from '../mensajes'
 import ResultadoEnChat from './ResultadoEnChat'
+import FichaEnChat from './FichaEnChat'
+import NoticiaEnChat from './NoticiaEnChat'
 import fondoCancha from '../assets/fondo-cancha.png'
 import { Capacitor } from '@capacitor/core'
 import { Keyboard, KeyboardResize } from '@capacitor/keyboard'
@@ -52,6 +54,8 @@ function resumenMsg(m) {
   if (m.tipo === 'resultado') {
     let d = m.adjunto_meta
     if (typeof d === 'string') { try { d = JSON.parse(d) } catch (e) { d = null } }
+    if (d && d.tipo === 'ficha') return `🏀 Ficha · ${d.nombre || 'jugador'}`
+    if (d && d.tipo === 'noticia') return `🏀 Noticia · ${(d.titulo || '').slice(0, 40)}`
     if (d && d.nombreA && d.nombreB) {
       return `🏀 ${d.nombreA} ${d.totalA != null ? d.totalA : ''}-${d.totalB != null ? d.totalB : ''} ${d.nombreB}`
     }
@@ -668,7 +672,11 @@ export default function PantallaChat({ abrirCon, onVolver, onVerPerfil }) {
               <div onClick={() => onVerPerfil && perfilOtro?.id && onVerPerfil(perfilOtro.id)} style={{ width: 28, height: 28, borderRadius: '50%', flexShrink: 0, cursor: 'pointer', background: perfilOtro?.foto_url ? `url(${perfilOtro.foto_url}) center/cover` : T.avatar, display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 800, color: T.avatarTexto, marginBottom: 2 }}>{!perfilOtro?.foto_url && nombreDe(perfilOtro).slice(0, 1).toUpperCase()}</div>
             ) : <div style={{ width: 28, flexShrink: 0 }} />)}
             <div id={`msg-${m.id}`} {...handlersSoloPresion(m)} style={{ maxWidth: '82%', WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none' }}>
-              <ResultadoEnChat datos={datosJuego} mio={mio} onVerJuego={null} onFijar={() => fijar(m, !m.fijado)} fijado={m.fijado} />
+              {datosJuego && datosJuego.tipo === 'ficha'
+                ? <FichaEnChat datos={datosJuego} mio={mio} />
+                : datosJuego && datosJuego.tipo === 'noticia'
+                  ? <NoticiaEnChat datos={datosJuego} mio={mio} />
+                  : <ResultadoEnChat datos={datosJuego} mio={mio} onVerJuego={null} onFijar={() => fijar(m, !m.fijado)} fijado={m.fijado} />}
               <div style={{ fontSize: 9.5, opacity: 0.6, textAlign: 'right', marginTop: 3, color: T.tenue }}>{horaCorta(m.creado_en)}{mio ? (m.leido ? ' ✓✓' : ' ✓') : ''}</div>
             </div>
           </div>
@@ -997,7 +1005,7 @@ export default function PantallaChat({ abrirCon, onVolver, onVerPerfil }) {
     <div style={wrap}>
       <style>{css}</style>
       <Velo />
-      <div style={{ position: 'relative', zIndex: 1, maxWidth: 620, margin: '0 auto', padding: '16px 16px 50px' }}>
+      <div style={{ position: 'relative', zIndex: 1, maxWidth: 620, margin: '0 auto', padding: 'calc(env(safe-area-inset-top) + 16px) 16px 50px' }}>
         <div style={{ background: T.navDorada, borderRadius: 14, padding: '11px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, boxShadow: '0 6px 18px rgba(156,101,24,.3)' }}>
           <span onClick={() => onVolver && onVolver()} style={{ color: '#2a1c08', fontWeight: 800, fontSize: 13, cursor: 'pointer' }}>← Volver</span>
           <span style={{ color: '#2a1c08', fontWeight: 800, fontSize: 14 }}>✉️ Mensajes</span>

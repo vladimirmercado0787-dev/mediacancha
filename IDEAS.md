@@ -346,6 +346,49 @@ Métrica **SEPARADA del rating**. El **rating** mide NIVEL/calidad (qué tan fue
 
 *Por definir:* pesos si se mezclan (visitas + seguidores + compartidas), y si la "popularidad" que se ve por fuera es el número crudo o un índice.
 
+**Idea T-012 — PANTALLA PÚBLICA DEL TORNEO + votación del MVP + seguir/álbumes** · `DISEÑO APROBADO ✅ (jun 2026)`
+
+*Diseño completo y maqueta aprobados por Vladimir. Detalle largo en el documento aparte `TORNEO_pantalla_publica_diseno.md` y la maqueta `maqueta_pantalla_publica_torneo.html`. Resumen del acuerdo:*
+
+**Concepto:** cada torneo es una **mini-liga con personalidad** — su propia pantalla pública, igual que la pantalla de la NBA, pero del torneo. El fanático entra y vive TODO. El objetivo es **provocar tráfico**: el torneo genera momentos → se comparten al Techado/chats → traen gente → sube la popularidad → los calientes suben en Explorar → entra más gente. La rueda gira sola. (La investigación confirma: lo interactivo —votos/predicciones/encuestas— es el segundo formato más importante para los fanáticos, por encima de stats y marcadores; las predicciones son lo que MÁS hace volver.)
+
+**SECCIONES (pestañas: Portada · Juegos · Tabla · Líderes · Votos · Álbumes):**
+- **Portada:** encabezado del torneo (logo, nombre, edición, nivel/categoría/rama) con DOS sellos — **Rating** (cero a cien = calidad, T-009) y **Popularidad** (visitas/seguidores + llama 🔥 si está en racha = tráfico, T-011); botones **Seguir** y **Compartir**; **carrusel de momentos automáticos** (rota solo) + cinta de **en vivo / próximo**.
+- **Juegos:** marcador **agrupado por día** (hora RD), en vivo → próximos → finales. Cada juego abre detalle (marcador, parciales, line-up, **narración automática** del anotador, stats, head-to-head) + compartir resultado.
+- **Tabla / Llave:** liga = tabla de posiciones; copa = **bracket interactivo**; mixto = las dos.
+- **Líderes + Carrera por el MVP:** carrusel de categorías (top cinco, cliqueable) con MC Rating; módulo de los **tres candidatos al MVP**, el #1 coronado.
+- **Votos** y **Álbumes** (ver abajo). También **Equipos/Jugadores** (logo de equipo T-007, badge de refuerzo T-006).
+
+**SISTEMA DE VOTACIÓN DEL MVP (lo central, aprobado):**
+- El MVP **no se elige a ciegas**: el sistema filtra con números, el fanático decide entre los mejores.
+- **Paso 1:** el sistema saca el **Top diez** con un puntaje que mezcla **estadísticas individuales** (MC Rating del torneo) + **récord del equipo** (un jugador de equipo ganador pesa más; el MVP casi siempre sale de arriba) + **impacto/consistencia**.
+- **Paso 2:** los **tres primeros** de ese Top diez entran a votación.
+- **Paso 3:** la votación **abre sola en la última semana de la temporada regular**. Un voto por persona, resultado en vivo.
+- **Paso 4:** se corona el MVP al cerrar, con tarjeta compartible.
+- **REQUISITO:** para saber cuándo es "la última semana de la regular", la app calcula el **calendario y las fases** desde el formato (**cantidad de equipos + cantidad de juegos + tipo de eliminatoria**). Ese **motor de calendario/fases es pieza base** — sin él no hay "última semana".
+- Mostrar **dos MVP que conversan:** el **MVP por números** (#1 del Top diez) y el **MVP del fanático** (ganador de la votación); la diferencia genera discusión = tráfico.
+
+**OTRAS VOTACIONES Y ENGANCHE:**
+- **Jugador de la jornada** (MVP del fanático por jornada).
+- **Predicción del próximo juego** ("¿quién gana?") → aciertos suman puntos → **ranking de predictores** (lo que más hace volver).
+- **Califica la actuación** (nota del fanático al jugador).
+- **Encuestas** del organizador (preguntas sueltas) · **reacciones en vivo** (emojis).
+- **Anti-trampa:** un voto por usuario registrado + límite de frecuencia (popularidad real, conecta con T-011).
+
+**SEGUIR + DISTRIBUCIÓN (el feed del torneo):** al dar **Seguir**, al fanático le llega TODO lo del torneo a su feed e historias — noticias, publicaciones, resultados, momentos automáticos, **historias** (lo del día) y **álbumes nuevos**. El torneo también **publica al Techado** (de ahí salen seguidores nuevos).
+
+**ESPACIO PROPIO:** el torneo tiene su **muro/publicaciones** (anuncios, noticias + los momentos automáticos) y su **espacio de álbumes de fotos** (jornadas, premiación, equipos). Historias = lo del momento; álbumes = pa' guardar. Suben el organizador y quizás los capitanes.
+
+**INTELIGENCIA AUTOMÁTICA (conecta con T-001):** los momentos se escriben solos (remontadas, rachas, explosiones, récords) y alimentan portada, feed y lo compartible.
+
+**TABLAS NUEVAS (Supabase):** `torneo_juegos` (si no existe), `torneo_encuestas` (tipo mvp/prediccion/rating/libre), `torneo_votos` (único: encuesta_id + usuario_id), `torneo_predicciones` (+ puntos), `torneo_calificaciones`, `torneo_seguidores`, `torneo_visitas` (únicos + trending siete días), `torneo_momentos`, `torneo_publicaciones`, `torneo_albumes`, `torneo_fotos`. **Recordar grants/RLS (error 2.8).**
+
+**PLAN POR FASES:** (1) esqueleto público (portada + juegos por día + tabla/llave + líderes), responsive desde el principio. (2) compartir + seguir + visitas (popularidad básica). (3) capa de enganche (encuestas + predicciones + ranking de predictores + MVP del fanático + calificación). (4) inteligencia automática (T-001). (5) rating y popularidad finos (T-009/T-011) + ediciones (T-010). Transversal: completar el asistente (capitanes/invitaciones/directiva/enganche, T-004/T-005) y el modo de anotación (L-007), de donde sale la data.
+
+**CONFIG NUEVA (amplía el wizard T-002):** agregar pasos de **equipos+capitanes** (T-004, con logo T-007), **directiva** (T-005), **modo de anotación** (Rápido/Fogueo/Torneo, L-007) y **enganche** (interruptores: predicciones, MVP, calificación, encuestas, público/privado, seguir). A futuro: **edición/temporada** (T-010).
+
+*Decisiones por definir antes de codear:* (1) umbrales de la inteligencia (de cuántos abajo = remontada, cuántos juegos = racha, qué número = explosión); (2) predicción solo "¿quién gana?" o también marcador/margen; (3) calificación en estrellas o nota uno a diez; (4) torneos públicos por defecto o el organizador decide.
+
 ---
 
 ### 3.2 LIGAS

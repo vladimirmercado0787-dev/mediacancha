@@ -28,6 +28,12 @@ function leerTema() {
 export default function PantallaBuscar({ onVolver, onVerPerfil }) {
   const [tema] = useState(leerTema)
   const T = TEMAS[tema] || TEMAS.azul
+  const [esEscritorio, setEsEscritorio] = useState(typeof window !== 'undefined' ? window.innerWidth >= 900 : false)
+  useEffect(() => {
+    const onResize = () => setEsEscritorio(window.innerWidth >= 900)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
 
   const [q, setQ] = useState('')
   const [resultados, setResultados] = useState([])
@@ -81,7 +87,7 @@ export default function PantallaBuscar({ onVolver, onVerPerfil }) {
     const sigo = siguiendoIds.includes(p.id)
     const nombreCompleto = `${p.nombre || ''}${p.apellido ? ' ' + p.apellido : ''}`.trim() || 'Jugador'
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: T.surf, border: `1px solid ${T.bd}`, borderRadius: 16, marginBottom: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: T.surf, border: `1px solid ${T.bd}`, borderRadius: 16 }}>
         <div onClick={() => onVerPerfil && onVerPerfil(p.id)} style={{ width: 48, height: 48, borderRadius: '50%', flexShrink: 0, background: p.foto_url ? `url(${p.foto_url}) center/cover` : T.boton, display: 'grid', placeItems: 'center', fontSize: 18, fontWeight: 800, color: T.onBoton, cursor: 'pointer', position: 'relative', overflow: 'hidden', border: `2px solid ${T.bd2}` }}>
           {!p.foto_url && nombreCompleto.slice(0, 1).toUpperCase()}
         </div>
@@ -104,7 +110,7 @@ export default function PantallaBuscar({ onVolver, onVerPerfil }) {
       <div style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none', background: T.veil }} />
       <div style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none', background: `radial-gradient(360px 280px at 50% 6%, ${T.glow1}, transparent 65%)` }} />
 
-      <div style={{ position: 'relative', zIndex: 1, maxWidth: 620, margin: '0 auto', padding: 'calc(env(safe-area-inset-top) + 14px) 16px calc(env(safe-area-inset-bottom) + 50px)' }}>
+      <div style={{ position: 'relative', zIndex: 1, maxWidth: esEscritorio ? 980 : 620, margin: '0 auto', padding: esEscritorio ? '22px 26px 50px' : 'calc(env(safe-area-inset-top) + 14px) 16px calc(env(safe-area-inset-bottom) + 50px)' }}>
         {/* nav */}
         <div style={{ background: T.surf, border: `1px solid ${T.bd}`, borderRadius: 16, padding: '11px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, position: 'relative', overflow: 'hidden', backdropFilter: 'blur(10px)' }}>
           <span style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, display: 'flex' }}><span style={{ flex: 1, background: TRI_AZUL }} /><span style={{ flex: 1, background: '#fff' }} /><span style={{ flex: 1, background: TRI_ROJO }} /></span>
@@ -133,7 +139,9 @@ export default function PantallaBuscar({ onVolver, onVerPerfil }) {
         ) : resultados.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '30px', color: T.tn, fontSize: 14 }}>No se encontró a nadie con "{q.trim()}".</div>
         ) : (
-          resultados.map((p) => <TarjetaPersona key={p.id} p={p} />)
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 12 }}>
+            {resultados.map((p) => <TarjetaPersona key={p.id} p={p} />)}
+          </div>
         )}
       </div>
     </div>

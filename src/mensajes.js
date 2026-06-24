@@ -33,6 +33,43 @@ export async function enviarResultado(paraId, datosJuego, textoOpcional = '') {
   return { ok: true, mensaje: data }
 }
 
+// Manda la FICHA de un jugador a un chat. Reusa el mismo canal de "resultado"
+// (columna tipo='resultado'), pero el adjunto trae tipo:'ficha' adentro, así
+// que el chat la dibuja como tarjeta de jugador (FichaEnChat). No toca nada de
+// los resultados de juego.
+export async function enviarFicha(paraId, datosFicha, textoOpcional = '') {
+  const yo = await miUsuarioId()
+  if (!yo) return { error: 'Inicia sesión' }
+  if (yo === paraId) return { error: 'No puedes enviarte mensajes a ti mismo' }
+  const resumen = (textoOpcional || '').trim() || ('🏀 Ficha · ' + ((datosFicha && datosFicha.nombre) || 'jugador'))
+  const meta = { ...(datosFicha || {}), tipo: 'ficha' }
+  const { data, error } = await supabase
+    .from('mensajes')
+    .insert({ de_id: yo, para_id: paraId, texto: resumen, tipo: 'resultado', adjunto_meta: meta })
+    .select()
+    .single()
+  if (error) return { error: error.message }
+  return { ok: true, mensaje: data }
+}
+
+// Manda una NOTICIA a un chat (tarjeta NBA con botón "Leer"). Mismo canal que
+// el resultado; el adjunto trae tipo:'noticia' adentro.
+export async function enviarNoticia(paraId, datosNoticia, textoOpcional = '') {
+  const yo = await miUsuarioId()
+  if (!yo) return { error: 'Inicia sesión' }
+  if (yo === paraId) return { error: 'No puedes enviarte mensajes a ti mismo' }
+  const tit = ((datosNoticia && datosNoticia.titulo) || 'noticia').slice(0, 60)
+  const resumen = (textoOpcional || '').trim() || ('🏀 Noticia · ' + tit)
+  const meta = { ...(datosNoticia || {}), tipo: 'noticia' }
+  const { data, error } = await supabase
+    .from('mensajes')
+    .insert({ de_id: yo, para_id: paraId, texto: resumen, tipo: 'resultado', adjunto_meta: meta })
+    .select()
+    .single()
+  if (error) return { error: error.message }
+  return { ok: true, mensaje: data }
+}
+
 // Leer toda la conversación con una persona (ordenada por fecha)
 export async function leerConversacion(otroId) {
   const yo = await miUsuarioId()
