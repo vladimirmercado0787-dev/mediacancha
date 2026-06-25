@@ -20,6 +20,10 @@ import { guardarJuegoDelDia } from './historialDia'
 import PantallaLigas from './componentes/PantallaLigas'
 import PantallaLNB from './componentes/PantallaLNB'
 import PantallaNBA from './componentes/PantallaNBA'
+import PantallaNoticias from './componentes/PantallaNoticias'
+import PantallaRosters from './componentes/PantallaRosters'
+import PantallaCentroComando from './componentes/PantallaCentroComando'
+import PantallaSalaDraft from './componentes/PantallaSalaDraft'
 import ShellEscritorio from './componentes/ShellEscritorio'
 import { StatusBar, Style } from '@capacitor/status-bar'
 
@@ -85,6 +89,9 @@ function App() {
     else if (id === 'ligas') setVista('ligas')
     else if (id === 'nba') setVista('nba')
     else if (id === 'lnb') setVista('lnb')
+    else if (id === 'noticias') setVista('noticias')
+    else if (id === 'rosters') setVista('rosters')
+    else if (id === 'comando') setVista('comando')
     else if (id === 'torneos') setVista('torneosAdmin')
     else if (id === 'buscar') setVista(sesion ? 'buscar' : 'login')
     else if (id === 'mensajes') { setChatCon(null); setVista(sesion ? 'chat' : 'login') }
@@ -258,7 +265,7 @@ function App() {
     return (
       <PantallaLigas
         onVolver={() => setVista('publica')}
-        onAccion={(id) => { if (id === 'lnb') setVista('lnb'); else if (id === 'nba') setVista('nba') }}
+        onAccion={(id) => { if (id === 'lnb') setVista('lnb'); else if (id === 'nba') setVista('nba'); else if (id === 'noticias') setVista('noticias'); else if (id === 'rosters') setVista('rosters'); else if (id === 'comando') setVista('comando') }}
       />
     )
   }
@@ -278,6 +285,30 @@ function App() {
   if (vista === 'nba') {
     return (
       <PantallaNBA onVolver={() => setVista('ligas')} />
+    )
+  }
+
+  if (vista === 'noticias') {
+    return (
+      <PantallaNoticias onVolver={() => setVista('ligas')} />
+    )
+  }
+
+  if (vista === 'rosters') {
+    return (
+      <PantallaRosters onVolver={() => setVista('ligas')} />
+    )
+  }
+
+  if (vista === 'comando') {
+    return (
+      <PantallaCentroComando onVolver={() => setVista('ligas')} onAbrirDraft={() => setVista('draft')} />
+    )
+  }
+
+  if (vista === 'draft') {
+    return (
+      <PantallaSalaDraft onVolver={() => setVista('comando')} />
     )
   }
 

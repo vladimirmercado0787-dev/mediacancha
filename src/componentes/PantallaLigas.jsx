@@ -181,6 +181,67 @@ export default function PantallaLigas({ onVolver, onAccion }) {
             Hoy: la <strong style={{ color: C.texto }}>LNB</strong> de República Dominicana, en vivo. Pronto: la <strong style={{ color: C.texto }}>NBA</strong> y más ligas del mundo dentro de Media Cancha.
           </div>
 
+          {/* CENTRO DE COMANDO — asistente de Fantasy NBA */}
+          <button
+            onClick={() => onAccion && onAccion('comando')}
+            style={{
+              width: '100%', display: 'flex', alignItems: 'center', gap: 14, textAlign: 'left', cursor: 'pointer',
+              position: 'relative', overflow: 'hidden', borderRadius: 22, marginBottom: 16,
+              border: '1px solid rgba(245,184,46,0.4)',
+              background: 'linear-gradient(135deg, rgba(245,184,46,0.18) 0%, rgba(255,255,255,0.06) 55%, rgba(245,184,46,0.10) 100%)',
+              padding: '18px 18px', boxShadow: '0 10px 28px rgba(8,16,40,0.40)',
+            }}
+          >
+            <span style={{ position: 'absolute', top: 14, right: 14, fontSize: 9, fontWeight: 900, letterSpacing: 0.8, textTransform: 'uppercase', color: '#F5B82E', background: 'rgba(245,184,46,0.14)', border: '1px solid rgba(245,184,46,0.4)', borderRadius: 20, padding: '4px 9px' }}>Esperando temporada</span>
+            <div style={{ width: 60, height: 60, borderRadius: 16, flexShrink: 0, display: 'grid', placeItems: 'center', background: 'rgba(0,0,0,0.28)', border: '1px solid rgba(255,255,255,0.10)', fontSize: 28 }}>🎯</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 18, fontWeight: 900, color: C.texto, letterSpacing: 0.2 }}>Centro de Comando</div>
+              <div style={{ fontSize: 12.5, color: C.texto2, marginTop: 3, fontWeight: 600 }}>Tu asistente de Fantasy NBA</div>
+              <div style={{ fontSize: 11.5, color: C.tenue, marginTop: 4 }}>Radar de noticias en vivo · estrategia en octubre</div>
+            </div>
+          </button>
+
+          {/* NOTICIAS RÁPIDAS — feed en vivo de la NBA */}
+          <button
+            onClick={() => onAccion && onAccion('noticias')}
+            style={{
+              width: '100%', display: 'flex', alignItems: 'center', gap: 14, textAlign: 'left', cursor: 'pointer',
+              position: 'relative', overflow: 'hidden', borderRadius: 22, marginBottom: 16,
+              border: '1px solid rgba(47,191,113,0.35)',
+              background: 'linear-gradient(135deg, rgba(47,191,113,0.16) 0%, rgba(255,255,255,0.06) 50%, rgba(90,169,255,0.12) 100%)',
+              padding: '18px 18px', boxShadow: '0 10px 28px rgba(8,16,40,0.40)',
+            }}
+          >
+            <span style={{ position: 'absolute', top: 14, right: 14, fontSize: 9.5, fontWeight: 900, letterSpacing: 1, textTransform: 'uppercase', color: '#7adfa6', background: 'rgba(47,191,113,0.16)', border: '1px solid rgba(47,191,113,0.4)', borderRadius: 20, padding: '4px 11px' }}>● En vivo</span>
+            <div style={{ width: 60, height: 60, borderRadius: 16, flexShrink: 0, display: 'grid', placeItems: 'center', background: 'rgba(0,0,0,0.28)', border: '1px solid rgba(255,255,255,0.10)', fontSize: 28 }}>⚡</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 18, fontWeight: 900, color: C.texto, letterSpacing: 0.2 }}>Noticias Rápidas</div>
+              <div style={{ fontSize: 12.5, color: C.texto2, marginTop: 3, fontWeight: 600 }}>Lesiones, quintetos y traspasos de la NBA</div>
+              <div style={{ fontSize: 11.5, color: C.tenue, marginTop: 4 }}>Al instante, todos los días</div>
+            </div>
+            <span style={{ fontSize: 26, color: C.tenue, flexShrink: 0 }}>›</span>
+          </button>
+
+          {/* PLANTILLAS NBA — rosters de los equipos */}
+          <button
+            onClick={() => onAccion && onAccion('rosters')}
+            style={{
+              width: '100%', display: 'flex', alignItems: 'center', gap: 14, textAlign: 'left', cursor: 'pointer',
+              position: 'relative', overflow: 'hidden', borderRadius: 22, marginBottom: 16,
+              border: '1px solid rgba(90,169,255,0.35)',
+              background: 'linear-gradient(135deg, rgba(90,169,255,0.16) 0%, rgba(255,255,255,0.06) 55%, rgba(62,107,214,0.12) 100%)',
+              padding: '18px 18px', boxShadow: '0 10px 28px rgba(8,16,40,0.40)',
+            }}
+          >
+            <div style={{ width: 60, height: 60, borderRadius: 16, flexShrink: 0, display: 'grid', placeItems: 'center', background: 'rgba(0,0,0,0.28)', border: '1px solid rgba(255,255,255,0.10)', fontSize: 28 }}>📋</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 18, fontWeight: 900, color: C.texto, letterSpacing: 0.2 }}>Plantillas NBA</div>
+              <div style={{ fontSize: 12.5, color: C.texto2, marginTop: 3, fontWeight: 600 }}>Rosters de los 30 equipos</div>
+              <div style={{ fontSize: 11.5, color: C.tenue, marginTop: 4 }}>Quién juega y quién no, en temporada</div>
+            </div>
+            <span style={{ fontSize: 26, color: C.tenue, flexShrink: 0 }}>›</span>
+          </button>
+
           {ligas.map((lg) => TarjetaLiga(lg))}
 
           <div style={{ textAlign: 'center', fontSize: 11, color: C.tenue, marginTop: 14, lineHeight: 1.5 }}>

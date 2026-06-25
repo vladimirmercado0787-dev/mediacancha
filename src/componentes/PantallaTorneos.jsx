@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { supabase } from '../supabaseClient'
+import { cargarTorneoPublico, generarCalendario } from '../torneoData'
 
 // ============================================================================
 //  PANTALLA DE TORNEOS — Media Cancha
@@ -169,7 +171,99 @@ export default function PantallaTorneos({ esAdmin = false, onVolver, onAccion })
     }
   }, [])
 
-  const tj = TORNEO_DEMO
+  // ---------- CARGA DEL TORNEO REAL (desde Supabase) ----------
+  const [datos, setDatos] = useState(null)
+  const [torneoRow, setTorneoRow] = useState(null)
+  const [jugCount, setJugCount] = useState(0)
+  const [recarga, setRecarga] = useState(0)
+  const [generando, setGenerando] = useState(false)
+  const [vueltas, setVueltas] = useState(1)
+  const [errorGen, setErrorGen] = useState(null)
+
+  useEffect(() => {
+    let vivo = true
+    ;(async () => {
+      try {
+        // por ahora carga el torneo que exista; más adelante vendrá por id desde una lista
+        const { data: ts } = await supabase.from('torneos').select('*').order('creado_en', { ascending: false }).limit(1)
+        const t = (ts || [])[0]
+        if (!t || !vivo) return
+        setTorneoRow(t)
+        const pub = await cargarTorneoPublico(t.id)
+        const { count } = await supabase.from('torneo_jugadores').select('id', { count: 'exact', head: true }).eq('torneo_id', t.id)
+        if (!vivo) return
+        setDatos(pub)
+        setJugCount(count || 0)
+      } catch (e) {
+        /* si algo falla, la pantalla se queda con la data de ejemplo */
+      }
+    })()
+    return () => { vivo = false }
+  }, [recarga])
+
+  // mapa equipo_id -> equipo (para sacar código y color)
+  const eqPorId = {}
+  ;(datos?.equipos || []).forEach((e) => { eqPorId[e.id] = e })
+
+  const fechaCorta = (iso) => {
+    if (!iso) return ''
+    const d = new Date(iso), hoy = new Date()
+    const dias = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb']
+    const meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
+    const etq = d.toDateString() === hoy.toDateString() ? 'Hoy' : `${dias[d.getDay()]} ${d.getDate()} ${meses[d.getMonth()]}`
+    let h = d.getHours(); const m = d.getMinutes(); const ap = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12
+    return `${etq} ${h}:${String(m).padStart(2, '0')} ${ap}`
+  }
+
+  // nombre legible del formato (antes venía de torneoFormato.js)
+  const nombreFormato = (f) => ({ liga: 'Liga (todos contra todos)', copa: 'Copa (eliminación directa)', mixto: 'Mixto (grupos + llave)' }[f] || 'Liga (todos contra todos)')
+
+  // ---------- TRANSFORMACIONES: datos reales si cargaron, si no, la data de ejemplo ----------
+  const tj = datos ? {
+    nombre: torneoRow?.nombre || 'Torneo',
+    subtitulo: `${datos.equipos.length} equipos · ${nombreFormato(torneoRow?.formato)}`,
+    lugar: torneoRow?.lugar || 'República Dominicana',
+    emoji: torneoRow?.emoji || '🏆',
+    equipos: datos.equipos.length,
+    jugadores: jugCount,
+    juegosJugados: datos.juegos.filter((j) => j.estado === 'final').length,
+    juegosTotal: datos.juegos.length,
+    fase: torneoRow?.fase || '—',
+    enVivo: datos.juegos.filter((j) => j.estado === 'vivo').length,
+  } : torneoRow ? {
+    nombre: torneoRow.nombre || 'Torneo',
+    subtitulo: nombreFormato(torneoRow.formato),
+    lugar: torneoRow.lugar || 'República Dominicana',
+    emoji: torneoRow.emoji || '🏆',
+    equipos: 0, jugadores: 0, juegosJugados: 0, juegosTotal: 0,
+    fase: torneoRow.fase || '—', enVivo: 0,
+  } : TORNEO_DEMO
+
+  const clasificacion = datos ? datos.tabla.map((t) => ({
+    pos: t.posicion,
+    cod: eqPorId[t.equipo_id]?.codigo || '??',
+    nombre: t.nombre,
+    pj: t.jugados, g: t.ganados, pts: t.puntos,
+    color: eqPorId[t.equipo_id]?.color || T.avatar,
+    colorTexto: '#fff',
+  })) : torneoRow ? [] : CLASIFICACION_DEMO
+
+  const EMO = { puntos: ['🏀', '#e8b65a'], rebotes: ['💪', '#5dcaa5'], asistencias: ['🤝', '#6fb0ec'], robos: ['✋', '#d4537e'], tapones: ['🚫', '#ef9f27'] }
+  const lideres = datos ? datos.lideres.filter((c) => c.filas.length).map((c) => {
+    const top = c.filas[0]
+    const par = EMO[c.id] || ['🏀', '#e8b65a']
+    return { stat: c.titulo, emoji: par[0], jugador: top.nombre, equipo: eqPorId[top.equipo_id]?.nombre || '', valor: top.valor, color: par[1] }
+  }) : torneoRow ? [] : LIDERES_DEMO
+
+  const top10 = datos ? datos.top10.map((j) => ({
+    pos: j.posicion, nombre: j.nombre, equipo: eqPorId[j.equipo_id]?.nombre || '',
+    cod: eqPorId[j.equipo_id]?.codigo || '??', val: j.mcRating, mvp: j.posicion <= 3,
+  })) : torneoRow ? [] : TOP10_DEMO
+
+  const proximos = datos ? datos.juegos.filter((j) => j.estado === 'proximo').slice(0, 6).map((j, i) => ({
+    local: eqPorId[j.equipoA_id]?.nombre || 'Equipo', visita: eqPorId[j.equipoB_id]?.nombre || 'Equipo',
+    fase: j.jornada ? `Jornada ${j.jornada}` : '', lugar: '', cuando: fechaCorta(j.fecha), destacado: i === 0,
+  })) : torneoRow ? [] : PROXIMOS_DEMO
 
   const tarjeta = { background: T.tarjeta, border: `0.5px solid ${T.bordeSuave}`, borderRadius: 16, overflow: 'hidden' }
   const tituloModulo = (txt, color) => (
@@ -182,8 +276,22 @@ export default function PantallaTorneos({ esAdmin = false, onVolver, onAccion })
     const s = size || 22
     return <span style={{ width: s, height: s, borderRadius: '50%', background: color, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: s * 0.4, color: colorTexto, fontWeight: 800, flexShrink: 0 }}>{cod}</span>
   }
-  const colorDe = (cod) => CLASIFICACION_DEMO.find((e) => e.cod === cod)?.color || T.avatar
-  const colorTxtDe = (cod) => CLASIFICACION_DEMO.find((e) => e.cod === cod)?.colorTexto || '#fff'
+  const colorDe = (cod) => clasificacion.find((e) => e.cod === cod)?.color || T.avatar
+  const colorTxtDe = (cod) => clasificacion.find((e) => e.cod === cod)?.colorTexto || '#fff'
+
+  const alGenerar = async (reemplazar = false) => {
+    if (!torneoRow || generando) return
+    setGenerando(true); setErrorGen(null)
+    try {
+      const { error } = await generarCalendario(torneoRow.id, datos?.equipos || [], torneoRow.formato || 'liga', { vueltas, reemplazar })
+      if (error) { setErrorGen(error); setGenerando(false); return }
+      setRecarga((r) => r + 1) // recarga el torneo ya con su calendario
+    } catch (e) {
+      setErrorGen('No se pudo generar el calendario.')
+    } finally {
+      setGenerando(false)
+    }
+  }
 
   const Contenido = () => {
     if (pestana === 'resumen') {
@@ -227,7 +335,7 @@ export default function PantallaTorneos({ esAdmin = false, onVolver, onAccion })
           {tituloModulo('Clasificación')}
           <div style={{ ...tarjeta, marginBottom: 18 }}>
             <div style={{ padding: '4px 14px 10px' }}>
-              {CLASIFICACION_DEMO.map((e) => (
+              {clasificacion.map((e) => (
                 <div key={e.pos} style={{ display: 'flex', alignItems: 'center', padding: '9px 0', fontSize: 13, borderBottom: e.pos < 4 ? `0.5px solid ${T.bordeSuave}` : 'none' }}>
                   <span style={{ width: 22, color: e.pos === 1 ? T.acento : T.tenue, fontWeight: 700 }}>{e.pos}</span>
                   <span style={{ flex: 1, color: T.textoFuerte, display: 'flex', alignItems: 'center', gap: 7 }}>{avatarEquipo(e.cod, e.color, e.colorTexto, 22)}{e.nombre}</span>
@@ -242,8 +350,8 @@ export default function PantallaTorneos({ esAdmin = false, onVolver, onAccion })
           {tituloModulo('Próximos juegos', '#6fb0ec')}
           <div style={{ ...tarjeta, marginBottom: 8 }}>
             <div style={{ padding: '8px 14px 10px' }}>
-              {PROXIMOS_DEMO.map((j, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 0', borderBottom: i < PROXIMOS_DEMO.length - 1 ? `0.5px solid ${T.bordeSuave}` : 'none' }}>
+              {proximos.map((j, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 0', borderBottom: i < proximos.length - 1 ? `0.5px solid ${T.bordeSuave}` : 'none' }}>
                   <div>
                     <div style={{ color: T.textoBody, fontSize: 13 }}>{j.visita ? `${j.local} vs ${j.visita}` : j.local}</div>
                     <div style={{ color: T.muyTenue, fontSize: 11 }}>{j.fase}{j.lugar ? ` · ${j.lugar}` : ''}</div>
@@ -293,7 +401,7 @@ export default function PantallaTorneos({ esAdmin = false, onVolver, onAccion })
               <span style={{ width: 30, textAlign: 'center' }}>PJ</span><span style={{ width: 30, textAlign: 'center' }}>G</span>
               <span style={{ width: 30, textAlign: 'center' }}>P</span><span style={{ width: 34, textAlign: 'center', color: T.acento }}>Pts</span>
             </div>
-            {CLASIFICACION_DEMO.map((e) => (
+            {clasificacion.map((e) => (
               <div key={e.pos} style={{ display: 'flex', alignItems: 'center', padding: '12px 14px', fontSize: 13.5, borderBottom: `0.5px solid ${T.bordeSuave}` }}>
                 <span style={{ width: 22, color: e.pos <= 2 ? T.acento : T.tenue, fontWeight: 700 }}>{e.pos}</span>
                 <span style={{ flex: 1, color: T.textoFuerte, display: 'flex', alignItems: 'center', gap: 8 }}>{avatarEquipo(e.cod, e.color, e.colorTexto, 26)}{e.nombre}</span>
@@ -314,7 +422,7 @@ export default function PantallaTorneos({ esAdmin = false, onVolver, onAccion })
         <>
           {tituloModulo('Líderes por estadística')}
           <div style={{ color: T.muyTenue, fontSize: 11.5, marginBottom: 14, marginTop: -4 }}>Solo aparecen las estadísticas que este torneo lleva.</div>
-          {LIDERES_DEMO.map((l, i) => (
+          {lideres.map((l, i) => (
             <div key={i} style={{ ...tarjeta, padding: 14, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 13 }}>
               <div style={{ width: 46, height: 46, borderRadius: 13, background: `${l.color}22`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 23, flexShrink: 0 }}>{l.emoji}</div>
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -338,8 +446,8 @@ export default function PantallaTorneos({ esAdmin = false, onVolver, onAccion })
           {tituloModulo('Top 10 del torneo')}
           <div style={{ color: T.muyTenue, fontSize: 11.5, marginBottom: 14, marginTop: -4 }}>Ranking general por valoración. Los 3 primeros entran a votación de MVP 👑</div>
           <div style={tarjeta}>
-            {TOP10_DEMO.map((j, i) => (
-              <div key={j.pos} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '11px 14px', borderBottom: i < TOP10_DEMO.length - 1 ? `0.5px solid ${T.bordeSuave}` : 'none', background: j.mvp ? `${T.acento}0d` : 'transparent' }}>
+            {top10.map((j, i) => (
+              <div key={j.pos} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '11px 14px', borderBottom: i < top10.length - 1 ? `0.5px solid ${T.bordeSuave}` : 'none', background: j.mvp ? `${T.acento}0d` : 'transparent' }}>
                 <span style={{ width: 24, textAlign: 'center', color: j.pos <= 3 ? T.acento : T.tenue, fontSize: 15, fontWeight: 800 }}>{j.pos}</span>
                 {avatarEquipo(j.cod, colorDe(j.cod), colorTxtDe(j.cod), 30)}
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -356,7 +464,7 @@ export default function PantallaTorneos({ esAdmin = false, onVolver, onAccion })
     }
 
     if (pestana === 'mvp') {
-      const finalistas = TOP10_DEMO.filter((j) => j.mvp)
+      const finalistas = top10.filter((j) => j.mvp)
       return (
         <>
           {tituloModulo('Votación MVP', '#e8b65a')}
@@ -392,73 +500,81 @@ export default function PantallaTorneos({ esAdmin = false, onVolver, onAccion })
 
     // ---------- EQUIPOS (con plantilla / roster) ----------
     if (pestana === 'equipos') {
+      const equiposReales = datos?.equipos || []
       return (
         <>
           {tituloModulo('Equipos del torneo')}
-          <div style={{ color: T.muyTenue, fontSize: 11.5, marginBottom: 14, marginTop: -4 }}>Toca un equipo para ver su plantilla completa.</div>
-          {EQUIPOS_DEMO.map((eq) => {
-            const abierto = equipoAbierto === eq.cod
+          <div style={{ color: T.muyTenue, fontSize: 11.5, marginBottom: 14, marginTop: -4 }}>
+            {equiposReales.length > 0 ? 'Toca un equipo para ver su plantilla completa.' : 'Todavía no hay equipos inscritos en este torneo.'}
+          </div>
+          {equiposReales.map((eq) => {
+            const abierto = equipoAbierto === eq.id
+            const jugs = (datos?.roster || []).filter((r) => r.equipo_id === eq.id)
+            const ft = (datos?.tabla || []).find((t) => t.equipo_id === eq.id)
             return (
-              <div key={eq.cod} style={{ ...tarjeta, marginBottom: 10 }}>
-                <div onClick={() => setEquipoAbierto(abierto ? null : eq.cod)} style={{ padding: 13, display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
-                  {avatarEquipo(eq.cod, eq.color, eq.colorTexto, 46)}
+              <div key={eq.id} style={{ ...tarjeta, marginBottom: 10 }}>
+                <div onClick={() => setEquipoAbierto(abierto ? null : eq.id)} style={{ padding: 13, display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
+                  {avatarEquipo(eq.codigo || '??', eq.color || T.avatar, '#fff', 46)}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ color: T.textoFuerte, fontSize: 15.5, fontWeight: 800 }}>{eq.nombre}</div>
-                    <div style={{ color: T.muyTenue, fontSize: 12 }}>DT: {eq.dt} · {eq.zona}</div>
+                    <div style={{ color: T.muyTenue, fontSize: 12 }}>{eq.dt_nombre ? `DT: ${eq.dt_nombre}` : 'Sin DT'}{eq.zona ? ` · ${eq.zona}` : ''}</div>
                   </div>
                   <div style={{ textAlign: 'right', marginRight: 4 }}>
-                    <div style={{ color: T.acento, fontSize: 13, fontWeight: 800 }}>{eq.g}-{eq.p}</div>
-                    <div style={{ color: T.muyTenue, fontSize: 10.5 }}>{eq.plantilla.length} jug.</div>
+                    <div style={{ color: T.acento, fontSize: 13, fontWeight: 800 }}>{ft ? `${ft.ganados}-${ft.perdidos}` : '0-0'}</div>
+                    <div style={{ color: T.muyTenue, fontSize: 10.5 }}>{jugs.length} jug.</div>
                   </div>
                   <span style={{ color: T.tenue, fontSize: 16, transform: abierto ? 'rotate(90deg)' : 'none', transition: 'transform .2s' }}>›</span>
                 </div>
 
                 {abierto && (
                   <div style={{ borderTop: `0.5px solid ${T.bordeSuave}`, padding: '6px 13px 12px' }}>
-                    {eq.plantilla.map((j) => (
-                      <div key={j.num} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '9px 0', borderBottom: `0.5px solid ${T.bordeSuave}` }}>
-                        <span style={{ width: 30, height: 30, borderRadius: 8, background: T.esClaro ? 'rgba(0,0,0,.05)' : 'rgba(255,255,255,.06)', color: T.acento, fontSize: 13, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{j.num}</span>
+                    {jugs.length === 0 && <div style={{ color: T.muyTenue, fontSize: 12, padding: '8px 2px' }}>Este equipo no tiene jugadores todavía.</div>}
+                    {jugs.map((j) => (
+                      <div key={j.jugador_id} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '9px 0', borderBottom: `0.5px solid ${T.bordeSuave}` }}>
+                        <span style={{ width: 30, height: 30, borderRadius: 8, background: T.esClaro ? 'rgba(0,0,0,.05)' : 'rgba(255,255,255,.06)', color: T.acento, fontSize: 13, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{j.numero ?? '–'}</span>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ color: T.textoFuerte, fontSize: 13.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>{j.nombre}{j.cap && <span style={{ fontSize: 9, fontWeight: 800, color: T.botonTexto, background: T.boton, padding: '1px 6px', borderRadius: 8 }}>CAP</span>}</div>
-                          <div style={{ color: T.muyTenue, fontSize: 11.5 }}>{j.pos}</div>
+                          <div style={{ color: T.textoFuerte, fontSize: 13.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>{j.nombre}{j.esCapitan && <span style={{ fontSize: 9, fontWeight: 800, color: T.botonTexto, background: T.boton, padding: '1px 6px', borderRadius: 8 }}>CAP</span>}{j.esRefuerzo && <span style={{ fontSize: 9, fontWeight: 800, color: T.tenue, border: `1px solid ${T.bordeSuave}`, padding: '1px 6px', borderRadius: 8 }}>R</span>}</div>
+                          <div style={{ color: T.muyTenue, fontSize: 11.5 }}>{j.posicion || '—'}</div>
                         </div>
                       </div>
                     ))}
-                    {esAdmin && (
-                      <button onClick={() => alert('Agregar jugador a ' + eq.nombre + ' (demo)')} style={{ width: '100%', marginTop: 10, border: `1px solid ${T.borde}`, borderRadius: 11, padding: 10, background: 'transparent', color: T.acento, fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>＋ Agregar jugador</button>
-                    )}
                   </div>
                 )}
               </div>
             )
           })}
-          {esAdmin && (
-            <button onClick={() => alert('Inscribir equipo (demo)')} style={{ width: '100%', marginTop: 4, border: `1px solid ${T.borde}`, borderRadius: 13, padding: 13, background: 'transparent', color: T.acento, fontSize: 13.5, fontWeight: 700, cursor: 'pointer' }}>＋ Inscribir equipo</button>
-          )}
         </>
       )
     }
 
-    // ---------- JUGADORES (todos, ordenados por valoración) ----------
+    // ---------- JUGADORES (todos los inscritos) ----------
     if (pestana === 'jugadores') {
-      const todos = []
-      EQUIPOS_DEMO.forEach((eq) => eq.plantilla.forEach((j) => todos.push({ ...j, equipo: eq.nombre, cod: eq.cod, color: eq.color, colorTexto: eq.colorTexto })))
+      const eqMap = {}
+      ;(datos?.equipos || []).forEach((e) => { eqMap[e.id] = e })
+      const todos = (datos?.roster || []).map((j) => {
+        const eq = eqMap[j.equipo_id] || {}
+        return { ...j, equipoNombre: eq.nombre || '—', cod: eq.codigo || '??', color: eq.color || T.avatar }
+      })
       return (
         <>
           {tituloModulo('Jugadores inscritos')}
-          <div style={{ color: T.muyTenue, fontSize: 11.5, marginBottom: 14, marginTop: -4 }}>{todos.length} jugadores en {EQUIPOS_DEMO.length} equipos. Vinculados por su MC ID.</div>
-          <div style={tarjeta}>
-            {todos.map((j, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '11px 14px', borderBottom: i < todos.length - 1 ? `0.5px solid ${T.bordeSuave}` : 'none' }}>
-                {avatarEquipo(j.cod, j.color, j.colorTexto, 32)}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ color: T.textoFuerte, fontSize: 13.5, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>#{j.num} {j.nombre}</div>
-                  <div style={{ color: T.muyTenue, fontSize: 11.5 }}>{j.pos} · {j.equipo}</div>
+          <div style={{ color: T.muyTenue, fontSize: 11.5, marginBottom: 14, marginTop: -4 }}>{todos.length} jugadores en {(datos?.equipos || []).length} equipos. Vinculados por su MC ID.</div>
+          {todos.length === 0 ? (
+            <div style={{ ...tarjeta, padding: 20, textAlign: 'center', color: T.muyTenue, fontSize: 13 }}>Todavía no hay jugadores inscritos.</div>
+          ) : (
+            <div style={tarjeta}>
+              {todos.map((j) => (
+                <div key={j.jugador_id} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '11px 14px', borderBottom: `0.5px solid ${T.bordeSuave}` }}>
+                  {avatarEquipo(j.cod, j.color, '#fff', 32)}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ color: T.textoFuerte, fontSize: 13.5, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>#{j.numero ?? '–'} {j.nombre}</div>
+                    <div style={{ color: T.muyTenue, fontSize: 11.5 }}>{j.posicion || '—'} · {j.equipoNombre}</div>
+                  </div>
+                  {j.esCapitan && <span style={{ fontSize: 9, fontWeight: 800, color: T.botonTexto, background: T.boton, padding: '2px 7px', borderRadius: 8 }}>CAP</span>}
                 </div>
-                {j.cap && <span style={{ fontSize: 9, fontWeight: 800, color: T.botonTexto, background: T.boton, padding: '2px 7px', borderRadius: 8 }}>CAP</span>}
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </>
       )
     }
@@ -509,6 +625,126 @@ export default function PantallaTorneos({ esAdmin = false, onVolver, onAccion })
       )
     }
 
+    if (pestana === 'calendario') {
+      const juegos = datos?.juegos || []
+      const equiposN = (datos?.equipos || []).length
+      const hayEquipos = equiposN >= 2
+      const nombreEq = (id) => eqPorId[id]?.nombre || 'Equipo'
+      const codEq = (id) => eqPorId[id]?.codigo || '??'
+      const colorEq = (id) => eqPorId[id]?.color || T.avatar
+      const esCopa = torneoRow?.formato === 'copa'
+      const nombreRondaLocal = (n) => n <= 2 ? 'Final' : n <= 4 ? 'Semifinal' : n <= 8 ? 'Cuartos de final' : n <= 16 ? 'Octavos de final' : `Ronda de ${n}`
+      const etiquetaJornada = (jn) => esCopa ? (jn === 1 ? nombreRondaLocal(equiposN) : `Ronda ${jn}`) : `Jornada ${jn}`
+      const porJornada = {}
+      juegos.forEach((j) => { const k = j.jornada || 1; (porJornada[k] = porJornada[k] || []).push(j) })
+      const jornadas = Object.keys(porJornada).map(Number).sort((a, b) => a - b)
+
+      // Vista previa de cuántos juegos genera la configuración elegida (solo liga).
+      const totalPrev = vueltas * equiposN * (equiposN - 1) / 2
+      const porEquipoPrev = vueltas * (equiposN - 1)
+      const opcionesVueltas = [{ v: 1, txt: 'Sencilla', sub: '1 vez' }, { v: 2, txt: 'Ida y vuelta', sub: '2 veces' }, { v: 3, txt: 'Triple', sub: '3 veces' }]
+      const selectorVueltas = !esCopa ? (
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ color: T.textoBody, fontSize: 12.5, fontWeight: 700, marginBottom: 8, textAlign: 'left' }}>¿Cuántas veces se enfrenta cada par?</div>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+            {opcionesVueltas.map((o) => {
+              const activo = vueltas === o.v
+              return (
+                <button key={o.v} onClick={() => setVueltas(o.v)} style={{ flex: 1, border: `1.5px solid ${activo ? T.acento : T.borde}`, background: activo ? `${T.acento}18` : 'transparent', borderRadius: 11, padding: '9px 4px', cursor: 'pointer', color: activo ? T.acento : T.textoBody }}>
+                  <div style={{ fontSize: 17, fontWeight: 800 }}>{o.v}</div>
+                  <div style={{ fontSize: 11, fontWeight: 700 }}>{o.txt}</div>
+                  <div style={{ fontSize: 9.5, color: T.muyTenue }}>{o.sub}</div>
+                </button>
+              )
+            })}
+          </div>
+          <div style={{ background: T.esClaro ? 'rgba(0,0,0,.04)' : 'rgba(255,255,255,.05)', borderRadius: 10, padding: '8px 12px', fontSize: 12, color: T.textoBody, textAlign: 'center' }}>
+            Genera <b style={{ color: T.acento }}>{totalPrev} partidos</b> · <b style={{ color: T.acento }}>{porEquipoPrev} por equipo</b>
+          </div>
+        </div>
+      ) : null
+
+      return (
+        <>
+          {tituloModulo('Calendario del torneo', '#6fb0ec')}
+          {juegos.length === 0 ? (
+            <div style={{ ...tarjeta, padding: 22, textAlign: 'center' }}>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>📅</div>
+              <div style={{ color: T.textoFuerte, fontSize: 15.5, fontWeight: 700, marginBottom: 6 }}>Todavía no hay calendario</div>
+              <div style={{ color: T.tenue, fontSize: 13, lineHeight: 1.5, marginBottom: hayEquipos ? 16 : 4 }}>
+                {hayEquipos
+                  ? `Genera todos los partidos automáticamente. Formato: ${nombreFormato(torneoRow?.formato)}.`
+                  : 'Necesitas al menos dos equipos inscritos para generar el calendario.'}
+              </div>
+              {esAdmin && hayEquipos && (
+                <>
+                  {selectorVueltas}
+                  <button onClick={() => alGenerar(false)} disabled={generando} style={{ width: '100%', border: 'none', borderRadius: 13, padding: 14, background: T.boton, color: T.botonTexto, fontSize: 14.5, fontWeight: 800, cursor: generando ? 'default' : 'pointer', opacity: generando ? 0.6 : 1 }}>
+                    {generando ? 'Generando…' : '⚡ Generar calendario'}
+                  </button>
+                  {errorGen && <div style={{ color: '#f09595', fontSize: 12.5, marginTop: 10 }}>{errorGen}</div>}
+                  {esCopa && <div style={{ color: T.muyTenue, fontSize: 11, marginTop: 12, lineHeight: 1.5 }}>Se genera la primera ronda de la llave. Las rondas siguientes se arman cuando terminen esos partidos.</div>}
+                </>
+              )}
+            </div>
+          ) : (
+            <>
+              <div style={{ color: T.muyTenue, fontSize: 11.5, marginBottom: 14, marginTop: -4 }}>
+                {juegos.length} partidos · {juegos.filter((j) => j.estado === 'final').length} jugados
+              </div>
+              {jornadas.map((jn) => (
+                <div key={jn} style={{ marginBottom: 16 }}>
+                  <div style={{ color: T.acento, fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 8 }}>
+                    {etiquetaJornada(jn)}
+                  </div>
+                  <div style={tarjeta}>
+                    {porJornada[jn].map((j, i) => {
+                      const fin = j.estado === 'final'
+                      const vivo = j.estado === 'vivo'
+                      const ganoA = fin && j.puntosA > j.puntosB
+                      const ganoB = fin && j.puntosB > j.puntosA
+                      return (
+                        <div key={j.id || i} style={{ display: 'flex', alignItems: 'center', padding: '11px 14px', borderBottom: i < porJornada[jn].length - 1 ? `0.5px solid ${T.bordeSuave}` : 'none', gap: 10 }}>
+                          <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                            {avatarEquipo(codEq(j.equipoA_id), colorEq(j.equipoA_id), '#fff', 26)}
+                            <span style={{ color: ganoA ? T.textoFuerte : T.textoBody, fontSize: 13, fontWeight: ganoA ? 800 : 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nombreEq(j.equipoA_id)}</span>
+                          </div>
+                          <div style={{ flexShrink: 0, textAlign: 'center', minWidth: 54 }}>
+                            {fin ? (
+                              <span style={{ color: T.textoFuerte, fontSize: 15, fontWeight: 800 }}>{j.puntosA}-{j.puntosB}</span>
+                            ) : vivo ? (
+                              <span style={{ color: '#f09595', fontSize: 10, fontWeight: 800 }}>● VIVO</span>
+                            ) : (
+                              <span style={{ color: T.muyTenue, fontSize: 11 }}>vs</span>
+                            )}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
+                            <span style={{ color: ganoB ? T.textoFuerte : T.textoBody, fontSize: 13, fontWeight: ganoB ? 800 : 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textAlign: 'right' }}>{nombreEq(j.equipoB_id)}</span>
+                            {avatarEquipo(codEq(j.equipoB_id), colorEq(j.equipoB_id), '#fff', 26)}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))}
+              {esAdmin && (
+                <div style={{ ...tarjeta, padding: 16, marginTop: 18, border: `0.5px solid ${T.borde}` }}>
+                  <div style={{ color: T.textoFuerte, fontSize: 13.5, fontWeight: 800, marginBottom: 4 }}>Regenerar calendario</div>
+                  <div style={{ color: T.muyTenue, fontSize: 11.5, lineHeight: 1.5, marginBottom: 12 }}>Borra los partidos que aún no se han jugado y crea unos nuevos. Los partidos ya jugados no se tocan.</div>
+                  {selectorVueltas}
+                  <button onClick={() => { if (window.confirm('¿Regenerar el calendario? Se borran los partidos no jugados y se crean nuevos con la configuración elegida.')) alGenerar(true) }} disabled={generando} style={{ width: '100%', border: `1.5px solid ${T.borde}`, borderRadius: 12, padding: 12, background: 'transparent', color: T.acento, fontSize: 13.5, fontWeight: 800, cursor: generando ? 'default' : 'pointer', opacity: generando ? 0.6 : 1 }}>
+                    {generando ? 'Regenerando…' : '🔄 Regenerar calendario'}
+                  </button>
+                  {errorGen && <div style={{ color: '#f09595', fontSize: 12.5, marginTop: 10 }}>{errorGen}</div>}
+                </div>
+              )}
+            </>
+          )}
+        </>
+      )
+    }
+
     const nombres = {
       bracket: 'Bracket / Llaves', calendario: 'Calendario completo', equipos: 'Equipos',
       jugadores: 'Jugadores', arbitros: 'Árbitros', reglas: 'Reglas del torneo',
@@ -537,6 +773,9 @@ export default function PantallaTorneos({ esAdmin = false, onVolver, onAccion })
             <div style={{ color: T.textoFuerte, fontSize: 16, fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tj.nombre}</div>
             <div style={{ color: T.tenue, fontSize: 11.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tj.subtitulo} · {tj.lugar}</div>
           </div>
+          {esAdmin && (
+            <button onClick={() => onAccion && onAccion('verPublico')} style={{ flexShrink: 0, border: `1px solid ${T.borde}`, background: 'transparent', color: T.acento, fontSize: 12, fontWeight: 700, padding: esAncho ? '7px 12px' : '7px 10px', borderRadius: 16, cursor: 'pointer', whiteSpace: 'nowrap' }}>{esAncho ? '👁️ Vista pública' : '👁️'}</button>
+          )}
           {esAdmin ? (
             <span style={{ flexShrink: 0, background: T.boton, color: T.botonTexto, fontSize: 11, fontWeight: 800, padding: '6px 12px', borderRadius: 16 }}>ADMIN</span>
           ) : (

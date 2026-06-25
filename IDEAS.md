@@ -641,6 +641,56 @@ Hecho en: logo de torneo, foto de perfil (forma círculo). Falta enchufar en: eq
 
 ---
 
+### 3.7 FANTASY NBA Y NOTICIAS
+
+*El asistente de Fantasy y el ecosistema de noticias de la NBA. Todo vive DENTRO de Media Cancha (mismo Supabase). Regla: nada de pago sin aprobación de Vladimir.*
+
+**MODELO DE ACCESO — PÚBLICO vs. PERSONAL (¡clave, NO confundir!):** esto **NO es una función pública** de Media Cancha. El Fantasy es **personal de Vladimir**. Vive dentro de Media Cancha solo para ahorrar montar otra app aparte, pero los demás usuarios no lo usan ni se enteran. La separación correcta:
+- **PÚBLICO (lo ve todo el mundo):** **Plantillas NBA** (rosters de los 30 equipos — quién juega y quién no) y **Noticias Rápidas**. Son datos de la NBA, no son personales → se quedan públicos.
+- **PERSONAL DE VLADIMIR (solo él, amarrado a su cuenta):** el **Centro de Comando** y todo lo de su Fantasy (su liga, su roster, su estrategia, sus movimientos). Se amarra a su cuenta de Media Cancha **igual que en Cocina PAE** (allá el Centro de Comando solo lo ve él al entrar con su correo). Aparece en la zona de **Mis Ligas** y solo sale cuando Vladimir entra con su correo y clave.
+
+**OBJETIVO DE VLADIMIR (la regla de oro del Fantasy):** ganar la semana asegurando **mínimo 5 de las 9 categorías**. NO se busca ganar las 9. Habrá categorías que se pierden a propósito. El cerebro tiene que **puntear**: rendir lo perdido para asegurar lo ganable.
+
+**Config de la liga (confirmada):** 9 categorías (FG%, FT%, 3PM, REB, AST, STL, BLK, TO [al revés: menos es mejor], PTS) · 12 equipos · draft serpiente · 2 ligas, casi la misma gente (Liga 1 pick 8 · Liga 2 pick 6) · roster 10 + 3 banca + 2 IR (IR solo acepta lesionado) · 1 cambio por día (6 la primera semana, 7 las normales).
+
+**LOS 4 ROBOTS:**
+1. **Cazador de noticias** — lee Rotowire + RotoBaller (RSS gratis) cada 15 min. `HECHO ✅`
+2. **Analista** — Gemini gratis convierte la noticia cruda en portada y la clasifica (LESION/QUINTETO/TRASPASO/RUMOR). `HECHO ✅`
+3. **Lector de tu roster** — entra a ESPN Fantasy y lee tu equipo + agentes libres. Solo lectura. `PENDIENTE (octubre · necesita cookies)`
+4. **Estratega / Recomendador** — junta noticias + tu roster + el rival y traza el plan. `PENDIENTE (octubre)`
+
+**PRINCIPIO CLAVE:** el robot PIENSA, tú EJECUTAS. ESPN no deja que un robot de afuera mueva tu equipo; automatizar el clic es frágil y arriesga la cuenta → **descartado**. El máximo es: avisos y recordatorios; Vladimir da el toque final en ESPN.
+
+**LA ESTRATEGIA (ideas de Vladimir):** `PENDIENTE (octubre)`
+- **Predicción antes del round:** compara tu equipo vs. el rival, categoría por categoría, con los números, y pronostica cuántas son ganables ("de las 9, te veo ganables 7"). Marca ganables / peleadas / perdidas.
+- **Plan a la medida del rival:** la estrategia CAMBIA según a quién enfrentas. Asegura las ganables, mete toda la energía en las peleadas (ahí se decide la semana), y **suelta las perdidas a propósito** (ni un movimiento gastado ahí).
+- **Plan que Vladimir aprueba:** se presenta en pantalla ("pelear estas, soltar estas, ¿apruebas?"). Él da el visto bueno o pide cambios. Tú mandas, él calcula.
+- **Movimientos con horario de cierre:** el robot sabe la hora del 1er juego del día (cuando se cierra el lineup). Avisa "esto cierra hoy a las 7:10" o "ya cerró, va para mañana". **Recordatorio programado** a la hora que Vladimir elija antes del cierre.
+- **Detección de calendario:** marca qué equipos juegan 4 veces esa semana y cuáles 1-2 → recoger jugadores de los que más juegan (streaming).
+
+**LA SALA DE DRAFT:** `HECHO ✅ (dormida hasta octubre)`. Motor de valor por categoría (z-scores, TO al revés, % pesados por volumen), detección de punteo, recomendación de mejor pick / pick para tu equipo. Cerca del draft: refrescar números con proyecciones reales y ampliar el pool. Ese mismo cerebro alimenta la predicción de temporada.
+
+**EL CENTRO DE COMANDO (pantalla):** `EN PROGRESO`. Es el hogar **PERSONAL** del Fantasy de Vladimir. Adentro va todo lo suyo: su plan de la semana, su roster, sus movimientos, su radar de noticias. **Va amarrado a su cuenta (como Cocina PAE) y vive en la zona de Mis Ligas**, visible SOLO cuando él entra con su correo. Orden de trabajo: **construir primero, amarrar a la cuenta después** (no urge mientras se prueba). Hoy, temporal para pruebas, hay un botón en Ligas; ese botón se quita cuando se amarre a la cuenta.
+
+**LA TARJETA DE ACCIÓN (contrato del recomendador):** JSON con tipo (lesión/oportunidad/traspaso/rotación), prioridad, jugador afectado, beneficiados (y si están libres en tu liga), acción sugerida (agregar/soltar), categorías afectadas, confianza, fuente. La UI solo la pinta; el robot la produce.
+
+**FUENTES (todas gratis):**
+- **ESPN API pública:** stats, scores, rosters de los 30 equipos, estado de lesión. Gratis y ordenado.
+- **Rotowire + RotoBaller (RSS):** noticias rápidas. Gratis.
+- **Sleeper API:** puente nombre → espn_id + tendencias de agregados/soltados. Gratis. **Hueco conocido:** el espn_id de Sleeper falta en algunos jugadores → para FOTOS, los rosters de ESPN son mejor puente (pendiente cambiarlo).
+- **Rotowire lineups diarios:** la mejor fuente editorial del quinteto proyectado, pero NO es gratis en formato máquina (su API es de pago). Plan: en temporada, bajar la página y que **Gemini la interprete** (raspado inteligente), o quedarnos con el estado de lesión de ESPN (gratis y estable).
+- **X/Twitter:** la más rápida, pero de PAGO. Mejora opcional de fase 2.
+
+**⚠️ ACCESO PERSONAL (candado) — CORRECCIÓN IMPORTANTE:** versión anterior estaba MAL (decía que Plantillas y Noticias también eran secretas). Lo correcto: el **Centro de Comando** y todo lo personal del Fantasy van **amarrados a la cuenta de Vladimir, igual que el Centro de Comando de Cocina PAE** — solo le aparecen a él al entrar con su correo y clave, en la zona de **Mis Ligas**. NO es un "modo secreto para todos"; es un **módulo por cuenta**. Las **Plantillas** y las **Noticias** se quedan **PÚBLICAS** (datos de la NBA, no personales). Orden: **se construye ahora, se amarra a la cuenta después** (mientras se prueba puede quedar visible).
+
+**Notas técnicas:**
+- Robot `robot-noticias` (Edge Function), corre cada 15 min (pg_cron), ritmo 1 llamada / ~4 s (límite gratis Gemini = 15/min), con reintentos si se satura (429/503). Tope 8 por corrida.
+- Tabla `micro_news` en Media Cancha. Grant `select` a anon/authenticated; escritura solo service_role.
+- Modo privado de fotos por dispositivo: 5 toques al "X hoy" (guardado en localStorage `mc_noticias_pro`). Foto = headshot de ESPN vía espn_id; si no hay, iniciales.
+- Conexión ESPN Fantasy (octubre): cookies `espn_s2` + `SWID` + IDs de liga como secretos. Solo lectura.
+
+---
+
 ## 4. REGISTRO DE LO YA CONSTRUIDO  (`HECHO`)
 *Esto es "qué hemos incorporado". Cuando una idea de arriba se construye, se anota aquí.*
 
