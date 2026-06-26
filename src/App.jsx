@@ -373,6 +373,8 @@ function App() {
           setVista(sesion ? 'publicar' : 'login')
         } else if (id === 'ligas') {
           setVista('ligas')
+        } else if (id === 'rankings' || id === 'nba') {
+          setVista('nba')
         } else if (id === 'buscar') {
           setVista(sesion ? 'buscar' : 'login')
         } else if (id === 'mensajes') {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { getNoticias as getNoticiasNBA } from './nbaApi'
 import { createPortal } from 'react-dom'
@@ -61,6 +61,7 @@ import CompartirAlChat from './CompartirAlChat'
 import { supabase } from '../supabaseClient'
 import { alternarSeguir, idsQueSigo, statsSociales } from '../social'
 import { contarNoLeidos, listaConversaciones, perfilesDe } from '../mensajes'
+import { leerTorneos } from '../torneos'
 import BottomSheet from './BottomSheet'
 
 const TEMAS = {
@@ -333,6 +334,54 @@ export default function PantallaPublica({ onAccion, haySesion }) {
   const [bProcesando, setBProcesando] = useState(null)
   const [noLeidos, setNoLeidos] = useState(0)
   const [anotarAbierto, setAnotarAbierto] = useState(false)
+  // móvil: barra de arriba que se esconde al leer (con transform, sin reflow) + Inicio que sube al tope
+  const refScrollMovil = useRef(null)
+  const refBarraTop = useRef(null)
+  const refNavBottom = useRef(null)
+  const ultimoScrollMovil = useRef(0)
+  const tickBarra = useRef(false)        // throttle por frame
+  const barraVisibleRef = useRef(true)   // espejo del estado
+  const [altoBarraTop, setAltoBarraTop] = useState(0)
+  const [altoNav, setAltoNav] = useState(0)
+  const [barraTopVisible, setBarraTopVisible] = useState(true)
+  const mostrarBarra = (v) => {
+    if (barraVisibleRef.current === v) return
+    barraVisibleRef.current = v
+    setBarraTopVisible(v)
+  }
+  const alScrollMovil = () => {
+    if (tickBarra.current) return
+    tickBarra.current = true
+    requestAnimationFrame(() => {
+      tickBarra.current = false
+      const el = refScrollMovil.current
+      if (!el) return
+      const y = el.scrollTop
+      if (y <= 0) { ultimoScrollMovil.current = 0; mostrarBarra(true); return }  // rebote/tope iOS: siempre mostrar
+      const dy = y - ultimoScrollMovil.current
+      if (Math.abs(dy) < 10) return                                              // histéresis: ignora micro-movimientos
+      ultimoScrollMovil.current = y
+      if (dy > 0) mostrarBarra(false)                                            // bajando (leyendo): esconder
+      else mostrarBarra(true)                                                    // subiendo: mostrar
+    })
+  }
+  const irAlTopeMovil = () => {
+    mostrarBarra(true)
+    const el = refScrollMovil.current
+    if (!el) return
+    const desde = el.scrollTop
+    if (desde <= 0) { ultimoScrollMovil.current = 0; return }
+    const t0 = performance.now()
+    const dur = 300
+    const paso = (t) => {
+      const p = Math.min(1, (t - t0) / dur)
+      const e = 1 - Math.pow(1 - p, 3)   // easeOutCubic
+      if (refScrollMovil.current) refScrollMovil.current.scrollTop = desde * (1 - e)
+      if (p < 1) requestAnimationFrame(paso)
+      else if (refScrollMovil.current) { refScrollMovil.current.scrollTop = 0; ultimoScrollMovil.current = 0 }
+    }
+    requestAnimationFrame(paso)
+  }
   const [statsSoc, setStatsSoc] = useState({ seguidores: 0, siguiendo: 0 })
   const [crearAbierto, setCrearAbierto] = useState(false)
   const [torneosAbierto, setTorneosAbierto] = useState(false)
@@ -346,6 +395,9 @@ export default function PantallaPublica({ onAccion, haySesion }) {
     return 'noche'
   })
   const [juegosDia, setJuegosDia] = useState([])
+  const [torneosReales, setTorneosReales] = useState([])
+  const [seccion, setSeccion] = useState('feed')   // 'feed' | 'rankings'
+  const [tabRank, setTabRank] = useState('nba')     // 'nba' | 'lnb' | 'general'
   const [publicaciones, setPublicaciones] = useState([])
   const [misReacc, setMisReacc] = useState({})
   const [cargandoTechado, setCargandoTechado] = useState(true)
@@ -472,11 +524,36 @@ export default function PantallaPublica({ onAccion, haySesion }) {
     try { window.scrollTo({ top: 0, behavior: 'smooth' }) } catch (e) { window.scrollTo(0, 0) }
   }
 
+  useLayoutEffect(() => {
+    const medir = () => {
+      setAltoBarraTop(refBarraTop.current ? refBarraTop.current.offsetHeight : 0)
+      setAltoNav(refNavBottom.current ? refNavBottom.current.offsetHeight : 0)
+    }
+    medir()
+    window.addEventListener('resize', medir)
+    return () => window.removeEventListener('resize', medir)
+  }, [esEscritorio, haySesion])
+
+  // iOS: el #root tiene su propio scroll con inercia (para pantallas viejas).  // En móvil eso choca con el scroll interno de esta pantalla y rompe el rebote
+  // inferior. Lo apagamos mientras esta pantalla está montada; se restaura al salir.
+  useEffect(() => {
+    if (esEscritorio) return
+    const root = document.getElementById('root')
+    if (!root) return
+    root.style.overflowY = 'hidden'
+    root.style.setProperty('-webkit-overflow-scrolling', 'auto')
+    return () => {
+      root.style.overflowY = ''
+      root.style.setProperty('-webkit-overflow-scrolling', 'touch')
+    }
+  }, [esEscritorio])
+
   useEffect(() => {
     setJuegosDia(leerHistorialDia())
     recargarTechado()
     miUsuarioId().then((id) => setMiId(id))
     if (haySesion) miPerfilCompleto().then((p) => setMiPerfil(p))
+    leerTorneos().then(({ torneos }) => setTorneosReales(torneos || [])).catch(() => {})
   }, [])
 
   // Cerrar los menús desplegables al hacer clic fuera
@@ -891,26 +968,34 @@ export default function PantallaPublica({ onAccion, haySesion }) {
     </div>
   )
 
-  const ListaTorneos = () => (
-    <>{TORNEOS.map((t, i) => (
-      <div key={i} style={{ marginBottom: 10 }}>
-        <Placa radio={15} pad={13}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 13 }}>
-            <div style={{ width: 44, height: 44, borderRadius: 11, flexShrink: 0, background: T.esClaro ? 'rgba(176,122,38,.12)' : 'linear-gradient(150deg, rgba(50,46,40,.6), rgba(18,18,20,.6))', border: `1px solid ${T.navActivoBorde}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Balon size={28} sw={4} gid={`gtb${i}`} cols={T.balon} /></div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 14.5, fontWeight: 700, color: C.texto }}>{t.nombre}</div>
-              <div style={{ fontSize: 11.5, color: C.tenue, marginTop: 3, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>📍 {t.meta}
-                <span style={{ fontSize: 8.5, fontWeight: 800, letterSpacing: 0.5, padding: '2px 7px', borderRadius: 7, textTransform: 'uppercase', color: t.color, background: `${t.color}26` }}>{t.nivel}</span>
+  const ListaTorneos = () => {
+    if (!torneosReales.length) {
+      return <Placa radio={15} pad={18}><div style={{ textAlign: 'center', color: C.tenue, fontSize: 13 }}>Todavía no hay torneos creados.</div></Placa>
+    }
+    const colorNivel = (n) => {
+      const m = { superior: '#e0a64b', intermedio: '#d88f3a', libre: '#2fbf71', campo: '#2fbf71', femenino: '#c4823a' }
+      return m[String(n || '').toLowerCase()] || T.acento
+    }
+    return (<>{torneosReales.map((t, i) => {
+      const col = colorNivel(t.nivel)
+      return (
+        <div key={t.id || i} onClick={() => click('torneos')} style={{ marginBottom: 10, cursor: 'pointer' }}>
+          <Placa radio={15} pad={13}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 13 }}>
+              <div style={{ width: 44, height: 44, borderRadius: 11, flexShrink: 0, background: T.esClaro ? 'rgba(176,122,38,.12)' : 'linear-gradient(150deg, rgba(50,46,40,.6), rgba(18,18,20,.6))', border: `1px solid ${T.navActivoBorde}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>{t.emoji || <Balon size={28} sw={4} gid={`gtb${i}`} cols={T.balon} />}</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 14.5, fontWeight: 700, color: C.texto }}>{t.nombre}</div>
+                <div style={{ fontSize: 11.5, color: C.tenue, marginTop: 3, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>📍 {t.lugar || 'Sin sede'} · {t.cantidad_equipos || 0} equipos
+                  {t.nivel && <span style={{ fontSize: 8.5, fontWeight: 800, letterSpacing: 0.5, padding: '2px 7px', borderRadius: 7, textTransform: 'uppercase', color: col, background: `${col}26` }}>{t.nivel}</span>}
+                </div>
               </div>
+              <div style={{ fontSize: 24, color: T.acento, flexShrink: 0, lineHeight: 1 }}>›</div>
             </div>
-            <div onClick={() => toggleLike(`t${i}`, t.likes)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', color: likes[`t${i}`] ? T.acento : C.tenue }}>
-              <div style={{ fontSize: 16 }}>♥</div><div style={{ fontSize: 11, fontWeight: 700 }}>{verLikes(`t${i}`, t.likes).toLocaleString('en-US')}</div>
-            </div>
-          </div>
-        </Placa>
-      </div>
-    ))}</>
-  )
+          </Placa>
+        </div>
+      )
+    })}</>)
+  }
 
   // color de avatar consistente según el nombre (como el mockup)
   const avatarColor = (semilla) => {
@@ -1935,10 +2020,10 @@ export default function PantallaPublica({ onAccion, haySesion }) {
 
   // ===== VISTA MÓVIL =====
   return (
-    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, height: '100dvh', color: C.texto, fontFamily: C.font, background: T.fondo, display: 'flex', flexDirection: 'column' }}>
+    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, width: '100vw', height: '100dvh', color: C.texto, fontFamily: C.font, background: T.fondo, overflow: 'hidden' }}>
       <Velo />
       {/* BARRA FIJA inmóvil: cubre desde el reloj/isla y no se mueve nunca */}
-      <div style={{ position: 'relative', zIndex: 40, flexShrink: 0, background: T.fondo, paddingTop: 'calc(env(safe-area-inset-top) - 4px)' }}>
+      <div ref={refBarraTop} style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 40, background: T.fondo, paddingTop: 'calc(env(safe-area-inset-top) - 4px)', transform: barraTopVisible ? 'translateY(0)' : `translateY(-${altoBarraTop}px)`, transition: 'transform .25s cubic-bezier(.4,0,.2,1)', willChange: 'transform' }}>
         <div style={{ maxWidth: 480, margin: '0 auto', padding: '6px 18px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Logo chico />
@@ -1974,23 +2059,49 @@ export default function PantallaPublica({ onAccion, haySesion }) {
       </div>
 
       {/* SOLO esta área hace scroll, por debajo de la barra fija */}
-      <div style={{ position: 'relative', zIndex: 1, flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
-        <div style={{ maxWidth: 480, margin: '0 auto', padding: '4px 16px 130px' }}>
-        {!haySesion && <div style={{ marginTop: 14 }}><Bienvenida /></div>}
-        <Historias />
-        <CarruselDestacados />
-        <div style={{ marginTop: 22 }}><SecHead titulo="El Techado" icono="techado" accion={{ txt: 'Ver todo →', fn: () => click('techado') }} /><span style={{ display: 'block', fontSize: 11.5, color: T.tenue, margin: '-6px 2px 10px' }}>Tu zona, primero</span><ListaTechado /></div>
-        <div style={{ marginTop: 22 }}><SecHead titulo="Torneos populares" accion={{ txt: 'Ver todos →', fn: () => click('torneos') }} /><ListaTorneos /></div>
-        <div style={{ marginTop: 22 }}><SecHead titulo="Rankings" accion={{ txt: 'Ver todo →', fn: () => click('rankings') }} /><RankingsNBA /></div>
-        {!haySesion && <CtaRegistro />}
+      <div ref={refScrollMovil} onScroll={alScrollMovil} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: altoNav, zIndex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'none', contain: 'content', transform: 'translateZ(0)', willChange: 'scroll-position' }}>
+        <div style={{ maxWidth: 480, margin: '0 auto', padding: '4px 16px 90px', position: 'relative', zIndex: 1, transform: 'translate3d(0,0,0)', backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', willChange: 'transform' }}>
+        <div style={{ height: altoBarraTop }} />
+        {seccion === 'rankings' ? (
+          <div style={{ marginTop: 4 }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: C.texto, margin: '4px 2px 12px' }}>Rankings</div>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+              {[{ id: 'nba', txt: 'NBA' }, { id: 'lnb', txt: 'LNB' }, { id: 'general', txt: 'General' }].map((tb) => (
+                <button key={tb.id} onClick={() => setTabRank(tb.id)} style={{ flex: 1, padding: '9px 6px', borderRadius: 11, border: `1px solid ${tabRank === tb.id ? T.acento : T.navActivoBorde}`, background: tabRank === tb.id ? `${T.acento}22` : 'transparent', color: tabRank === tb.id ? T.acento : C.tenue, fontSize: 13, fontWeight: 800, cursor: 'pointer', letterSpacing: 0.4 }}>{tb.txt}</button>
+              ))}
+            </div>
+            {tabRank === 'nba' && <RankingsNBA />}
+            {tabRank === 'lnb' && <RankingsLNB />}
+            {tabRank === 'general' && (
+              <Placa radio={16} pad={26}>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 34, marginBottom: 8 }}>🏆</div>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: C.texto, marginBottom: 6 }}>Ranking General — Próximamente</div>
+                  <div style={{ fontSize: 12.5, color: C.tenue, lineHeight: 1.5 }}>Aquí va a vivir el ranking de Media Cancha juntando todos los torneos y las ligas.</div>
+                </div>
+              </Placa>
+            )}
+          </div>
+        ) : (
+          <>
+          {!haySesion && <div style={{ marginTop: 14 }}><Bienvenida /></div>}
+          <Historias />
+          <CarruselDestacados />
+          <div style={{ marginTop: 22 }}><SecHead titulo="El Techado" icono="techado" accion={{ txt: 'Ver todo →', fn: () => click('techado') }} /><span style={{ display: 'block', fontSize: 11.5, color: T.tenue, margin: '-6px 2px 10px' }}>Tu zona, primero</span><ListaTechado /></div>
+          <div style={{ marginTop: 22 }}><SecHead titulo="Torneos populares" accion={{ txt: 'Ver todos →', fn: () => click('torneos') }} /><ListaTorneos /></div>
+          {!haySesion && <CtaRegistro />}
+          </>
+        )}
         </div>
       </div>
-      <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 40, background: T.headerBg, backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', borderTop: `1px solid ${T.navActivoBorde}`, boxShadow: '0 -5px 25px rgba(0,0,0,.1)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
+      <div ref={refNavBottom} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 40, background: T.headerBg, backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', borderTop: `1px solid ${T.navActivoBorde}`, boxShadow: '0 -5px 25px rgba(0,0,0,.1)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', paddingTop: 8, paddingBottom: 4 }}>
         <div style={{ width: '100%', maxWidth: 480, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px' }}>
         {[{ id: 'inicio', txt: 'Inicio', icono: '⌂' }, { id: 'ligas', txt: 'Ligas', icono: '🏀' }].map((n) => (
-          <button key={n.id} onClick={() => click(n.id)} style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', textAlign: 'center', color: n.id === 'inicio' ? T.acento : C.tenue, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
-            <div style={{ fontSize: 18, marginBottom: 3, display: 'flex', justifyContent: 'center' }}>{n.icono}</div>{n.txt}
+          <button key={n.id} onClick={() => { if (n.id === 'inicio') { setMenuAbierto(false); setMasAbierto(false); setCrearAbierto(false); setSeccion('feed'); irAlTopeMovil() } else { click(n.id) } }} style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', textAlign: 'center', color: n.id === 'inicio' ? (seccion === 'feed' ? T.acento : C.tenue) : C.tenue, fontSize: 10, fontWeight: 700, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+            {n.id === 'inicio'
+              ? <svg width="32" height="32" viewBox="0 0 24 24" fill={T.acento} style={{ display: 'block' }}><path d="M12 3 2 12h3v8h5v-5h4v5h5v-8h3L12 3z"/></svg>
+              : <><div style={{ fontSize: 18, marginBottom: 3, display: 'flex', justifyContent: 'center' }}>{n.icono}</div>{n.txt}</>}
           </button>
         ))}
         <div style={{ flex: 1, minWidth: 0, display: 'flex', justifyContent: 'center' }}>
@@ -1999,7 +2110,7 @@ export default function PantallaPublica({ onAccion, haySesion }) {
             <span style={{ fontSize: 7.5, fontWeight: 900, letterSpacing: 0.5, textTransform: 'uppercase', marginTop: 1 }}>Anotar</span>
           </button>
         </div>
-        <button onClick={() => click('rankings')} style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', textAlign: 'center', color: C.tenue, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
+        <button onClick={() => { setSeccion('rankings'); irAlTopeMovil() }} style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', textAlign: 'center', color: seccion === 'rankings' ? T.acento : C.tenue, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
           <div style={{ fontSize: 18, marginBottom: 3, display: 'flex', justifyContent: 'center' }}>★</div>Ranking
         </button>
         <button onClick={() => click('perfil')} style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', textAlign: 'center', color: C.tenue, fontSize: 10, fontWeight: 700, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
