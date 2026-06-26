@@ -16,7 +16,8 @@ import PantallaChat from './componentes/PantallaChat'
 import PantallaPublicar from './componentes/PantallaPublicar'
 import PantallaTorneos from './componentes/PantallaTorneos'
 import PantallaTorneoPublico from './componentes/PantallaTorneoPublico'
-import PantallaAnotador from './componentes/PantallaAnotador'
+import PantallaTorneoConfig from './componentes/PantallaTorneoConfig'
+import PantallaNoticiasCrudas from './componentes/PantallaNoticiasCrudas'
 import PantallaCrearTorneo from './componentes/PantallaCrearTorneo'
 import { guardarJuegoDelDia } from './historialDia'
 import PantallaLigas from './componentes/PantallaLigas'
@@ -37,7 +38,7 @@ function App() {
   const [resultadoJuego, setResultadoJuego] = useState(null)
   const [destinoTrasLogin, setDestinoTrasLogin] = useState('perfil')
   const [perfilViendo, setPerfilViendo] = useState(null)
-  const [torneoAnotando, setTorneoAnotando] = useState(null)
+  const [torneoEnJuego, setTorneoEnJuego] = useState(null)
   const [chatCon, setChatCon] = useState(null)
   const [esEscritorio, setEsEscritorio] = useState(typeof window !== 'undefined' ? window.innerWidth >= 900 : false)
 
@@ -168,15 +169,16 @@ function App() {
       <PantallaTorneoPublico
         onVolver={() => setVista('publica')}
         onVerPerfil={(id) => { if (id && sesion?.user?.id === id) { setVista('perfil') } else { setPerfilViendo(id); setVista('perfilAjeno') } }}
-        onAnotar={(id) => { setTorneoAnotando(id); setVista('anotador') }}
+        onAnotar={(id) => { setTorneoEnJuego(id); setVista('torneoConfig') }}
       />
     )
   }
 
-  if (vista === 'anotador') {
+  if (vista === 'torneoConfig') {
     return (
-      <PantallaAnotador
-        torneoId={torneoAnotando}
+      <PantallaTorneoConfig
+        torneoId={torneoEnJuego}
+        onListo={(config) => { setConfigJuego(config); setVista('juegoJugadores') }}
         onVolver={() => setVista('torneoPublico')}
       />
     )
@@ -324,7 +326,13 @@ function App() {
 
   if (vista === 'comando') {
     return (
-      <PantallaCentroComando onVolver={() => setVista('ligas')} onAbrirDraft={() => setVista('draft')} />
+      <PantallaCentroComando onVolver={() => setVista('ligas')} onAbrirDraft={() => setVista('draft')} onAbrirNoticias={() => setVista('noticiasCrudas')} />
+    )
+  }
+
+  if (vista === 'noticiasCrudas') {
+    return (
+      <PantallaNoticiasCrudas onVolver={() => setVista('comando')} />
     )
   }
 

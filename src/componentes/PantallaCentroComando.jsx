@@ -52,7 +52,7 @@ const MODULOS = [
   { icon: '📅', t: 'Calendario', d: 'quien juega mas' },
 ]
 
-export default function PantallaCentroComando({ onVolver, onAbrirDraft }) {
+export default function PantallaCentroComando({ onVolver, onAbrirDraft, onAbrirNoticias }) {
   const [noticias, setNoticias] = useState([])
   const [cargando, setCargando] = useState(true)
   const [esEscritorio, setEsEscritorio] = useState(false)
@@ -177,6 +177,10 @@ export default function PantallaCentroComando({ onVolver, onAbrirDraft }) {
               </div>
             ))}
           </div>
+
+          <button onClick={onAbrirNoticias} style={{ width: '100%', marginTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: C.panel, border: `1px solid ${C.borde}`, borderRadius: 13, padding: '13px', color: C.oro, fontSize: 13.5, fontWeight: 800, cursor: 'pointer' }}>
+            📰 Ver noticias completas (con foto) →
+          </button>
 
           <div style={{ textAlign: 'center', fontSize: 11, color: C.tenue2, marginTop: 16 }}>Solo tu ves esto · entras con tu cuenta</div>
         </div>

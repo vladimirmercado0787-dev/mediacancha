@@ -389,6 +389,45 @@ Métrica **SEPARADA del rating**. El **rating** mide NIVEL/calidad (qué tan fue
 
 *Decisiones por definir antes de codear:* (1) umbrales de la inteligencia (de cuántos abajo = remontada, cuántos juegos = racha, qué número = explosión); (2) predicción solo "¿quién gana?" o también marcador/margen; (3) calificación en estrellas o nota uno a diez; (4) torneos públicos por defecto o el organizador decide.
 
+**Idea T-013 — ANOTACIÓN EN VIVO DEL TORNEO (arquitectura completa)** · `DISEÑO APROBADO ✅ (jun 2026)`
+
+Reutiliza el anotador que YA existe (`PantallaJuegoVivo`: puntos, faltas, asistencias encadenadas, rebotes en cascada, tiros libres, expulsiones, narrador). NO se reinventa — se CONECTA a los torneos. (Error pasado a NO repetir: se construyó un anotador pelado nuevo Y se puso un botón "Anotar" en la pantalla PÚBLICA. Ambas cosas se borran.)
+
+**Dos mundos que NO se mezclan:** el administrador OPERA; el público solo MIRA.
+
+**Las CUATRO superficies donde vive un juego de torneo:**
+1. **Centro de Comando (admin)** — el calendario con los juegos; por cada juego: *asignar anotador* + botón *Iniciar*. Aquí se opera todo.
+2. **Anotador en vivo (`PantallaJuegoVivo`)** — el anotador asignado mete todo, con las reglas de seguridad.
+3. **Pantalla Pública (espejo, solo lectura)** — la portada muestra los juegos EN VIVO con el marcador corriendo, y los resultados + estadísticas al terminar. CERO botones de anotar.
+4. **Techado + perfil de cada involucrado** — mientras se juega, el juego sale EN VIVO en el techado de cada participante; al terminar le queda el resultado y sus estadísticas. Aplica a TODOS los inscritos: jugadores, directiva y anotador.
+
+**Reglas del anotador (seguridad en la cancha):**
+- **Quién NO puede anotar:** ningún jugador, capitán ni manager de ESE juego específico (NO del torneo entero — solo de ese partido).
+- **Quién SÍ puede:** cualquier fanático o miembro de la directiva (gente neutral al juego).
+- **Al salir (hacia atrás):** confirma "¿seguro?" y GUARDA — no se pierde lo anotado.
+- **Al terminar (hacia adelante):** confirma "¿el juego terminó?" — no se finaliza de un solo toque.
+- **Cambio de anotador en medio del juego:** se puede pasar a OTRO anotador, en otro teléfono, sin perder nada. El juego sigue por donde iba.
+
+**LA COLUMNA QUE UNE TODO:** el juego en vivo vive en la BASE DE DATOS mientras se juega (no en el teléfono del anotador). De ahí beben la pública y los techados, se logra el cambio de anotador, y nada se pierde. Una sola pieza resuelve tres cosas: el en vivo, el techado y el handoff.
+
+**Dependencia:** las estadísticas por jugador exigen que los equipos tengan jugadores → **capitanes e invitaciones (T-004) va PRIMERO.**
+
+**Base que ya existe para conectar:** `techado.js` ya publica un juego (`publicarJuego`, expira 24h); el perfil ya guarda stats de juego con fuente `torneo`/`liga`/`rapido`. Falta estirarlo a TODOS los involucrados y meterle el en vivo.
+
+**ORDEN DE CONSTRUCCIÓN:**
+1. Borrar la basura (mi `PantallaAnotador`, el botón "Anotar" de la pública, su ruta en App).
+2. Capitanes e invitaciones (T-004): meter jugadores a los equipos. El cimiento.
+3. La columna: el juego en vivo guardándose en la base.
+4. Centro de Comando del admin: calendario + asignar anotador + Iniciar.
+5. Conectar `PantallaJuegoVivo` al juego del torneo (config desde equipos+rosters) + reglas de seguridad + cambio de anotador.
+6. La pública en vivo (portada con el juego corriendo).
+7. El techado + el perfil, en vivo y con resultados, para cada involucrado.
+
+**El reloj — decisión:** por ahora **MANUAL y por fuera** (no se complica para arrancar).
+**FUTURO (T-013b) — cronometrista aparte:** un usuario asignado SOLO al reloj, sincronizado con la pantalla y el sistema. Permite contar los **minutos jugados por cada jugador** y por cuarto, como la mesa de control del baloncesto real (separado del anotador).
+
+**PENDIENTES de arreglo (estado jun 2026):** ya existe `PantallaTorneoConfig` (config formal del juego de torneo: cuartos, minutos, faltas, bonus, stats, reloj) que cae en el flujo de siempre (Jugadores → JuegoVivo → Resultado). FALTA: (1) **quitar la entrada "Anotar" de la pantalla PÚBLICA** — es provisional; va en el Centro de Comando del organizador (paso 4); (2) **conectar el resultado a las tablas del torneo** (`torneo_juegos` + `torneo_juego_jugadores`) para que mueva la tabla y salga en la pública — ahora solo guarda en el día/perfil; (3) aplicar las reglas de seguridad y el cambio de anotador (paso 5).
+
 ---
 
 ### 3.2 LIGAS
