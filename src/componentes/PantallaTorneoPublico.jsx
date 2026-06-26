@@ -24,7 +24,7 @@ const COLOR_MOMENTO = { remontada: '#ef7a3a', racha: '#e8b65a', explosion: '#d45
 const ETIQUETA_MOMENTO = { remontada: 'Remontada', racha: 'Racha', explosion: 'Explosión' }
 const EMO_LIDER = { puntos: ['🏀', '#e8b65a'], rebotes: ['💪', '#5dcaa5'], asistencias: ['🤝', '#6fb0ec'], robos: ['✋', '#d4537e'], tapones: ['🚫', '#ef9f27'], triples: ['🎯', '#9b6ff0'], perdidas: ['🔁', '#c77d5a'], pct_tc: ['📈', '#5dcaa5'], pct_tp: ['🏹', '#9b6ff0'], pct_tl: ['💯', '#e8b65a'], eficiencia: ['⚡', '#f0c040'] }
 
-export default function PantallaTorneoPublico({ torneoId = null, onVolver, onVerPerfil }) {
+export default function PantallaTorneoPublico({ torneoId = null, onVolver, onVerPerfil, onAnotar }) {
   const [datos, setDatos] = useState(null)
   const [torneoRow, setTorneoRow] = useState(null)
   const [jugCount, setJugCount] = useState(0)
@@ -35,6 +35,7 @@ export default function PantallaTorneoPublico({ torneoId = null, onVolver, onVer
   const [cargando, setCargando] = useState(true)
   const [ancho, setAncho] = useState(typeof window !== 'undefined' ? window.innerWidth : 390)
   const refMomentos = useRef(null)
+  const [miId, setMiId] = useState(null)
 
   const esAncho = ancho >= 820
   const esEscritorio = ancho >= 1180
@@ -45,6 +46,8 @@ export default function PantallaTorneoPublico({ torneoId = null, onVolver, onVer
     window.addEventListener('resize', r)
     return () => window.removeEventListener('resize', r)
   }, [])
+
+  useEffect(() => { supabase.auth.getUser().then(({ data }) => setMiId(data?.user?.id || null)) }, [])
 
   useEffect(() => {
     const y = window.scrollY
@@ -721,6 +724,9 @@ export default function PantallaTorneoPublico({ torneoId = null, onVolver, onVer
               <div style={{ color: C.txt, fontSize: 16.5, fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nombre}</div>
               <div style={{ color: C.tenue, fontSize: 11.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sub}</div>
             </div>
+            {onAnotar && torneoRow && (
+              <button onClick={() => onAnotar(torneoRow.id)} style={{ flexShrink: 0, border: `0.5px solid ${C.oro}66`, background: 'rgba(245,184,46,0.12)', color: C.oro, borderRadius: 11, padding: '8px 12px', fontSize: 12.5, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap' }}>✎ Anotar</button>
+            )}
           </div>
 
           {/* BADGES */}

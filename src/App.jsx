@@ -15,6 +15,8 @@ import PantallaPerfilAjeno from './componentes/PantallaPerfilAjeno'
 import PantallaChat from './componentes/PantallaChat'
 import PantallaPublicar from './componentes/PantallaPublicar'
 import PantallaTorneos from './componentes/PantallaTorneos'
+import PantallaTorneoPublico from './componentes/PantallaTorneoPublico'
+import PantallaAnotador from './componentes/PantallaAnotador'
 import PantallaCrearTorneo from './componentes/PantallaCrearTorneo'
 import { guardarJuegoDelDia } from './historialDia'
 import PantallaLigas from './componentes/PantallaLigas'
@@ -35,6 +37,7 @@ function App() {
   const [resultadoJuego, setResultadoJuego] = useState(null)
   const [destinoTrasLogin, setDestinoTrasLogin] = useState('perfil')
   const [perfilViendo, setPerfilViendo] = useState(null)
+  const [torneoAnotando, setTorneoAnotando] = useState(null)
   const [chatCon, setChatCon] = useState(null)
   const [esEscritorio, setEsEscritorio] = useState(typeof window !== 'undefined' ? window.innerWidth >= 900 : false)
 
@@ -92,7 +95,7 @@ function App() {
     else if (id === 'noticias') setVista('noticias')
     else if (id === 'rosters') setVista('rosters')
     else if (id === 'comando') setVista('comando')
-    else if (id === 'torneos') setVista('torneosAdmin')
+    else if (id === 'torneos') setVista('torneoPublico')
     else if (id === 'buscar') setVista(sesion ? 'buscar' : 'login')
     else if (id === 'mensajes') { setChatCon(null); setVista(sesion ? 'chat' : 'login') }
     else if (id === 'perfil') { setDestinoTrasLogin('perfil'); setVista(sesion ? 'perfil' : 'login') }
@@ -156,6 +159,25 @@ function App() {
         esAdmin={false}
         onVolver={() => setVista('publica')}
         onAccion={(id) => { if (id === 'admin') setVista('torneosAdmin') }}
+      />
+    )
+  }
+
+  if (vista === 'torneoPublico') {
+    return (
+      <PantallaTorneoPublico
+        onVolver={() => setVista('publica')}
+        onVerPerfil={(id) => { if (id && sesion?.user?.id === id) { setVista('perfil') } else { setPerfilViendo(id); setVista('perfilAjeno') } }}
+        onAnotar={(id) => { setTorneoAnotando(id); setVista('anotador') }}
+      />
+    )
+  }
+
+  if (vista === 'anotador') {
+    return (
+      <PantallaAnotador
+        torneoId={torneoAnotando}
+        onVolver={() => setVista('torneoPublico')}
       />
     )
   }
@@ -333,7 +355,7 @@ function App() {
         } else if (id === 'resultados') {
           setVista('resultados')
         } else if (id === 'torneos') {
-          setVista('torneosAdmin')
+          setVista('torneoPublico')
         } else if (id === 'misTorneos' || id === 'dondeJuego') {
           setVista('torneosAdmin')
         } else if (id === 'crearTorneo') {

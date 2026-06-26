@@ -135,6 +135,25 @@ export async function guardarJuego(torneoId, datos) {
   return { juego: data, error: error?.message || null }
 }
 
+// ---------- ANOTAR: cerrar un partido EXISTENTE con su marcador ----------
+//  El calendario ya creó el juego como 'proximo'. Esto lo pasa a 'final' con su marcador.
+export async function anotarResultado(juegoId, datos) {
+  const { data, error } = await supabase
+    .from('torneo_juegos')
+    .update({
+      estado: 'final',
+      puntos_a: datos.puntosA ?? 0,
+      puntos_b: datos.puntosB ?? 0,
+      parciales_a: datos.parcialesA || [],
+      parciales_b: datos.parcialesB || [],
+      fecha: datos.fecha || new Date().toISOString(),
+    })
+    .eq('id', juegoId)
+    .select()
+    .single()
+  return { juego: data, error: error?.message || null }
+}
+
 // ---------- CALENDARIO: generar los partidos (fixtures) de un torneo ----------
 //  Toma los equipos del torneo + su formato y crea los partidos "próximos".
 //  opciones.vueltas: cuántas veces se enfrenta cada par (liga). 1=sencilla, 2=ida y vuelta, 3=triple...
