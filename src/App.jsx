@@ -16,10 +16,12 @@ import PantallaChat from './componentes/PantallaChat'
 import PantallaPublicar from './componentes/PantallaPublicar'
 import PantallaTorneos from './componentes/PantallaTorneos'
 import PantallaTorneoPublico from './componentes/PantallaTorneoPublico'
+import PantallaInvitaciones from './componentes/PantallaInvitaciones'
 import PantallaTorneoConfig from './componentes/PantallaTorneoConfig'
 import PantallaNoticiasCrudas from './componentes/PantallaNoticiasCrudas'
 import PantallaCrearTorneo from './componentes/PantallaCrearTorneo'
 import { guardarJuegoDelDia } from './historialDia'
+import { leerRosterTorneo, guardarAnotacionTorneo } from './torneoData'
 import PantallaLigas from './componentes/PantallaLigas'
 import PantallaLNB from './componentes/PantallaLNB'
 import PantallaNBA from './componentes/PantallaNBA'
@@ -30,6 +32,27 @@ import PantallaSalaDraft from './componentes/PantallaSalaDraft'
 import ShellEscritorio from './componentes/ShellEscritorio'
 import { StatusBar, Style } from '@capacitor/status-bar'
 
+// Convierte el roster de dos equipos en los jugadores que el anotador espera.
+// Los primeros cinco de cada equipo entran en cancha; el resto, a la banca.
+function jugadoresDesdeRoster(roster, equipoA_id, equipoB_id) {
+  const construir = (eq, equipoId) =>
+    (roster || [])
+      .filter((p) => p.equipo_id === equipoId)
+      .map((p, k) => ({
+        id: 'j' + eq + '_' + k,
+        nombre: p.nombre || ('#' + (p.numero ?? '')),
+        numero: p.numero != null ? String(p.numero) : '',
+        equipo: eq,
+        perfilId: p.perfilId || null,
+        jugadorId: p.jugador_id || null, // clave única del jugador para guardar sus stats
+        foto: p.foto || null,
+        etiqueta: p.nombre || ('#' + (p.numero ?? '')),
+        enCancha: k < 5,
+        pts: 0, reb: 0, ast: 0, rob: 0,
+      }))
+  return [...construir(0, equipoA_id), ...construir(1, equipoB_id)]
+}
+
 function App() {
   const [mostrarIntro, setMostrarIntro] = useState(true)
   const [vista, setVista] = useState('publica')
@@ -39,6 +62,7 @@ function App() {
   const [destinoTrasLogin, setDestinoTrasLogin] = useState('perfil')
   const [perfilViendo, setPerfilViendo] = useState(null)
   const [torneoEnJuego, setTorneoEnJuego] = useState(null)
+  const [juegoTorneoCtx, setJuegoTorneoCtx] = useState(null)
   const [chatCon, setChatCon] = useState(null)
   const [esEscritorio, setEsEscritorio] = useState(typeof window !== 'undefined' ? window.innerWidth >= 900 : false)
 
@@ -164,6 +188,12 @@ function App() {
     )
   }
 
+  if (vista === 'invitaciones') {
+    return (
+      <PantallaInvitaciones onVolver={() => setVista('publica')} />
+    )
+  }
+
   if (vista === 'torneoPublico') {
     return (
       <PantallaTorneoPublico
@@ -178,8 +208,18 @@ function App() {
     return (
       <PantallaTorneoConfig
         torneoId={torneoEnJuego}
-        onListo={(config) => { setConfigJuego(config); setVista('juegoJugadores') }}
-        onVolver={() => setVista('torneoPublico')}
+        onListo={async (config) => {
+          if (juegoTorneoCtx) {
+            const roster = await leerRosterTorneo(juegoTorneoCtx.torneoId)
+            const jugadores = jugadoresDesdeRoster(roster, juegoTorneoCtx.equipoA_id, juegoTorneoCtx.equipoB_id)
+            setConfigJuego({ ...config, nombreA: juegoTorneoCtx.nombreA, nombreB: juegoTorneoCtx.nombreB, jugadores, juegoTorneo: juegoTorneoCtx })
+            setJuegoTorneoCtx(null)
+            setVista('juegoVivo')
+          } else {
+            setConfigJuego(config); setVista('juegoJugadores')
+          }
+        }}
+        onVolver={() => { if (juegoTorneoCtx) { setJuegoTorneoCtx(null); setVista('torneosAdmin') } else { setVista('torneoPublico') } }}
       />
     )
   }
@@ -190,6 +230,8 @@ function App() {
         esAdmin={true}
         onVolver={() => setVista('publica')}
         onAccion={() => {}}
+        onVerPerfil={(id) => { if (id && sesion?.user?.id === id) { setVista('perfil') } else { setPerfilViendo(id); setVista('perfilAjeno') } }}
+        onAnotarJuego={(juego) => { setJuegoTorneoCtx(juego); setTorneoEnJuego(juego.torneoId); setVista('torneoConfig') }}
       />
     )
   }
@@ -249,8 +291,16 @@ function App() {
     return (
       <PantallaJuegoVivo
         config={configJuego}
-        onTerminar={(res) => { guardarJuegoDelDia(res); setResultadoJuego(res); setVista('juegoResultado') }}
-        onVolver={() => setVista('publica')}
+        onTerminar={async (res) => {
+          if (res?.juegoTorneo) {
+            await guardarAnotacionTorneo(res.juegoTorneo, res)
+            setConfigJuego(null)
+            setVista('torneosAdmin')
+          } else {
+            guardarJuegoDelDia(res); setResultadoJuego(res); setVista('juegoResultado')
+          }
+        }}
+        onVolver={() => { if (configJuego?.juegoTorneo) { setConfigJuego(null); setVista('torneosAdmin') } else { setVista('publica') } }}
       />
     )
   }
@@ -366,6 +416,8 @@ function App() {
           setVista('torneoPublico')
         } else if (id === 'misTorneos' || id === 'dondeJuego') {
           setVista('torneosAdmin')
+        } else if (id === 'invitaciones') {
+          setVista(sesion ? 'invitaciones' : 'login')
         } else if (id === 'crearTorneo') {
           setVista(sesion ? 'crearTorneo' : 'login')
         } else if (id === 'publicar') {

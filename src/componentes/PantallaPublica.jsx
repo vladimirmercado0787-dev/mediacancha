@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useRef } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef, Component } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { getNoticias as getNoticiasNBA } from './nbaApi'
 import { createPortal } from 'react-dom'
@@ -275,6 +275,7 @@ const ACCIONES_CREAR = [
 ]
 const ACCIONES_MIAS = [
   { id: 'misTorneos', txt: '🏆 Mis torneos' },
+  { id: 'invitaciones', txt: '✉️ Mis invitaciones' },
   { id: 'misLigas', txt: '🤝 Mis ligas' },
 ]
 // Solo crear torneo/liga (para el botón "Crear ▾" de la fila; "Armar juego" va aparte)
@@ -289,7 +290,7 @@ function ModalJugadorMC({ jug, onClose, T, escritorio }) {
   if (!jug) return null
   const ini = (jug.nombre || '?').trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase()
   return createPortal((
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 600, background: 'rgba(4,5,7,.72)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: escritorio ? 'center' : 'flex-end', justifyContent: 'center', padding: escritorio ? 20 : 0 }}>
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 600, background: 'rgba(4,5,7,.95)', display: 'flex', alignItems: escritorio ? 'center' : 'flex-end', justifyContent: 'center', padding: escritorio ? 20 : 0 }}>
       <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 460, background: T.esClaro ? '#f4f6f8' : '#14161a', borderRadius: escritorio ? 20 : '20px 20px 0 0', border: `1px solid ${T.navActivoBorde}`, padding: escritorio ? '18px 20px 22px' : '14px 18px calc(env(safe-area-inset-bottom) + 22px)', maxHeight: '88dvh', overflowY: 'auto' }}>
         {!escritorio && <div style={{ width: 38, height: 4, borderRadius: 2, background: 'rgba(255,255,255,.2)', margin: '0 auto 8px' }} />}
         <div style={{ display: 'flex', justifyContent: 'flex-end' }}><span onClick={onClose} style={{ fontSize: 24, color: T.tenue, cursor: 'pointer', lineHeight: 1 }}>×</span></div>
@@ -556,7 +557,10 @@ export default function PantallaPublica({ onAccion, haySesion }) {
     leerTorneos().then(({ torneos }) => setTorneosReales(torneos || [])).catch(() => {})
   }, [])
 
-  // Cerrar los menús desplegables al hacer clic fuera
+  // Cerrar los menús desplegables (de escritorio) al hacer clic fuera.
+  // OJO: el menú móvil (menuAbierto) NO va aquí; en iOS este "oído" agarra
+  // el mismo toque con que se abre y lo cierra de una. Ese se cierra con una
+  // capa invisible detrás (más abajo en la vista móvil).
   useEffect(() => {
     if (!masAbierto && !crearAbierto && !torneosAbierto) return
     const cerrar = () => { setMasAbierto(false); setCrearAbierto(false); setTorneosAbierto(false) }
@@ -566,22 +570,13 @@ export default function PantallaPublica({ onAccion, haySesion }) {
 
   useEffect(() => {
     const hayModal = pubAbierta || verHistorialDia || juegoAPublicar
-    if (hayModal) {
-      const scrollY = window.scrollY
-      document.body.style.position = 'fixed'
-      document.body.style.top = `-${scrollY}px`
-      document.body.style.left = '0'
-      document.body.style.right = '0'
-      document.body.style.width = '100%'
-      return () => {
-        document.body.style.position = ''
-        document.body.style.top = ''
-        document.body.style.left = ''
-        document.body.style.right = ''
-        document.body.style.width = ''
-        window.scrollTo(0, scrollY)
-      }
-    }
+    if (!hayModal) return
+    // Bloqueo de scroll SEGURO para iOS (el mismo que usa el visor de fotos).
+    // NO usar body position:fixed: en el WebView de iOS deja la pantalla negra
+    // y sin poder cerrar el modal.
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = prev }
   }, [pubAbierta, verHistorialDia, juegoAPublicar])
 
   const onBorrarPublicacion = async (pubId) => {
@@ -1251,18 +1246,21 @@ export default function PantallaPublica({ onAccion, haySesion }) {
         />
       )}
       {pubAbierta && (
-        <DetallePublicacion
-          pub={pubAbierta}
-          T={T} C={C} ORO_TEXTO={ORO_TEXTO}
-          haySesion={haySesion}
-          esMia={miId && pubAbierta.autor_id === miId}
-          onCerrar={() => setPubAbierta(null)}
-          onPedirLogin={() => { setPubAbierta(null); click('entrar') }}
-          onReaccionar={onReaccionar}
-          miReaccion={misReacc[pubAbierta.id]}
-          onBorrar={() => { onBorrarPublicacion(pubAbierta.id); setPubAbierta(null) }}
-          onCambioComentarios={recargarTechado}
-        />
+        <LimiteDetalle onCerrar={() => setPubAbierta(null)}>
+          <DetallePublicacion
+            pub={pubAbierta}
+            T={T} C={C} ORO_TEXTO={ORO_TEXTO}
+            haySesion={haySesion}
+            esMia={miId && pubAbierta.autor_id === miId}
+            onCerrar={() => setPubAbierta(null)}
+            onPedirLogin={() => { setPubAbierta(null); click('entrar') }}
+            onReaccionar={onReaccionar}
+            miReaccion={misReacc[pubAbierta.id]}
+            onBorrar={() => { onBorrarPublicacion(pubAbierta.id); setPubAbierta(null) }}
+            onCambioComentarios={recargarTechado}
+            onAccion={onAccion}
+          />
+        </LimiteDetalle>
       )}
       {visorFotos && (
         <VisorFotos fotos={visorFotos.fotos} inicio={visorFotos.inicio} onCerrar={() => setVisorFotos(null)} />
@@ -1286,7 +1284,7 @@ export default function PantallaPublica({ onAccion, haySesion }) {
         />
       )}
       {verHistorialDia && (
-        <div onClick={() => setVerHistorialDia(false)} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(4,5,7,0.8)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', display: 'flex', alignItems: esEscritorio ? 'center' : 'flex-end', justifyContent: 'center', padding: esEscritorio ? 20 : 0 }}>
+        <div onClick={() => setVerHistorialDia(false)} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(4,5,7,0.95)', display: 'flex', alignItems: esEscritorio ? 'center' : 'flex-end', justifyContent: 'center', padding: esEscritorio ? 20 : 0 }}>
           <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 480, maxHeight: '88dvh', display: 'flex', flexDirection: 'column', borderRadius: esEscritorio ? 20 : '20px 20px 0 0', padding: 1.5, background: T.borde }}>
             <div style={{ borderRadius: esEscritorio ? 19 : '19px 19px 0 0', background: 'linear-gradient(180deg, #14161a, #0c0e12)', padding: '18px 16px 24px', overflowY: 'auto' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
@@ -1545,7 +1543,7 @@ export default function PantallaPublica({ onAccion, haySesion }) {
       { id: 'crearLiga', emoji: '🤝', t: 'Liga', d: 'Crea o administra una liga por jornadas.' },
     ]
     return (
-      <div onClick={() => setAnotarAbierto(false)} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,.55)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+      <div onClick={() => setAnotarAbierto(false)} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,.86)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
         <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 480, background: T.esClaro ? '#fff' : 'linear-gradient(180deg,#16130d,#0d0b07)', borderRadius: '20px 20px 0 0', border: `1px solid ${T.navActivoBorde}`, borderBottom: 'none', padding: '10px 16px calc(20px + env(safe-area-inset-bottom))', boxShadow: '0 -10px 40px rgba(0,0,0,.5)', animation: 'mcHojaSube .28s cubic-bezier(.2,.8,.3,1)' }}>
           <style>{`@keyframes mcHojaSube{from{transform:translateY(100%)}to{transform:translateY(0)}}`}</style>
           <div style={{ width: 40, height: 4, borderRadius: 4, background: T.tenue, opacity: 0.4, margin: '4px auto 14px' }} />
@@ -1684,7 +1682,7 @@ export default function PantallaPublica({ onAccion, haySesion }) {
       <ModalJugadorMC jug={jugSel} onClose={() => setJugSel(null)} T={T} escritorio={esEscritorio} />
 
       {notSel && createPortal((
-        <div onClick={() => setNotSel(null)} style={{ position: 'fixed', inset: 0, zIndex: 600, background: 'rgba(4,5,7,.72)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: esEscritorio ? 'center' : 'flex-end', justifyContent: 'center', padding: esEscritorio ? 20 : 0 }}>
+        <div onClick={() => setNotSel(null)} style={{ position: 'fixed', inset: 0, zIndex: 600, background: 'rgba(4,5,7,.95)', display: 'flex', alignItems: esEscritorio ? 'center' : 'flex-end', justifyContent: 'center', padding: esEscritorio ? 20 : 0 }}>
           <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 460, background: T.esClaro ? '#f4f6f8' : '#14161a', borderRadius: esEscritorio ? 20 : '20px 20px 0 0', border: `1px solid ${T.navActivoBorde}`, maxHeight: '88dvh', overflowY: 'auto' }}>
             {notSel.foto && <div style={{ width: '100%', height: 180, background: `#000 url(${notSel.foto}) center/cover` }} />}
             <div style={{ padding: esEscritorio ? '15px 18px 20px' : '15px 18px calc(env(safe-area-inset-bottom) + 22px)' }}>
@@ -2057,6 +2055,13 @@ export default function PantallaPublica({ onAccion, haySesion }) {
           )}
         </div>
       </div>
+
+      {/* Capa invisible: cierra el menú móvil al tocar afuera. A prueba de iOS
+          porque es un elemento real (no un 'oído' global), a nivel de pantalla
+          y fuera de la barra transformada. */}
+      {menuAbierto && (
+        <div onClick={() => setMenuAbierto(false)} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 35, background: 'transparent' }} />
+      )}
 
       {/* SOLO esta área hace scroll, por debajo de la barra fija */}
       <div ref={refScrollMovil} onScroll={alScrollMovil} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: altoNav, zIndex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'none', contain: 'content', transform: 'translateZ(0)', willChange: 'scroll-position' }}>
@@ -2825,7 +2830,30 @@ function HojaComentarios({ pub, T, C, haySesion, onCerrar, onPedirLogin, onCambi
 }
 
 // ---- Ventana de DETALLE ----
-function DetallePublicacion({ pub, T, C, ORO_TEXTO, haySesion, esMia, onCerrar, onPedirLogin, onReaccionar, miReaccion, onBorrar, onCambioComentarios }) {
+// Atrapa-errores: si el detalle revienta al dibujarse, en vez de dejar la
+// pantalla negra sin salida, muestra el mensaje del error y un botón para cerrar.
+class LimiteDetalle extends Component {
+  constructor(props) { super(props); this.state = { error: null } }
+  static getDerivedStateFromError(error) { return { error } }
+  componentDidCatch(error, info) { try { console.error('Detalle reventó:', error, info) } catch (e) {} }
+  render() {
+    if (this.state.error) {
+      const msg = String((this.state.error && this.state.error.message) || this.state.error || 'error desconocido')
+      return (
+        <div onClick={this.props.onCerrar} style={{ position: 'fixed', inset: 0, zIndex: 95, background: 'rgba(4,5,7,0.96)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420, width: '100%', background: '#16181d', border: '1px solid #2a2d34', borderRadius: 16, padding: 22, color: '#ededed' }}>
+            <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 10 }}>⚠️ Algo falló al abrir</div>
+            <div style={{ fontSize: 12.5, color: '#b9c0c8', lineHeight: 1.5, marginBottom: 18, wordBreak: 'break-word', maxHeight: 260, overflowY: 'auto' }}>{msg}</div>
+            <button onClick={this.props.onCerrar} style={{ border: 'none', borderRadius: 10, padding: '11px 18px', background: 'linear-gradient(120deg,#fbe08a,#c8842e)', color: '#1a1205', fontWeight: 800, fontSize: 14, cursor: 'pointer' }}>Cerrar</button>
+          </div>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
+function DetallePublicacion({ pub, T, C, ORO_TEXTO, haySesion, esMia, onCerrar, onPedirLogin, onReaccionar, miReaccion, onBorrar, onCambioComentarios, onAccion }) {
   const esEscritorio = typeof window !== 'undefined' && window.innerWidth >= 900
   const tema = typeof window !== 'undefined' ? (localStorage.getItem('mc_tema') || 'dorado') : 'dorado'
   let datos = pub.datos || {}
@@ -2833,13 +2861,26 @@ function DetallePublicacion({ pub, T, C, ORO_TEXTO, haySesion, esMia, onCerrar, 
   const esJuego = datos && datos.nombreA && datos.nombreB && (datos.totalA != null || (datos.jugadores && datos.jugadores.length))
   const fuenteJuego = datos.fuente || (pub.tipo === 'torneo' ? 'torneo' : pub.tipo === 'liga' ? 'liga' : 'rapido')
 
-  // Colores del modal coherentes con el tema actual
-  const modalFondo = T.esClaro ? '#f3eee3' : 'linear-gradient(180deg, #14161a, #0c0e12)'
-  const modalTexto = T.textoBody
-  const modalTenue = T.tenue
-  const lineaModal = T.esClaro ? 'rgba(0,0,0,.08)' : 'rgba(255,255,255,.07)'
+  // Tema oscuro propio para la ventana, IGUAL que la hoja de comentarios que sí
+  // funciona en iOS. Reusamos el componente BottomSheet (ya probado) en vez de
+  // armar la ventana a mano, que era lo que se ponía negro.
+  const D = {
+    esClaro: false,
+    fondo: '#0c0d10',
+    textoBody: '#ededed',
+    textoFuerte: '#ffffff',
+    subTexto: '#d8d8d8',
+    tenue: '#8e8e93',
+    borde: '#0c0d10',
+    boton: 'linear-gradient(120deg, #fbe08a, #c8842e)',
+    avatar: 'linear-gradient(135deg, #c8842e, #8a5a1e)',
+    avatarTexto: '#1a1205',
+  }
+  const acento = '#f5b82e'
+  const lineaModal = 'rgba(255,255,255,.07)'
+  const cComent = { texto: D.textoBody, tenue: D.tenue }
 
-  // ===== Comentarios: estado elevado para poder anclar la caja abajo =====
+  // ===== Comentarios =====
   const [comentarios, setComentarios] = useState([])
   const [textoComentario, setTextoComentario] = useState('')
   const [cargandoComentarios, setCargandoComentarios] = useState(true)
@@ -2862,116 +2903,101 @@ function DetallePublicacion({ pub, T, C, ORO_TEXTO, haySesion, esMia, onCerrar, 
       setTextoComentario('')
       await cargarComentarios()
       onCambioComentarios && onCambioComentarios()
-    } else {
-      alert(res.error)
     }
     setEnviandoComentario(false)
   }
 
-  // ¿Compartir disponible en este dispositivo?
   const compartir = async () => {
-    const titulo = pub.titulo || `${datos.nombreA || ''} vs ${datos.nombreB || ''}`.trim() || 'Media Cancha'
-    const texto = esJuego ? `${datos.nombreA} ${datos.totalA} - ${datos.totalB} ${datos.nombreB} · vía Media Cancha 🏀` : (pub.texto || 'Mira esto en Media Cancha 🏀')
+    const t = pub.titulo || `${datos.nombreA || ''} vs ${datos.nombreB || ''}`.trim() || 'Media Cancha'
+    const tx = esJuego ? `${datos.nombreA} ${datos.totalA} - ${datos.totalB} ${datos.nombreB} · vía Media Cancha 🏀` : (pub.texto || 'Mira esto en Media Cancha 🏀')
     try {
-      if (navigator.share) {
-        await navigator.share({ title: titulo, text: texto })
-      } else if (navigator.clipboard) {
-        await navigator.clipboard.writeText(texto)
-        alert('Copiado para compartir 📋')
-      }
+      if (navigator.share) await navigator.share({ title: t, text: tx })
+      else if (navigator.clipboard) await navigator.clipboard.writeText(tx)
     } catch (e) { /* el usuario canceló */ }
   }
 
-  const inputComentBg = T.esClaro ? '#fff' : 'rgba(12,14,18,0.7)'
-  const inputComentBorde = T.esClaro ? 'rgba(0,0,0,.14)' : 'rgba(255,255,255,.12)'
+  const inputBg = 'rgba(255,255,255,0.06)'
+  const inputBorde = 'rgba(255,255,255,0.16)'
+
+  // Caja de comentar (va anclada abajo por el 'pie' de BottomSheet; sube con el teclado)
+  const pie = (
+    <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '8px 14px 10px' }}>
+      <input
+        value={textoComentario}
+        onChange={(e) => setTextoComentario(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') enviarComentario() }}
+        placeholder={haySesion ? 'Escribe un comentario…' : 'Inicia sesión para comentar'}
+        maxLength={500}
+        style={{ flex: 1, minWidth: 0, background: inputBg, border: `1px solid ${inputBorde}`, borderRadius: 22, padding: '11px 15px', color: D.textoBody, fontSize: 16, outline: 'none' }}
+      />
+      <button onClick={enviarComentario} disabled={enviandoComentario} style={{ flexShrink: 0, border: 'none', borderRadius: '50%', width: 44, height: 44, background: D.boton, color: '#1a1205', fontWeight: 800, fontSize: 17, cursor: 'pointer', display: 'grid', placeItems: 'center' }}>{enviandoComentario ? '…' : '➤'}</button>
+    </div>
+  )
+
+  const accionDerecha = esMia ? (
+    <span onClick={onBorrar} title="Eliminar" style={{ fontSize: 17, color: '#e0563f', cursor: 'pointer', padding: '2px 6px' }}>🗑️</span>
+  ) : null
 
   return (
-    <div onClick={onCerrar} style={{ position: 'fixed', inset: 0, zIndex: 70, background: T.esClaro ? 'rgba(30,26,18,0.5)' : 'rgba(4,5,7,0.82)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', display: 'flex', alignItems: esEscritorio ? 'center' : 'flex-end', justifyContent: 'center', padding: esEscritorio ? 20 : 0 }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 480, maxHeight: esEscritorio ? '88dvh' : '92dvh', display: 'flex', flexDirection: 'column', borderRadius: esEscritorio ? 20 : '20px 20px 0 0', padding: 1.5, background: T.borde, overflow: 'hidden' }}>
-        <div style={{ borderRadius: esEscritorio ? 19 : '19px 19px 0 0', background: modalFondo, display: 'flex', flexDirection: 'column', overflow: 'hidden', flex: 1, minHeight: 0 }}>
-
-          {/* cabecera del modal (FIJA arriba) */}
-          <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', borderBottom: `1px solid ${lineaModal}` }}>
-            <span style={{ fontSize: 14, fontWeight: 800, color: modalTexto, flex: 1 }}>Publicación</span>
-            {esMia && <span onClick={onBorrar} title="Eliminar" style={{ fontSize: 17, color: '#e0563f', cursor: 'pointer', padding: '2px 6px' }}>🗑️</span>}
-            <span onClick={onCerrar} style={{ fontSize: 24, color: modalTenue, cursor: 'pointer', lineHeight: 1, padding: '0 2px' }}>×</span>
+    <BottomSheet T={D} esEscritorio={esEscritorio} titulo="Publicación" accionDerecha={accionDerecha} pie={pie} expandido={true} onCerrar={onCerrar}>
+      <div style={{ padding: '14px 16px 18px' }}>
+        {esJuego ? (
+          <div style={{ marginBottom: 16 }}>
+            <TarjetaResultado
+              datos={datos}
+              fuente={fuenteJuego}
+              tiempo={haceCuanto(pub.creado_en)}
+              autorNombre={`${pub.autor_nombre || 'Usuario'}${pub.autor_apellido ? ' ' + pub.autor_apellido : ''}`}
+              autorFoto={pub.autor_foto}
+              autorId={pub.autor_id}
+              onIrPerfil={(id) => onAccion && onAccion('verPerfil:' + id)}
+              comentario={pub.texto && !pub.texto.startsWith('Ganaron') && !pub.texto.startsWith('Quedaron') ? pub.texto.split('\n')[0] : null}
+              temaForzado={tema}
+            />
           </div>
-
-          {/* ZONA QUE CORRE: tarjeta + reacciones + lista de comentarios */}
-          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', padding: '14px 16px 14px' }}>
-            {esJuego ? (
-              <div style={{ marginBottom: 16 }}>
-                <TarjetaResultado
-                  datos={datos}
-                  fuente={fuenteJuego}
-                  tiempo={haceCuanto(pub.creado_en)}
-                  autorNombre={`${pub.autor_nombre || 'Usuario'}${pub.autor_apellido ? ' ' + pub.autor_apellido : ''}`}
-                  autorFoto={pub.autor_foto}
-                  autorId={pub.autor_id}
-                  onIrPerfil={(id) => onAccion && onAccion('verPerfil:' + id)}
-                  comentario={pub.texto && !pub.texto.startsWith('Ganaron') && !pub.texto.startsWith('Quedaron') ? pub.texto.split('\n')[0] : null}
-                  temaForzado={tema}
-                />
+        ) : (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 12 }}>
+              <div onClick={() => pub.autor_id && onAccion && onAccion('verPerfil:' + pub.autor_id)} style={{ width: 36, height: 36, borderRadius: '50%', cursor: 'pointer', background: pub.autor_foto ? `url(${pub.autor_foto}) center/cover` : D.avatar, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: D.avatarTexto, flexShrink: 0 }}>
+                {!pub.autor_foto && ((pub.autor_nombre || '?').slice(0, 1).toUpperCase())}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div onClick={() => pub.autor_id && onAccion && onAccion('verPerfil:' + pub.autor_id)} style={{ fontSize: 13.5, fontWeight: 700, color: D.textoBody, cursor: 'pointer' }}>{pub.autor_nombre || 'Usuario'}{pub.autor_apellido ? ` ${pub.autor_apellido}` : ''}</div>
+                <div style={{ fontSize: 11, color: D.tenue }}>{haceCuanto(pub.creado_en)}</div>
+              </div>
+            </div>
+            {pub.titulo && <div style={{ fontSize: 18, fontWeight: 800, color: D.textoBody, lineHeight: 1.2, marginBottom: 8 }}>{pub.titulo}</div>}
+            {datos.fondo && FONDOS_PUB[datos.fondo] ? (
+              <div style={{ position: 'relative', minHeight: 220, borderRadius: 16, overflow: 'hidden', marginBottom: 16, background: `url(${FONDOS_PUB[datos.fondo]}) center/cover`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(8,9,12,.35), rgba(8,9,12,.62))' }} />
+                <div style={{ position: 'relative', padding: 24, textAlign: 'center', color: '#fff', fontSize: 24, fontWeight: 800, lineHeight: 1.3, textShadow: '0 2px 12px rgba(0,0,0,.6)', wordBreak: 'break-word' }}>{pub.texto}</div>
               </div>
             ) : (
-              <>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 12 }}>
-                  <div onClick={() => pub.autor_id && onAccion && onAccion('verPerfil:' + pub.autor_id)} style={{ width: 36, height: 36, borderRadius: '50%', cursor: 'pointer', background: pub.autor_foto ? `url(${pub.autor_foto}) center/cover` : T.avatar, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: T.avatarTexto, flexShrink: 0 }}>
-                    {!pub.autor_foto && ((pub.autor_nombre || '?').slice(0, 1).toUpperCase())}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div onClick={() => pub.autor_id && onAccion && onAccion('verPerfil:' + pub.autor_id)} style={{ fontSize: 13.5, fontWeight: 700, color: modalTexto, cursor: 'pointer' }}>{pub.autor_nombre || 'Usuario'}{pub.autor_apellido ? ` ${pub.autor_apellido}` : ''}</div>
-                    <div style={{ fontSize: 11, color: modalTenue }}>{haceCuanto(pub.creado_en)}</div>
-                  </div>
-                </div>
-                {pub.titulo && <div style={{ fontSize: 18, fontWeight: 800, color: modalTexto, lineHeight: 1.2, marginBottom: 8 }}>{pub.titulo}</div>}
-                {datos.fondo && FONDOS_PUB[datos.fondo] ? (
-                  <div style={{ position: 'relative', minHeight: 220, borderRadius: 16, overflow: 'hidden', marginBottom: 16, background: `url(${FONDOS_PUB[datos.fondo]}) center/cover`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(8,9,12,.35), rgba(8,9,12,.62))' }} />
-                    <div style={{ position: 'relative', padding: 24, textAlign: 'center', color: '#fff', fontSize: 24, fontWeight: 800, lineHeight: 1.3, textShadow: '0 2px 12px rgba(0,0,0,.6)', wordBreak: 'break-word' }}>{pub.texto}</div>
-                  </div>
-                ) : (
-                  pub.texto && <div style={{ fontSize: 14.5, color: modalTexto, lineHeight: 1.6, marginBottom: 16 }}>{resaltarTexto(pub.texto, T.acento, null)}</div>
-                )}
-              </>
+              pub.texto && <div style={{ fontSize: 14.5, color: D.textoBody, lineHeight: 1.6, marginBottom: 16 }}>{resaltarTexto(pub.texto, acento, null)}</div>
             )}
+          </>
+        )}
 
-            {/* barra de reacciones + compartir */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 18, padding: '12px 0', borderTop: `1px solid ${lineaModal}`, borderBottom: `1px solid ${lineaModal}`, marginBottom: 14, flexWrap: 'wrap' }}>
-              <div onClick={() => onReaccionar(pub.id, 'like')} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', color: miReaccion === 'like' ? T.acento : modalTenue, fontSize: 14, fontWeight: 700 }}>
-                <span style={{ fontSize: 17 }}>{miReaccion === 'like' ? '❤️' : '🤍'}</span> {pub.likes || 0}
-              </div>
-              <div onClick={() => onReaccionar(pub.id, 'dislike')} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', color: miReaccion === 'dislike' ? '#e0563f' : modalTenue, fontSize: 14, fontWeight: 700 }}>
-                <span style={{ fontSize: 17 }}>👎</span> {pub.dislikes || 0}
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: modalTenue, fontSize: 14, fontWeight: 700 }}>
-                <span style={{ fontSize: 17 }}>💬</span> {comentarios.length || pub.num_comentarios || 0}
-              </div>
-              <button onClick={compartir} style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 7, border: 'none', borderRadius: 10, padding: '9px 16px', background: T.boton, color: '#1a1205', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>
-                <span style={{ fontSize: 15 }}>↗</span> Compartir
-              </button>
-            </div>
-
-            {/* lista de comentarios (la caja de escribir va anclada abajo, fuera del scroll) */}
-            <Comentarios lista={comentarios} cargando={cargandoComentarios} T={T} C={C} onAccion={onAccion} />
+        {/* barra de reacciones + compartir */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 18, padding: '12px 0', borderTop: `1px solid ${lineaModal}`, borderBottom: `1px solid ${lineaModal}`, marginBottom: 14, flexWrap: 'wrap' }}>
+          <div onClick={() => onReaccionar(pub.id, 'like')} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', color: miReaccion === 'like' ? acento : D.tenue, fontSize: 14, fontWeight: 700 }}>
+            <span style={{ fontSize: 17 }}>{miReaccion === 'like' ? '❤️' : '🤍'}</span> {pub.likes || 0}
           </div>
-
-          {/* CAJA DE COMENTAR (ANCLADA abajo; sube con el teclado) */}
-          <div style={{ flexShrink: 0, display: 'flex', gap: 8, alignItems: 'center', padding: '10px 14px', paddingBottom: 'calc(10px + env(safe-area-inset-bottom))', borderTop: `1px solid ${lineaModal}`, background: T.esClaro ? 'rgba(255,255,255,.55)' : 'rgba(8,9,12,.55)' }}>
-            <input
-              value={textoComentario}
-              onChange={(e) => setTextoComentario(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') enviarComentario() }}
-              placeholder={haySesion ? 'Escribe un comentario…' : 'Inicia sesión para comentar'}
-              maxLength={500}
-              style={{ flex: 1, minWidth: 0, background: inputComentBg, border: `1px solid ${inputComentBorde}`, borderRadius: 22, padding: '11px 15px', color: T.textoBody, fontSize: 16, outline: 'none' }}
-            />
-            <button onClick={enviarComentario} disabled={enviandoComentario} style={{ flexShrink: 0, border: 'none', borderRadius: '50%', width: 44, height: 44, background: T.boton, color: '#1a1205', fontWeight: 800, fontSize: 17, cursor: 'pointer', display: 'grid', placeItems: 'center' }}>{enviandoComentario ? '…' : '➤'}</button>
+          <div onClick={() => onReaccionar(pub.id, 'dislike')} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', color: miReaccion === 'dislike' ? '#e0563f' : D.tenue, fontSize: 14, fontWeight: 700 }}>
+            <span style={{ fontSize: 17 }}>👎</span> {pub.dislikes || 0}
           </div>
-
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: D.tenue, fontSize: 14, fontWeight: 700 }}>
+            <span style={{ fontSize: 17 }}>💬</span> {comentarios.length || pub.num_comentarios || 0}
+          </div>
+          <button onClick={compartir} style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 7, border: 'none', borderRadius: 10, padding: '9px 16px', background: D.boton, color: '#1a1205', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>
+            <span style={{ fontSize: 15 }}>↗</span> Compartir
+          </button>
         </div>
+
+        {/* lista de comentarios */}
+        <Comentarios lista={comentarios} cargando={cargandoComentarios} T={D} C={cComent} onAccion={onAccion} />
       </div>
-    </div>
+    </BottomSheet>
   )
 }
 
@@ -2994,7 +3020,7 @@ function SelectorPlantilla({ T, C, ORO_TEXTO, esEscritorio, usuarioPago, onCance
   const inputBorde = T.esClaro ? 'rgba(0,0,0,.12)' : 'rgba(255,255,255,.12)'
 
   return (
-    <div onClick={onCancelar} style={{ position: 'fixed', inset: 0, zIndex: 80, background: fondoModal, backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', display: 'flex', alignItems: esEscritorio ? 'center' : 'flex-end', justifyContent: 'center', padding: esEscritorio ? 20 : 0 }}>
+    <div onClick={onCancelar} style={{ position: 'fixed', inset: 0, zIndex: 80, background: fondoModal, display: 'flex', alignItems: esEscritorio ? 'center' : 'flex-end', justifyContent: 'center', padding: esEscritorio ? 20 : 0 }}>
       <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 480, maxHeight: '90dvh', display: 'flex', flexDirection: 'column', borderRadius: esEscritorio ? 20 : '20px 20px 0 0', padding: 1.5, background: T.borde }}>
         <div style={{ borderRadius: esEscritorio ? 19 : '19px 19px 0 0', background: cajaInterior, padding: '18px 16px 20px', overflowY: 'auto' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>

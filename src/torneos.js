@@ -219,6 +219,93 @@ export async function agregarDirectiva(torneoId, datos) {
   return { miembro: data, error: error?.message || null }
 }
 
+// Lee la directiva del torneo, con la foto de cada miembro (si tiene cuenta).
+export async function leerDirectiva(torneoId) {
+  const { data, error } = await supabase
+    .from('torneo_directiva')
+    .select('*')
+    .eq('torneo_id', torneoId)
+  if (error) return { directiva: [], error: error.message }
+  const filas = data || []
+  const ids = [...new Set(filas.map((d) => d.perfil_id).filter(Boolean))]
+  const fotos = {}
+  if (ids.length) {
+    const { data: perfiles } = await supabase.from('perfiles').select('id, foto_url').in('id', ids)
+    ;(perfiles || []).forEach((p) => { fotos[p.id] = p.foto_url || null })
+  }
+  return { directiva: filas.map((d) => ({ ...d, foto: d.perfil_id ? (fotos[d.perfil_id] || null) : null })), error: null }
+}
+
+// Da o quita el permiso de administrar a un miembro de la directiva.
+export async function cambiarPermiso(miembroId, puede) {
+  const { error } = await supabase
+    .from('torneo_directiva')
+    .update({ puede_administrar: !!puede })
+    .eq('id', miembroId)
+  return { error: error?.message || null }
+}
+
+// ---------- BITÁCORA (historial) ----------
+// Deja una huella de una acción importante. La base sella sola quién la hizo.
+export async function registrarBitacora(torneoId, datos) {
+  const { error } = await supabase
+    .from('torneo_bitacora')
+    .insert({
+      torneo_id: torneoId,
+      actor_nombre: datos.actor_nombre || null,
+      accion: datos.accion,
+      detalle: datos.detalle || null,
+      objeto_tipo: datos.objeto_tipo || null,
+      objeto_id: datos.objeto_id || null,
+    })
+  return { error: error?.message || null }
+}
+
+// Lee el historial del torneo (lo más nuevo primero).
+export async function leerBitacora(torneoId, limite = 20) {
+  const { data, error } = await supabase
+    .from('torneo_bitacora')
+    .select('*')
+    .eq('torneo_id', torneoId)
+    .order('creado_en', { ascending: false })
+    .limit(limite)
+  return { bitacora: data || [], error: error?.message || null }
+}
+
+// ---------- CAJA (ingresos y gastos del torneo) ----------
+// Lee todos los movimientos del torneo (lo más nuevo primero).
+export async function leerCaja(torneoId) {
+  const { data, error } = await supabase
+    .from('torneo_caja')
+    .select('*')
+    .eq('torneo_id', torneoId)
+    .order('creado_en', { ascending: false })
+  return { caja: data || [], error: error?.message || null }
+}
+
+// Registra un movimiento (ingreso o gasto). La base sella solo quién fue.
+export async function agregarMovimiento(torneoId, datos) {
+  const { data, error } = await supabase
+    .from('torneo_caja')
+    .insert({
+      torneo_id: torneoId,
+      tipo: datos.tipo,
+      categoria: datos.categoria || null,
+      concepto: datos.concepto,
+      monto: datos.monto,
+      registrado_nombre: datos.registrado_nombre || null,
+    })
+    .select()
+    .single()
+  return { movimiento: data, error: error?.message || null }
+}
+
+// Borra un movimiento (para corregir un error).
+export async function eliminarMovimiento(id) {
+  const { error } = await supabase.from('torneo_caja').delete().eq('id', id)
+  return { error: error?.message || null }
+}
+
 // ---------- BUSCAR PERSONAS (para invitar) ----------
 // Busca perfiles por nombre/apellido/código. Reusa el patrón del juego rápido.
 export async function buscarPersonas(termino) {

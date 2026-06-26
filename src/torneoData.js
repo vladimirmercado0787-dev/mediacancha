@@ -72,9 +72,22 @@ export async function leerStatsTorneo(torneoId) {
 export async function leerRosterTorneo(torneoId) {
   const { data } = await supabase
     .from('torneo_jugadores')
-    .select('id, equipo_id, nombre, numero, posicion, es_capitan, es_refuerzo, perfil_id')
+    .select('id, equipo_id, nombre, numero, posicion, es_capitan, es_refuerzo, perfil_id, estado')
     .eq('torneo_id', torneoId)
-  return (data || []).map((j) => ({
+  const filas = data || []
+
+  // Traer la foto de perfil de cada jugador que tenga cuenta vinculada (una sola consulta)
+  const ids = [...new Set(filas.map((j) => j.perfil_id).filter(Boolean))]
+  const fotos = {}
+  if (ids.length) {
+    const { data: perfiles } = await supabase
+      .from('perfiles')
+      .select('id, foto_url')
+      .in('id', ids)
+    ;(perfiles || []).forEach((p) => { fotos[p.id] = p.foto_url || null })
+  }
+
+  return filas.map((j) => ({
     jugador_id: j.id,
     equipo_id: j.equipo_id,
     nombre: j.nombre || 'Jugador',
@@ -82,7 +95,9 @@ export async function leerRosterTorneo(torneoId) {
     posicion: j.posicion || null,
     esCapitan: !!j.es_capitan,
     esRefuerzo: !!j.es_refuerzo,
+    estado: j.estado || 'confirmado',
     perfilId: j.perfil_id || null, // código único que lo vincula a su cuenta de Media Cancha
+    foto: j.perfil_id ? (fotos[j.perfil_id] || null) : null, // foto de perfil (por ahora; luego será la foto de jugador)
   }))
 }
 
@@ -152,6 +167,52 @@ export async function anotarResultado(juegoId, datos) {
     .select()
     .single()
   return { juego: data, error: error?.message || null }
+}
+
+// ---------- GUARDAR ANOTACIÓN DE TORNEO ----------
+//  Recibe el 'res' que entrega el anotador (PantallaJuegoVivo) al terminar y lo
+//  guarda DONDE VA: cierra el partido del calendario con su marcador y guarda las
+//  estadísticas de cada jugador. ctx lleva la info del partido del torneo.
+//  ctx = { juegoId, torneoId, jornada, equipoA_id, equipoB_id }
+//  Cada jugador en res.jugadores trae: equipo (0|1), nombre, numero, pts, reb, ast,
+//  rob, tap, per, y jugadorId (el id real del roster, inyectado al cargar el juego).
+export async function guardarAnotacionTorneo(ctx, res) {
+  if (!ctx || !ctx.juegoId) return { error: 'Falta el juego que se va a anotar.' }
+  const jugadores = (res && res.jugadores) || []
+  const puntosA = jugadores.filter((j) => j.equipo === 0).reduce((s, j) => s + (j.pts || 0), 0)
+  const puntosB = jugadores.filter((j) => j.equipo === 1).reduce((s, j) => s + (j.pts || 0), 0)
+
+  // 1) cerrar el partido del calendario con su marcador (proximo/vivo -> final)
+  const { error: e1 } = await anotarResultado(ctx.juegoId, {
+    puntosA, puntosB,
+    parcialesA: res.parcialesA || [],
+    parcialesB: res.parcialesB || [],
+  })
+  if (e1) return { error: e1 }
+
+  // 2) guardar las estadísticas por jugador (borra las viejas por si se re-anota)
+  await supabase.from('torneo_juego_jugadores').delete().eq('juego_id', ctx.juegoId)
+  const filas = jugadores
+    .filter((j) => ((j.pts || 0) + (j.reb || 0) + (j.ast || 0) + (j.rob || 0) + (j.tap || 0) + (j.per || 0)) > 0)
+    .map((j) => ({
+      torneo_id: ctx.torneoId,
+      juego_id: ctx.juegoId,
+      jornada: ctx.jornada ?? null,
+      jugador_id: j.jugadorId || null,
+      equipo_id: j.equipo === 0 ? ctx.equipoA_id : ctx.equipoB_id,
+      nombre: j.nombre || 'Jugador',
+      numero: j.numero ?? null,
+      puntos: j.pts || 0, rebotes: j.reb || 0, asistencias: j.ast || 0,
+      robos: j.rob || 0, tapones: j.tap || 0, perdidas: j.per || 0,
+      tc_int: j.tcInt || 0, tc_anot: j.tcAnot || 0,
+      tp_int: j.tpInt || 0, tp_anot: j.tpAnot || 0,
+      tl_int: j.tlInt || 0, tl_anot: j.tlAnot || 0,
+    }))
+  if (filas.length) {
+    const { error: e2 } = await supabase.from('torneo_juego_jugadores').insert(filas)
+    if (e2) return { error: e2 }
+  }
+  return { error: null }
 }
 
 // ---------- CALENDARIO: generar los partidos (fixtures) de un torneo ----------

@@ -1,6 +1,66 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../supabaseClient'
 import { cargarTorneoPublico, generarCalendario } from '../torneoData'
+import { invitar, buscarPersonas, agregarJugador, agregarDirectiva, leerDirectiva, cambiarPermiso, registrarBitacora, leerBitacora, leerCaja, agregarMovimiento, eliminarMovimiento } from '../torneos'
+
+// Etiquetas y orden de los roles de la directiva
+const ROL_DIR = { presidente: 'Presidente', vicepresidente: 'Vicepresidente', tesorero: 'Tesorero', secretario: 'Secretario', vocal: 'Vocal' }
+const RANK_DIR = { presidente: 0, vicepresidente: 1, tesorero: 2, secretario: 3, vocal: 4 }
+const ROLES_AGREGABLES = ['vicepresidente', 'tesorero', 'secretario', 'vocal']
+// Iconos del historial por tipo de acción [emoji, color]
+const ICONO_BITACORA = {
+  permiso_otorgado: ['🔓', '#34c759'], permiso_quitado: ['🔒', '#e8a93a'],
+  miembro_agregado: ['➕', '#6fb0ec'], juego_creado: ['🏀', '#e8b65a'],
+  marcador_cambiado: ['✏️', '#e8b65a'], invitacion_enviada: ['✉️', '#9b8cff'],
+  jugador_confirmado: ['✅', '#34c759'], calendario_generado: ['📅', '#6fb0ec'],
+  jugador_eliminado: ['➖', '#d24f4f'],
+  ingreso_registrado: ['💰', '#5dcaa5'], gasto_registrado: ['💸', '#f09595'], movimiento_borrado: ['🗑️', '#d24f4f'],
+}
+function tiempoRelativo(iso) {
+  if (!iso) return ''
+  const d = new Date(iso); const seg = Math.floor((Date.now() - d.getTime()) / 1000)
+  if (seg < 60) return 'hace un momento'
+  const min = Math.floor(seg / 60); if (min < 60) return `hace ${min} min`
+  const hr = Math.floor(min / 60); if (hr < 24) return `hace ${hr} h`
+  const dias = Math.floor(hr / 24); if (dias === 1) return 'ayer'
+  if (dias < 7) return `hace ${dias} días`
+  const meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
+  return `${d.getDate()} ${meses[d.getMonth()]}`
+}
+
+// Categorías de la caja del torneo
+const CAT_INGRESO = [
+  { id: 'inscripcion', t: 'Inscripción', emoji: '🧾' },
+  { id: 'patrocinador', t: 'Patrocinador', emoji: '🤝' },
+  { id: 'taquilla', t: 'Taquilla', emoji: '🎟️' },
+  { id: 'donacion', t: 'Donación', emoji: '🎁' },
+  { id: 'otro', t: 'Otro ingreso', emoji: '💵' },
+]
+const CAT_GASTO = [
+  { id: 'arbitros', t: 'Árbitros', emoji: '🟨' },
+  { id: 'premiacion', t: 'Premiación', emoji: '🏆' },
+  { id: 'logistica', t: 'Logística', emoji: '📦' },
+  { id: 'balones', t: 'Balones y equipo', emoji: '🏀' },
+  { id: 'comida', t: 'Comida', emoji: '🍽️' },
+  { id: 'transporte', t: 'Transporte', emoji: '🚐' },
+  { id: 'otro', t: 'Otro gasto', emoji: '🧾' },
+]
+function catInfo(tipo, id) {
+  const lista = tipo === 'ingreso' ? CAT_INGRESO : CAT_GASTO
+  return lista.find((c) => c.id === id) || { id: 'otro', t: tipo === 'ingreso' ? 'Otro ingreso' : 'Otro gasto', emoji: tipo === 'ingreso' ? '💵' : '🧾' }
+}
+function fmtRD(n) {
+  const num = Math.round((Number(n) || 0) * 100) / 100
+  const [ent, dec] = num.toFixed(2).split('.')
+  const conComas = ent.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+  return `RD$ ${conComas}${dec === '00' ? '' : '.' + dec}`
+}
+function fmtCorto(n) {
+  const num = Math.abs(Number(n) || 0)
+  if (num >= 1000000) return (Math.round(num / 100000) / 10).toString().replace(/\.0$/, '') + 'M'
+  if (num >= 1000) return Math.round(num / 1000) + 'K'
+  return String(Math.round(num))
+}
 
 // ============================================================================
 //  PANTALLA DE TORNEOS — Media Cancha
@@ -108,7 +168,7 @@ const EQUIPOS_DEMO = [
   },
 ]
 
-export default function PantallaTorneos({ esAdmin = false, onVolver, onAccion }) {
+export default function PantallaTorneos({ esAdmin = false, onVolver, onAccion, onVerPerfil, onAnotarJuego }) {
   const [tema] = useState(() => {
     const validos = ['dorado', 'azul', 'claro', 'larimar']
     if (typeof window !== 'undefined') {
@@ -117,8 +177,32 @@ export default function PantallaTorneos({ esAdmin = false, onVolver, onAccion })
     }
     return 'dorado'
   })
-  const T = TEMAS[tema] || TEMAS.dorado
+  // Identidad "transmisión" (azul-marino + dorado + tricolor), igual que la
+  // pantalla pública del torneo. Tema fijo: las dos pantallas del torneo son familia.
+  const BROADCAST = {
+    esClaro: false,
+    fondo: '#070d1d', panel: 'rgba(9,14,28,.97)', tarjeta: '#111a30',
+    acento: '#f5b82e', textoFuerte: '#f3f6fc', textoBody: '#e7edf6',
+    tenue: '#9aa6bd', muyTenue: '#6b7791',
+    boton: 'linear-gradient(180deg, #ffd66b, #f5b82e)', botonTexto: '#1a1205',
+    avatar: 'linear-gradient(150deg, #f5b82e, #c8842e)', avatarTexto: '#fff',
+    glow: 'rgba(245,184,46,.16)', borde: 'rgba(245,184,46,.22)', bordeSuave: 'rgba(255,255,255,.07)',
+  }
+  const T = BROADCAST
+  const card2 = '#0e1628'
   const font = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+  const fDisp = "'Anton', 'Arial Narrow', Impact, sans-serif"
+  const fCond = "'Oswald', 'Arial Narrow', 'Helvetica Neue', sans-serif"
+
+  // Cargar tipografía deportiva (Anton/Oswald) sin tocar otros archivos.
+  useEffect(() => {
+    const id = 'mc-fuentes-deportivas'
+    if (typeof document === 'undefined' || document.getElementById(id)) return
+    const l = document.createElement('link')
+    l.id = id; l.rel = 'stylesheet'
+    l.href = 'https://fonts.googleapis.com/css2?family=Anton&family=Oswald:wght@400;500;600;700&display=swap'
+    document.head.appendChild(l)
+  }, [])
 
   const PESTANAS_PUBLICAS = [
     { id: 'resumen', txt: 'Resumen', icono: '📊' },
@@ -179,6 +263,49 @@ export default function PantallaTorneos({ esAdmin = false, onVolver, onAccion })
   const [generando, setGenerando] = useState(false)
   const [vueltas, setVueltas] = useState(1)
   const [errorGen, setErrorGen] = useState(null)
+  // --- Invitar jugador (T-004) ---
+  const [invitarEquipo, setInvitarEquipo] = useState(null)
+  const [busqueda, setBusqueda] = useState('')
+  const [resultados, setResultados] = useState([])
+  const [buscando, setBuscando] = useState(false)
+  const [seleccionado, setSeleccionado] = useState(null)
+  const [rolInvitar, setRolInvitar] = useState('jugador')
+  const [mensajeInvitar, setMensajeInvitar] = useState('')
+  const [enviando, setEnviando] = useState(false)
+  const [toastInvitar, setToastInvitar] = useState(null)
+  const [eliminarJug, setEliminarJug] = useState(null)
+  const [eliminando, setEliminando] = useState(false)
+  const [confirmarJug, setConfirmarJug] = useState(null)
+  const [pinCodigo, setPinCodigo] = useState('')
+  const [confirmandoPin, setConfirmandoPin] = useState(false)
+  const [errorPin, setErrorPin] = useState('')
+  const [jugadorVer, setJugadorVer] = useState(null)
+  const refBusca = useRef(null)
+  // --- Directiva + historial ---
+  const [miId, setMiId] = useState(null)
+  const [directiva, setDirectiva] = useState([])
+  const [bitacora, setBitacora] = useState([])
+  const [togglingId, setTogglingId] = useState(null)
+  const [agregarDir, setAgregarDir] = useState(false)
+  const [dirBusqueda, setDirBusqueda] = useState('')
+  const [dirResultados, setDirResultados] = useState([])
+  const [dirBuscando, setDirBuscando] = useState(false)
+  const [dirSel, setDirSel] = useState(null)
+  const [dirRol, setDirRol] = useState('vocal')
+  const [dirEnviando, setDirEnviando] = useState(false)
+  const [dirToast, setDirToast] = useState(null)
+  const refDirBusca = useRef(null)
+  // --- Caja (ingresos/gastos) ---
+  const [caja, setCaja] = useState([])
+  const [cajaModal, setCajaModal] = useState(false)
+  const [cajaTipo, setCajaTipo] = useState('ingreso')
+  const [cajaCategoria, setCajaCategoria] = useState('inscripcion')
+  const [cajaConcepto, setCajaConcepto] = useState('')
+  const [cajaMonto, setCajaMonto] = useState('')
+  const [cajaGuardando, setCajaGuardando] = useState(false)
+  const [cajaToast, setCajaToast] = useState(null)
+  const [cajaEliminar, setCajaEliminar] = useState(null)
+  const [cajaEliminando, setCajaEliminando] = useState(false)
 
   useEffect(() => {
     let vivo = true
@@ -194,6 +321,13 @@ export default function PantallaTorneos({ esAdmin = false, onVolver, onAccion })
         if (!vivo) return
         setDatos(pub)
         setJugCount(count || 0)
+        const { data: u } = await supabase.auth.getUser()
+        const [{ directiva: dir }, { bitacora: bit }, { caja: cj }] = await Promise.all([leerDirectiva(t.id), leerBitacora(t.id, 20), leerCaja(t.id)])
+        if (!vivo) return
+        setMiId(u?.user?.id || null)
+        setDirectiva(dir)
+        setBitacora(bit)
+        setCaja(cj)
       } catch (e) {
         /* si algo falla, la pantalla se queda con la data de ejemplo */
       }
@@ -204,6 +338,235 @@ export default function PantallaTorneos({ esAdmin = false, onVolver, onAccion })
   // mapa equipo_id -> equipo (para sacar código y color)
   const eqPorId = {}
   ;(datos?.equipos || []).forEach((e) => { eqPorId[e.id] = e })
+
+  // ---------- DIRECTIVA: derivados + acciones ----------
+  const miRolDir = directiva.find((d) => d.perfil_id === miId)?.rol || (torneoRow && miId && miId === torneoRow.creador_id ? 'presidente' : null)
+  const miNombre = directiva.find((d) => d.perfil_id === miId)?.nombre || 'Alguien'
+  const puedeGestionar = miRolDir === 'presidente' || miRolDir === 'vicepresidente'
+
+  // ---------- CAJA: derivados + acciones ----------
+  const miFilaDir = directiva.find((d) => d.perfil_id === miId)
+  const puedeAdministrar = (miFilaDir && (miFilaDir.rol === 'presidente' || miFilaDir.rol === 'vicepresidente' || miFilaDir.puede_administrar)) || (torneoRow && miId && miId === torneoRow.creador_id)
+  const cajaIngresos = caja.filter((m) => m.tipo === 'ingreso').reduce((s, m) => s + Number(m.monto || 0), 0)
+  const cajaGastos = caja.filter((m) => m.tipo === 'gasto').reduce((s, m) => s + Number(m.monto || 0), 0)
+  const cajaBalance = cajaIngresos - cajaGastos
+
+  const recargarCaja = async () => {
+    if (!torneoRow) return
+    const [{ caja: cj }, { bitacora: bit }] = await Promise.all([leerCaja(torneoRow.id), leerBitacora(torneoRow.id, 20)])
+    setCaja(cj); setBitacora(bit)
+  }
+
+  const abrirCajaModal = (tipo) => {
+    setCajaTipo(tipo)
+    setCajaCategoria(tipo === 'ingreso' ? 'inscripcion' : 'arbitros')
+    setCajaConcepto(''); setCajaMonto('')
+    setCajaModal(true)
+  }
+
+  const guardarMovimiento = async () => {
+    if (cajaGuardando || !torneoRow) return
+    const monto = parseFloat(String(cajaMonto).replace(/,/g, ''))
+    if (!cajaConcepto.trim()) { setCajaToast('Escribe el concepto.'); return }
+    if (!monto || monto <= 0) { setCajaToast('Escribe un monto válido.'); return }
+    setCajaGuardando(true)
+    await agregarMovimiento(torneoRow.id, { tipo: cajaTipo, categoria: cajaCategoria, concepto: cajaConcepto.trim(), monto, registrado_nombre: miNombre })
+    await registrarBitacora(torneoRow.id, {
+      accion: cajaTipo === 'ingreso' ? 'ingreso_registrado' : 'gasto_registrado',
+      detalle: `Registró un ${cajaTipo} de ${fmtRD(monto)} · ${cajaConcepto.trim()}`,
+      objeto_tipo: 'caja', actor_nombre: miNombre,
+    })
+    await recargarCaja()
+    setCajaGuardando(false)
+    setCajaModal(false)
+    setCajaToast(cajaTipo === 'ingreso' ? 'Ingreso registrado.' : 'Gasto registrado.')
+  }
+
+  const borrarMovimiento = async () => {
+    if (!cajaEliminar || cajaEliminando || !torneoRow) return
+    setCajaEliminando(true)
+    const m = cajaEliminar
+    await eliminarMovimiento(m.id)
+    await registrarBitacora(torneoRow.id, {
+      accion: 'movimiento_borrado',
+      detalle: `Borró un ${m.tipo} de ${fmtRD(m.monto)} · ${m.concepto}`,
+      objeto_tipo: 'caja', actor_nombre: miNombre,
+    })
+    await recargarCaja()
+    setCajaEliminando(false)
+    setCajaEliminar(null)
+    setCajaToast('Movimiento borrado.')
+  }
+
+  const modalCaja = () => {
+    if (!cajaModal) return null
+    const inputBg = T.esClaro ? 'rgba(0,0,0,.04)' : 'rgba(255,255,255,.05)'
+    const cats = cajaTipo === 'ingreso' ? CAT_INGRESO : CAT_GASTO
+    const esIng = cajaTipo === 'ingreso'
+    return (
+      <div onClick={() => setCajaModal(false)} style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(0,0,0,.72)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+        <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 560, maxHeight: '90dvh', overflowY: 'auto', WebkitOverflowScrolling: 'touch', background: T.fondo, borderRadius: '20px 20px 0 0', border: `1px solid ${T.bordeSuave}` }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: `0.5px solid ${T.bordeSuave}`, position: 'sticky', top: 0, background: T.fondo, zIndex: 2 }}>
+            <div style={{ fontFamily: fCond, fontWeight: 700, fontSize: 17, textTransform: 'uppercase', letterSpacing: 0.3, color: T.textoFuerte }}>Registrar movimiento</div>
+            <button onClick={() => setCajaModal(false)} style={{ width: 32, height: 32, borderRadius: 9, border: `0.5px solid ${T.bordeSuave}`, background: T.tarjeta, color: T.textoFuerte, fontSize: 15, cursor: 'pointer' }}>✕</button>
+          </div>
+          <div style={{ padding: '14px 16px calc(env(safe-area-inset-bottom) + 18px)' }}>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+              {[['ingreso', 'Ingreso', '#5dcaa5'], ['gasto', 'Gasto', '#f09595']].map(([id, txt, col]) => {
+                const on = cajaTipo === id
+                return <button key={id} onClick={() => { setCajaTipo(id); setCajaCategoria(id === 'ingreso' ? 'inscripcion' : 'arbitros') }} style={{ flex: 1, border: on ? 'none' : `1px solid ${T.bordeSuave}`, borderRadius: 12, padding: 12, fontFamily: fCond, fontWeight: 700, fontSize: 14, letterSpacing: 0.4, textTransform: 'uppercase', cursor: 'pointer', background: on ? col : 'transparent', color: on ? '#08130f' : T.tenue }}>{txt}</button>
+              })}
+            </div>
+
+            <div style={{ fontFamily: fCond, fontWeight: 600, fontSize: 11, letterSpacing: 0.6, textTransform: 'uppercase', color: T.tenue, marginBottom: 8 }}>Categoría</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginBottom: 16 }}>
+              {cats.map((c) => {
+                const on = cajaCategoria === c.id
+                return <button key={c.id} onClick={() => setCajaCategoria(c.id)} style={{ border: on ? 'none' : `1px solid ${T.bordeSuave}`, borderRadius: 10, padding: '8px 12px', fontFamily: fCond, fontWeight: 700, fontSize: 12.5, letterSpacing: 0.2, cursor: 'pointer', background: on ? T.boton : 'transparent', color: on ? T.botonTexto : T.tenue }}>{c.emoji} {c.t}</button>
+              })}
+            </div>
+
+            <div style={{ fontFamily: fCond, fontWeight: 600, fontSize: 11, letterSpacing: 0.6, textTransform: 'uppercase', color: T.tenue, marginBottom: 8 }}>Monto (RD$)</div>
+            <input value={cajaMonto} onChange={(e) => setCajaMonto(e.target.value.replace(/[^\d.]/g, ''))} type="tel" inputMode="decimal" placeholder="0" style={{ width: '100%', boxSizing: 'border-box', border: `1px solid ${T.bordeSuave}`, borderRadius: 12, padding: '13px 14px', background: inputBg, color: esIng ? '#5dcaa5' : '#f09595', fontSize: 22, fontWeight: 800, fontFamily: fCond, outline: 'none', marginBottom: 16 }} />
+
+            <div style={{ fontFamily: fCond, fontWeight: 600, fontSize: 11, letterSpacing: 0.6, textTransform: 'uppercase', color: T.tenue, marginBottom: 8 }}>Concepto</div>
+            <input value={cajaConcepto} onChange={(e) => setCajaConcepto(e.target.value)} placeholder={esIng ? 'Ej: Inscripción equipo Tígueres' : 'Ej: Pago de árbitros jornada uno'} style={{ width: '100%', boxSizing: 'border-box', border: `1px solid ${T.bordeSuave}`, borderRadius: 12, padding: '12px 14px', background: inputBg, color: T.textoFuerte, fontSize: 15, outline: 'none' }} />
+
+            <button disabled={cajaGuardando} onClick={guardarMovimiento} style={{ width: '100%', marginTop: 18, border: 'none', borderRadius: 13, padding: 14, fontFamily: fCond, fontWeight: 700, fontSize: 15, letterSpacing: 0.6, textTransform: 'uppercase', cursor: cajaGuardando ? 'default' : 'pointer', background: cajaGuardando ? 'rgba(255,255,255,.08)' : T.boton, color: cajaGuardando ? T.muyTenue : T.botonTexto }}>{cajaGuardando ? 'Guardando…' : 'Guardar movimiento'}</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const modalEliminarCaja = () => {
+    if (!cajaEliminar) return null
+    const m = cajaEliminar
+    return (
+      <div onClick={() => !cajaEliminando && setCajaEliminar(null)} style={{ position: 'fixed', inset: 0, zIndex: 85, background: 'rgba(0,0,0,.72)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+        <div onClick={(e) => e.stopPropagation()} style={{ background: T.fondo, border: `1px solid ${T.borde}`, borderRadius: 18, width: '100%', maxWidth: 380, padding: 22, textAlign: 'center' }}>
+          <div style={{ fontSize: 38, marginBottom: 10 }}>🗑️</div>
+          <div style={{ fontFamily: fCond, fontWeight: 700, fontSize: 19, textTransform: 'uppercase', letterSpacing: 0.4, color: T.textoFuerte, marginBottom: 8 }}>¿Borrar movimiento?</div>
+          <div style={{ color: T.tenue, fontSize: 13.5, lineHeight: 1.5, marginBottom: 20 }}>Vas a borrar <b style={{ color: T.textoFuerte }}>{m.concepto}</b> ({m.tipo === 'ingreso' ? 'ingreso' : 'gasto'} de <b style={{ color: T.textoFuerte }}>{fmtRD(m.monto)}</b>). Queda en el historial que lo borraste.</div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button disabled={cajaEliminando} onClick={() => setCajaEliminar(null)} style={{ flex: 1, border: `1px solid ${T.bordeSuave}`, borderRadius: 12, padding: 13, fontFamily: fCond, fontWeight: 600, fontSize: 14, letterSpacing: 0.5, textTransform: 'uppercase', cursor: 'pointer', background: 'transparent', color: T.tenue }}>Cancelar</button>
+            <button disabled={cajaEliminando} onClick={borrarMovimiento} style={{ flex: 1, border: 'none', borderRadius: 12, padding: 13, fontFamily: fCond, fontWeight: 700, fontSize: 14, letterSpacing: 0.5, textTransform: 'uppercase', cursor: 'pointer', background: cajaEliminando ? 'rgba(210,79,79,.5)' : '#d24f4f', color: '#fff' }}>{cajaEliminando ? '…' : 'Borrar'}</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const recargarDir = async () => {
+    if (!torneoRow) return
+    const [{ directiva: dir }, { bitacora: bit }] = await Promise.all([leerDirectiva(torneoRow.id), leerBitacora(torneoRow.id, 20)])
+    setDirectiva(dir); setBitacora(bit)
+  }
+
+  const togglePermiso = async (m, valor) => {
+    if (!puedeGestionar || togglingId || !torneoRow) return
+    setTogglingId(m.id)
+    await cambiarPermiso(m.id, valor)
+    await registrarBitacora(torneoRow.id, {
+      accion: valor ? 'permiso_otorgado' : 'permiso_quitado',
+      detalle: `${valor ? 'Le dio' : 'Le quitó'} acceso de administración a ${m.nombre}`,
+      objeto_tipo: 'permiso', objeto_id: m.id, actor_nombre: miNombre,
+    })
+    await recargarDir()
+    setTogglingId(null)
+  }
+
+  const buscarDir = (texto) => {
+    setDirBusqueda(texto)
+    if (refDirBusca.current) clearTimeout(refDirBusca.current)
+    if (texto.trim().length < 2) { setDirResultados([]); return }
+    refDirBusca.current = setTimeout(async () => {
+      setDirBuscando(true)
+      const { personas } = await buscarPersonas(texto.trim())
+      setDirResultados(personas || [])
+      setDirBuscando(false)
+    }, 300)
+  }
+
+  const confirmarAgregarDir = async () => {
+    if (!dirSel || dirEnviando || !torneoRow) return
+    if (directiva.some((d) => d.perfil_id === dirSel.id)) { setDirToast('Esa persona ya está en la directiva.'); return }
+    setDirEnviando(true)
+    const nombre = `${dirSel.nombre || ''} ${dirSel.apellido || ''}`.trim() || 'Miembro'
+    await agregarDirectiva(torneoRow.id, { perfil_id: dirSel.id, nombre, rol: dirRol, estado: 'pendiente' })
+    await invitar(torneoRow.id, { invitado_id: dirSel.id, tipo: 'directiva', rol: dirRol })
+    await registrarBitacora(torneoRow.id, {
+      accion: 'miembro_agregado',
+      detalle: `Agregó a ${nombre} a la directiva como ${ROL_DIR[dirRol] || dirRol}`,
+      objeto_tipo: 'miembro', actor_nombre: miNombre,
+    })
+    await recargarDir()
+    setDirEnviando(false)
+    setAgregarDir(false); setDirSel(null); setDirBusqueda(''); setDirResultados([])
+    setDirToast('Listo. Le llegó la invitación para confirmar.')
+  }
+
+  const modalAgregarDir = () => {
+    if (!agregarDir) return null
+    const inputBg = T.esClaro ? 'rgba(0,0,0,.04)' : 'rgba(255,255,255,.05)'
+    return (
+      <div onClick={() => setAgregarDir(false)} style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(0,0,0,.72)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+        <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 560, maxHeight: '90dvh', overflowY: 'auto', WebkitOverflowScrolling: 'touch', background: T.fondo, borderRadius: '20px 20px 0 0', border: `1px solid ${T.bordeSuave}` }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: `0.5px solid ${T.bordeSuave}`, position: 'sticky', top: 0, background: T.fondo, zIndex: 2 }}>
+            <div>
+              <div style={{ fontFamily: fCond, fontWeight: 600, fontSize: 10.5, letterSpacing: 1, textTransform: 'uppercase', color: T.muyTenue }}>Agregar a la directiva</div>
+              <div style={{ fontFamily: fCond, fontWeight: 700, fontSize: 17, textTransform: 'uppercase', letterSpacing: 0.3, color: T.textoFuerte }}>Buscar persona</div>
+            </div>
+            <button onClick={() => setAgregarDir(false)} style={{ width: 32, height: 32, borderRadius: 9, border: `0.5px solid ${T.bordeSuave}`, background: T.tarjeta, color: T.textoFuerte, fontSize: 15, cursor: 'pointer' }}>✕</button>
+          </div>
+
+          <div style={{ padding: '14px 16px calc(env(safe-area-inset-bottom) + 18px)' }}>
+            <div style={{ fontFamily: fCond, fontWeight: 600, fontSize: 11, letterSpacing: 0.6, textTransform: 'uppercase', color: T.tenue, marginBottom: 8 }}>¿Qué rol tendrá?</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginBottom: 16 }}>
+              {ROLES_AGREGABLES.map((id) => {
+                const on = dirRol === id
+                return <button key={id} onClick={() => setDirRol(id)} style={{ border: on ? 'none' : `1px solid ${T.bordeSuave}`, borderRadius: 10, padding: '8px 13px', fontFamily: fCond, fontWeight: 700, fontSize: 12.5, letterSpacing: 0.3, textTransform: 'uppercase', cursor: 'pointer', background: on ? T.boton : 'transparent', color: on ? T.botonTexto : T.tenue }}>{ROL_DIR[id]}</button>
+              })}
+            </div>
+
+            {dirSel ? (
+              <div style={{ ...tarjeta, padding: 12, display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}>
+                {fotoOiniciales(dirSel, 42)}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ color: T.textoFuerte, fontSize: 14.5, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{`${dirSel.nombre || ''} ${dirSel.apellido || ''}`.trim()}</div>
+                  <div style={{ color: T.tenue, fontSize: 12 }}>{dirSel.codigo_unico ? `Código ${dirSel.codigo_unico}` : ''}{dirSel.municipio ? ` · ${dirSel.municipio}` : ''}</div>
+                </div>
+                <button onClick={() => { setDirSel(null); setDirBusqueda(''); setDirResultados([]) }} style={{ border: 'none', background: 'transparent', color: T.acento, fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>Cambiar</button>
+              </div>
+            ) : (
+              <>
+                <input value={dirBusqueda} onChange={(e) => buscarDir(e.target.value)} placeholder="Nombre o código único…" autoFocus style={{ width: '100%', boxSizing: 'border-box', border: `1px solid ${T.bordeSuave}`, borderRadius: 12, padding: '12px 14px', background: inputBg, color: T.textoFuerte, fontSize: 15, outline: 'none' }} />
+                {dirBuscando && <div style={{ color: T.tenue, fontSize: 12.5, padding: '10px 4px' }}>Buscando…</div>}
+                {dirResultados.length > 0 && (
+                  <div style={{ marginTop: 8 }}>
+                    {dirResultados.map((p) => {
+                      const ya = directiva.some((d) => d.perfil_id === p.id)
+                      return (
+                        <div key={p.id} onClick={() => { if (ya) return; setDirSel(p); setDirResultados([]) }} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 6px', borderBottom: `0.5px solid ${T.bordeSuave}`, cursor: ya ? 'default' : 'pointer', opacity: ya ? 0.5 : 1 }}>
+                          {fotoOiniciales(p, 38)}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ color: T.textoFuerte, fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{`${p.nombre || ''} ${p.apellido || ''}`.trim()}</div>
+                            <div style={{ color: T.muyTenue, fontSize: 11.5 }}>{p.codigo_unico ? `Código ${p.codigo_unico}` : ''}{ya ? ' · ya está' : ''}</div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </>
+            )}
+
+            <button disabled={!dirSel || dirEnviando} onClick={confirmarAgregarDir} style={{ width: '100%', marginTop: 18, border: 'none', borderRadius: 13, padding: 14, fontFamily: fCond, fontWeight: 700, fontSize: 15, letterSpacing: 0.6, textTransform: 'uppercase', cursor: (!dirSel || dirEnviando) ? 'default' : 'pointer', background: (!dirSel || dirEnviando) ? 'rgba(255,255,255,.08)' : T.boton, color: (!dirSel || dirEnviando) ? T.muyTenue : T.botonTexto }}>{dirEnviando ? 'Agregando…' : '＋ Agregar y avisar'}</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   const fechaCorta = (iso) => {
     if (!iso) return ''
@@ -265,16 +628,22 @@ export default function PantallaTorneos({ esAdmin = false, onVolver, onAccion })
     fase: j.jornada ? `Jornada ${j.jornada}` : '', lugar: '', cuando: fechaCorta(j.fecha), destacado: i === 0,
   })) : torneoRow ? [] : PROXIMOS_DEMO
 
-  const tarjeta = { background: T.tarjeta, border: `0.5px solid ${T.bordeSuave}`, borderRadius: 16, overflow: 'hidden' }
+  const tarjeta = { background: `linear-gradient(160deg, ${T.tarjeta}, ${card2})`, border: `0.5px solid ${T.bordeSuave}`, borderRadius: 16, overflow: 'hidden' }
   const tituloModulo = (txt, color) => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 11 }}>
-      <span style={{ width: 4, height: 16, background: color || T.acento, borderRadius: 2, display: 'inline-block' }} />
-      <span style={{ color: T.textoFuerte, fontSize: 15, fontWeight: 800 }}>{txt}</span>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 12, marginTop: 2 }}>
+      <span style={{ width: 4, height: 18, background: color || T.acento, borderRadius: 2, display: 'inline-block' }} />
+      <span style={{ fontFamily: fCond, color: T.textoFuerte, fontSize: 16, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase' }}>{txt}</span>
     </div>
   )
   const avatarEquipo = (cod, color, colorTexto, size) => {
-    const s = size || 22
-    return <span style={{ width: s, height: s, borderRadius: '50%', background: color, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: s * 0.4, color: colorTexto, fontWeight: 800, flexShrink: 0 }}>{cod}</span>
+    const s = size || 22; const r = Math.round(s * 0.26)
+    return <span style={{ width: s, height: s, borderRadius: r, background: `linear-gradient(155deg, ${color}, rgba(0,0,0,.5))`, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: fCond, fontSize: s * 0.42, color: '#fff', fontWeight: 700, letterSpacing: 0.3, flexShrink: 0, border: '1.5px solid rgba(255,255,255,.14)', boxShadow: '0 4px 12px rgba(0,0,0,.4)' }}>{cod}</span>
+  }
+  const fotoOiniciales = (p, size) => {
+    const s = size || 38
+    const ini = `${(p.nombre || '?')[0] || ''}${(p.apellido || '')[0] || ''}`.toUpperCase()
+    if (p.foto_url) return <img src={p.foto_url} alt="" style={{ width: s, height: s, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+    return <span style={{ width: s, height: s, borderRadius: '50%', background: T.avatar, color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: fCond, fontWeight: 700, fontSize: s * 0.4, flexShrink: 0 }}>{ini || '?'}</span>
   }
   const colorDe = (cod) => clasificacion.find((e) => e.cod === cod)?.color || T.avatar
   const colorTxtDe = (cod) => clasificacion.find((e) => e.cod === cod)?.colorTexto || '#fff'
@@ -285,12 +654,225 @@ export default function PantallaTorneos({ esAdmin = false, onVolver, onAccion })
     try {
       const { error } = await generarCalendario(torneoRow.id, datos?.equipos || [], torneoRow.formato || 'liga', { vueltas, reemplazar })
       if (error) { setErrorGen(error); setGenerando(false); return }
+      await registrarBitacora(torneoRow.id, { accion: 'calendario_generado', detalle: `Generó el calendario del torneo${reemplazar ? ' (lo reemplazó)' : ''}`, objeto_tipo: 'juego', actor_nombre: miNombre })
       setRecarga((r) => r + 1) // recarga el torneo ya con su calendario
     } catch (e) {
       setErrorGen('No se pudo generar el calendario.')
     } finally {
       setGenerando(false)
     }
+  }
+
+  const cerrarModalInvitar = () => { setInvitarEquipo(null); setBusqueda(''); setResultados([]); setSeleccionado(null); setRolInvitar('jugador'); setMensajeInvitar('') }
+
+  const alBuscar = (texto) => {
+    setBusqueda(texto); setSeleccionado(null)
+    if (refBusca.current) clearTimeout(refBusca.current)
+    if (texto.trim().length < 2) { setResultados([]); return }
+    refBusca.current = setTimeout(async () => {
+      setBuscando(true)
+      const { personas } = await buscarPersonas(texto.trim())
+      setResultados(personas || [])
+      setBuscando(false)
+    }, 320)
+  }
+
+  const enviarInvitacion = async () => {
+    if (!seleccionado || !invitarEquipo || !torneoRow || enviando) return
+    const yaEsta = (datos?.roster || []).some((r) => r.equipo_id === invitarEquipo.id && r.perfilId === seleccionado.id)
+    if (yaEsta) { setToastInvitar('Esa persona ya está en este equipo'); setTimeout(() => setToastInvitar(null), 3000); return }
+    setEnviando(true)
+    const nombreP = `${seleccionado.nombre || ''} ${seleccionado.apellido || ''}`.trim() || 'Jugador'
+    // 1) enviar la invitación PRIMERO. Si falla, no tocamos la plantilla (así no quedan repetidos).
+    const { error } = await invitar(torneoRow.id, { invitado_id: seleccionado.id, tipo: rolInvitar, equipo_id: invitarEquipo.id, mensaje: mensajeInvitar.trim() || null })
+    if (error) { setEnviando(false); setToastInvitar('No se pudo enviar: ' + error); setTimeout(() => setToastInvitar(null), 3500); return }
+    // 2) solo si la invitación salió, crear la fila pendiente en el roster (al aceptar pasa a confirmado)
+    await agregarJugador(torneoRow.id, invitarEquipo.id, { perfil_id: seleccionado.id, nombre: nombreP, es_capitan: rolInvitar === 'capitan', estado: 'pendiente' })
+    setEnviando(false)
+    await registrarBitacora(torneoRow.id, { accion: 'invitacion_enviada', detalle: `Invitó a ${nombreP} a ${invitarEquipo.nombre} como ${rolInvitar === 'capitan' ? 'capitán' : 'jugador'}`, objeto_tipo: 'invitacion', actor_nombre: miNombre })
+    setToastInvitar(`Invitación enviada a ${nombreP} 🏀`); setTimeout(() => setToastInvitar(null), 3500)
+    cerrarModalInvitar()
+    setRecarga((r) => r + 1)
+  }
+
+  const modalInvitar = () => {
+    if (!invitarEquipo) return null
+    const eq = invitarEquipo
+    const idsEnEquipo = new Set((datos?.roster || []).filter((r) => r.equipo_id === eq.id).map((r) => r.perfilId).filter(Boolean))
+    const inputBg = T.esClaro ? '#fff' : 'rgba(255,255,255,.05)'
+    const etiqueta = { fontFamily: fCond, fontWeight: 600, fontSize: 11, letterSpacing: 0.6, textTransform: 'uppercase', color: T.tenue, marginBottom: 8 }
+    return (
+      <div onClick={cerrarModalInvitar} style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(0,0,0,.72)', display: 'flex', alignItems: esAncho ? 'center' : 'flex-end', justifyContent: 'center', padding: esAncho ? 20 : 0 }}>
+        <div onClick={(e) => e.stopPropagation()} style={{ background: T.fondo, border: `1px solid ${T.borde}`, borderRadius: esAncho ? 20 : '20px 20px 0 0', width: '100%', maxWidth: 540, maxHeight: '90dvh', overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '14px 16px', borderBottom: `0.5px solid ${T.bordeSuave}`, position: 'sticky', top: 0, background: T.fondo, zIndex: 2 }}>
+            {avatarEquipo(eq.codigo || '??', eq.color || T.avatar, '#fff', 38)}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontFamily: fCond, fontWeight: 600, fontSize: 10.5, letterSpacing: 1, textTransform: 'uppercase', color: T.muyTenue }}>Invitar a</div>
+              <div style={{ fontFamily: fCond, fontWeight: 700, fontSize: 17, textTransform: 'uppercase', letterSpacing: 0.3, color: T.textoFuerte, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{eq.nombre}</div>
+            </div>
+            <button onClick={cerrarModalInvitar} style={{ width: 32, height: 32, borderRadius: 9, border: `0.5px solid ${T.bordeSuave}`, background: T.tarjeta, color: T.textoFuerte, fontSize: 15, cursor: 'pointer' }}>✕</button>
+          </div>
+
+          <div style={{ padding: 16 }}>
+            <div style={etiqueta}>¿Cómo lo invitas?</div>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 18 }}>
+              {[['jugador', '🏀 Jugador'], ['capitan', '© Capitán']].map(([id, txt]) => {
+                const on = rolInvitar === id
+                return <button key={id} onClick={() => setRolInvitar(id)} style={{ flex: 1, border: on ? 'none' : `1px solid ${T.bordeSuave}`, borderRadius: 11, padding: 11, fontFamily: fCond, fontWeight: 700, fontSize: 13.5, letterSpacing: 0.4, textTransform: 'uppercase', cursor: 'pointer', background: on ? T.boton : 'transparent', color: on ? T.botonTexto : T.tenue }}>{txt}</button>
+              })}
+            </div>
+
+            <div style={etiqueta}>Busca a la persona</div>
+            <input value={busqueda} onChange={(e) => alBuscar(e.target.value)} placeholder="Nombre o código único…" autoFocus style={{ width: '100%', boxSizing: 'border-box', border: `1px solid ${T.bordeSuave}`, borderRadius: 12, padding: '12px 14px', background: inputBg, color: T.textoFuerte, fontSize: 15, outline: 'none' }} />
+
+            {seleccionado ? (
+              <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 13, background: 'rgba(245,184,46,.13)', border: `1px solid ${T.borde}` }}>
+                {fotoOiniciales(seleccionado, 42)}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ color: T.textoFuerte, fontSize: 14.5, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{`${seleccionado.nombre || ''} ${seleccionado.apellido || ''}`.trim()}</div>
+                  <div style={{ color: T.muyTenue, fontSize: 11.5 }}>{seleccionado.codigo_unico ? '#' + seleccionado.codigo_unico : ''}{seleccionado.municipio ? ` · ${seleccionado.municipio}` : ''}</div>
+                </div>
+                <button onClick={() => setSeleccionado(null)} style={{ border: 'none', background: 'transparent', color: T.tenue, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Cambiar</button>
+              </div>
+            ) : (
+              <div style={{ marginTop: 10 }}>
+                {buscando && <div style={{ color: T.muyTenue, fontSize: 12.5, padding: '8px 2px' }}>Buscando…</div>}
+                {!buscando && busqueda.trim().length >= 2 && resultados.length === 0 && <div style={{ color: T.muyTenue, fontSize: 12.5, padding: '8px 2px', lineHeight: 1.5 }}>Nadie con ese nombre o código. La persona debe tener cuenta en Media Cancha.</div>}
+                {resultados.map((p) => {
+                  const ya = idsEnEquipo.has(p.id)
+                  return (
+                    <div key={p.id} onClick={() => { if (ya) return; setSeleccionado(p); setResultados([]) }} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 6px', borderBottom: `0.5px solid ${T.bordeSuave}`, cursor: ya ? 'default' : 'pointer', opacity: ya ? 0.55 : 1 }}>
+                      {fotoOiniciales(p, 38)}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ color: T.textoFuerte, fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{`${p.nombre || ''} ${p.apellido || ''}`.trim()}</div>
+                        <div style={{ color: T.muyTenue, fontSize: 11.5 }}>{p.codigo_unico ? '#' + p.codigo_unico : ''}{p.municipio ? ` · ${p.municipio}` : ''}</div>
+                      </div>
+                      <span style={{ color: ya ? T.muyTenue : T.acento, fontSize: 12.5, fontWeight: 700 }}>{ya ? 'Ya en el equipo' : 'Elegir'}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            <div style={{ ...etiqueta, margin: '18px 0 8px' }}>Mensaje (opcional)</div>
+            <textarea value={mensajeInvitar} onChange={(e) => setMensajeInvitar(e.target.value)} placeholder="Ej: Te queremos en el equipo para la Copa." rows={2} style={{ width: '100%', boxSizing: 'border-box', border: `1px solid ${T.bordeSuave}`, borderRadius: 12, padding: '11px 14px', background: inputBg, color: T.textoFuerte, fontSize: 14, outline: 'none', resize: 'none', fontFamily: font }} />
+
+            <button disabled={!seleccionado || enviando} onClick={enviarInvitacion} style={{ width: '100%', marginTop: 16, border: 'none', borderRadius: 13, padding: 14, fontFamily: fCond, fontWeight: 700, fontSize: 15, letterSpacing: 0.6, textTransform: 'uppercase', cursor: (!seleccionado || enviando) ? 'default' : 'pointer', background: (!seleccionado || enviando) ? 'rgba(255,255,255,.08)' : T.boton, color: (!seleccionado || enviando) ? T.muyTenue : T.botonTexto, boxShadow: (!seleccionado || enviando) ? 'none' : '0 8px 22px rgba(245,184,46,.26)' }}>{enviando ? 'Enviando…' : '✉️ Enviar invitación'}</button>
+            <div style={{ color: T.muyTenue, fontSize: 11, textAlign: 'center', marginTop: 10, lineHeight: 1.5, paddingBottom: 'calc(env(safe-area-inset-bottom) + 6px)' }}>La persona la verá en "Mis invitaciones" y al aceptar entra al equipo.</div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const eliminarJugador = async () => {
+    if (!eliminarJug || eliminando) return
+    const nombreEl = eliminarJug.nombre; const equipoEl = eliminarJug.equipoNombre
+    setEliminando(true)
+    const { error } = await supabase.from('torneo_jugadores').delete().eq('id', eliminarJug.jugador_id)
+    setEliminando(false)
+    if (error) { setEliminarJug(null); setToastInvitar('No se pudo eliminar: ' + error); setTimeout(() => setToastInvitar(null), 3500); return }
+    setEliminarJug(null); setToastInvitar('Jugador eliminado'); setTimeout(() => setToastInvitar(null), 3000)
+    if (torneoRow) await registrarBitacora(torneoRow.id, { accion: 'jugador_eliminado', detalle: `Sacó a ${nombreEl}${equipoEl ? ' de ' + equipoEl : ''}`, objeto_tipo: 'jugador', actor_nombre: miNombre })
+    setRecarga((r) => r + 1)
+  }
+
+  const modalEliminar = () => {
+    if (!eliminarJug) return null
+    const j = eliminarJug
+    return (
+      <div onClick={() => !eliminando && setEliminarJug(null)} style={{ position: 'fixed', inset: 0, zIndex: 85, background: 'rgba(0,0,0,.72)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+        <div onClick={(e) => e.stopPropagation()} style={{ background: T.fondo, border: `1px solid ${T.borde}`, borderRadius: 18, width: '100%', maxWidth: 380, padding: 22, textAlign: 'center' }}>
+          <div style={{ fontSize: 38, marginBottom: 10 }}>🗑️</div>
+          <div style={{ fontFamily: fCond, fontWeight: 700, fontSize: 19, textTransform: 'uppercase', letterSpacing: 0.4, color: T.textoFuerte, marginBottom: 8 }}>¿Eliminar jugador?</div>
+          <div style={{ color: T.tenue, fontSize: 13.5, lineHeight: 1.5, marginBottom: 20 }}>Vas a sacar a <b style={{ color: T.textoFuerte }}>{j.nombre}</b>{j.equipoNombre ? <> de <b style={{ color: T.textoFuerte }}>{j.equipoNombre}</b></> : null}. Lo puedes volver a invitar después.</div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button disabled={eliminando} onClick={() => setEliminarJug(null)} style={{ flex: 1, border: `1px solid ${T.bordeSuave}`, borderRadius: 12, padding: 13, fontFamily: fCond, fontWeight: 600, fontSize: 14, letterSpacing: 0.5, textTransform: 'uppercase', cursor: 'pointer', background: 'transparent', color: T.tenue }}>Cancelar</button>
+            <button disabled={eliminando} onClick={eliminarJugador} style={{ flex: 1, border: 'none', borderRadius: 12, padding: 13, fontFamily: fCond, fontWeight: 700, fontSize: 14, letterSpacing: 0.5, textTransform: 'uppercase', cursor: 'pointer', background: eliminando ? 'rgba(210,79,79,.5)' : '#d24f4f', color: '#fff' }}>{eliminando ? '…' : 'Eliminar'}</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const cerrarConfirmar = () => { setConfirmarJug(null); setPinCodigo(''); setErrorPin('') }
+
+  const confirmarConCodigo = async () => {
+    if (!confirmarJug || confirmandoPin) return
+    if (!/^[0-9]{4}$/.test(pinCodigo)) { setErrorPin('Escribe los cuatro dígitos.'); return }
+    setConfirmandoPin(true); setErrorPin('')
+    const { data, error } = await supabase.rpc('confirmar_jugador_con_codigo', { p_jugador_id: confirmarJug.jugador_id, p_pin: pinCodigo })
+    setConfirmandoPin(false)
+    if (error) { setErrorPin(error.message || 'No se pudo confirmar.'); return }
+    if (data === true) {
+      const nom = confirmarJug.nombre
+      cerrarConfirmar()
+      setToastInvitar('✓ ' + nom + ' confirmado'); setTimeout(() => setToastInvitar(null), 3000)
+      if (torneoRow) await registrarBitacora(torneoRow.id, { accion: 'jugador_confirmado', detalle: `Confirmó a ${nom} con su código`, objeto_tipo: 'jugador', actor_nombre: miNombre })
+      setRecarga((r) => r + 1)
+    } else {
+      setErrorPin('Código incorrecto. Inténtalo de nuevo.')
+    }
+  }
+
+  const modalConfirmar = () => {
+    if (!confirmarJug) return null
+    const j = confirmarJug
+    return (
+      <div onClick={() => !confirmandoPin && cerrarConfirmar()} style={{ position: 'fixed', inset: 0, zIndex: 85, background: 'rgba(0,0,0,.72)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+        <div onClick={(e) => e.stopPropagation()} style={{ background: T.fondo, border: `1px solid ${T.borde}`, borderRadius: 18, width: '100%', maxWidth: 380, padding: 22, textAlign: 'center' }}>
+          <div style={{ fontSize: 38, marginBottom: 10 }}>🔒</div>
+          <div style={{ fontFamily: fCond, fontWeight: 700, fontSize: 19, textTransform: 'uppercase', letterSpacing: 0.4, color: T.textoFuerte, marginBottom: 8 }}>Confirmar a {j.nombre}</div>
+          <div style={{ color: T.tenue, fontSize: 13.5, lineHeight: 1.5, marginBottom: 18 }}>Que <b style={{ color: T.textoFuerte }}>{j.nombre}</b> escriba aquí su código de jugador de cuatro dígitos para confirmar al instante.</div>
+          <input value={pinCodigo} onChange={(e) => { setPinCodigo(e.target.value.replace(/\D/g, '').slice(0, 4)); setErrorPin('') }} type="tel" inputMode="numeric" autoFocus maxLength={4} placeholder="••••" style={{ width: '100%', textAlign: 'center', fontFamily: fDisp, fontSize: 34, letterSpacing: 14, padding: '12px 0', borderRadius: 13, border: `1px solid ${errorPin ? 'rgba(226,75,74,.6)' : T.borde}`, background: T.esClaro ? 'rgba(0,0,0,.04)' : 'rgba(255,255,255,.05)', color: T.textoFuerte, outline: 'none', boxSizing: 'border-box' }} />
+          {errorPin && <div style={{ fontSize: 12.5, color: '#e0563f', marginTop: 9 }}>{errorPin}</div>}
+          <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
+            <button disabled={confirmandoPin} onClick={cerrarConfirmar} style={{ flex: 1, border: `1px solid ${T.bordeSuave}`, borderRadius: 12, padding: 13, fontFamily: fCond, fontWeight: 600, fontSize: 14, letterSpacing: 0.5, textTransform: 'uppercase', cursor: 'pointer', background: 'transparent', color: T.tenue }}>Cancelar</button>
+            <button disabled={confirmandoPin || pinCodigo.length !== 4} onClick={confirmarConCodigo} style={{ flex: 1, border: 'none', borderRadius: 12, padding: 13, fontFamily: fCond, fontWeight: 700, fontSize: 14, letterSpacing: 0.5, textTransform: 'uppercase', cursor: (confirmandoPin || pinCodigo.length !== 4) ? 'default' : 'pointer', background: (confirmandoPin || pinCodigo.length !== 4) ? 'rgba(52,199,89,.4)' : '#2bb14e', color: '#fff' }}>{confirmandoPin ? '…' : 'Confirmar'}</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const modalJugador = () => {
+    if (!jugadorVer) return null
+    const j = jugadorVer
+    const tiles = [{ l: 'Puntos', s: '—' }, { l: 'Rebotes', s: '—' }, { l: 'Asistencias', s: '—' }]
+    return (
+      <div onClick={() => setJugadorVer(null)} style={{ position: 'fixed', inset: 0, zIndex: 85, background: 'rgba(0,0,0,.72)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+        <div onClick={(e) => e.stopPropagation()} style={{ background: T.fondo, border: `1px solid ${T.borde}`, borderRadius: 18, width: '100%', maxWidth: 400, padding: 22 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 13, marginBottom: 18 }}>
+            {j.foto ? (
+              <img src={j.foto} alt="" style={{ width: 52, height: 52, borderRadius: 13, objectFit: 'cover', flexShrink: 0, border: `1px solid ${T.bordeSuave}` }} />
+            ) : (
+              <div style={{ width: 52, height: 52, borderRadius: 13, background: T.esClaro ? 'rgba(0,0,0,.05)' : 'rgba(255,255,255,.06)', color: T.acento, fontFamily: fDisp, fontSize: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{j.numero != null ? j.numero : (j.nombre || '?').trim().charAt(0).toUpperCase()}</div>
+            )}
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontFamily: fDisp, fontSize: 22, color: T.textoFuerte, lineHeight: 1.05, textTransform: 'uppercase' }}>{j.nombre}</div>
+              <div style={{ color: T.tenue, fontSize: 12.5, marginTop: 3 }}>{[j.posicion, j.equipoNombre].filter(Boolean).join(' · ') || '—'}{j.esCapitan ? ' · Capitán' : ''}</div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+            {tiles.map((t, i) => (
+              <div key={i} style={{ flex: 1, background: T.tarjeta, border: `0.5px solid ${T.bordeSuave}`, borderRadius: 13, padding: '12px 6px', textAlign: 'center' }}>
+                <div style={{ fontFamily: fDisp, fontSize: 26, color: T.textoFuerte, lineHeight: 1 }}>{t.s}</div>
+                <div style={{ fontFamily: fCond, fontSize: 10, color: T.muyTenue, textTransform: 'uppercase', letterSpacing: 0.4, marginTop: 6 }}>{t.l}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: 9, alignItems: 'flex-start', background: 'rgba(245,184,46,.08)', border: '1px solid rgba(245,184,46,.22)', borderRadius: 12, padding: '11px 13px', marginBottom: 18 }}>
+            <span style={{ fontSize: 15, flexShrink: 0 }}>📊</span>
+            <div style={{ color: T.tenue, fontSize: 12.5, lineHeight: 1.45 }}>Todavía no ha jugado. Sus estadísticas se van a ir llenando solas según juegue en el torneo.</div>
+          </div>
+          {j.perfilId ? (
+            <button onClick={() => { const id = j.perfilId; setJugadorVer(null); onVerPerfil && onVerPerfil(id) }} style={{ width: '100%', border: 'none', borderRadius: 13, padding: 14, fontFamily: fCond, fontWeight: 700, fontSize: 14.5, letterSpacing: 0.6, textTransform: 'uppercase', cursor: 'pointer', background: T.boton, color: T.botonTexto, boxShadow: '0 8px 22px rgba(245,184,46,.26)' }}>Ver perfil y seguir</button>
+          ) : (
+            <div style={{ textAlign: 'center', color: T.muyTenue, fontSize: 12, padding: '4px 0 2px' }}>Este jugador todavía no tiene cuenta en Media Cancha.</div>
+          )}
+        </div>
+      </div>
+    )
   }
 
   const Contenido = () => {
@@ -301,7 +883,7 @@ export default function PantallaTorneos({ esAdmin = false, onVolver, onAccion })
             {[{ l: 'Equipos', v: tj.equipos }, { l: 'Jugadores', v: tj.jugadores }, { l: 'Juegos', v: `${tj.juegosJugados}/${tj.juegosTotal}` }, { l: 'Fase', v: tj.fase, chico: true }].map((m, i) => (
               <div key={i} style={{ background: T.tarjeta, border: `0.5px solid ${T.bordeSuave}`, borderRadius: 13, padding: '12px 14px' }}>
                 <div style={{ color: T.tenue, fontSize: 11, marginBottom: 5 }}>{m.l}</div>
-                <div style={{ color: T.textoFuerte, fontSize: m.chico ? 15 : 22, fontWeight: 800 }}>{m.v}</div>
+                <div style={{ fontFamily: fDisp, color: T.textoFuerte, fontSize: m.chico ? 17 : 26, lineHeight: 1.05 }}>{m.v}</div>
               </div>
             ))}
           </div>
@@ -320,7 +902,7 @@ export default function PantallaTorneos({ esAdmin = false, onVolver, onAccion })
                     <span style={{ color: T.textoBody, fontSize: 11 }}>Lobos</span>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1 }}>
-                    <span style={{ color: T.textoFuerte, fontSize: 24, fontWeight: 800 }}>58 — 52</span>
+                    <span style={{ fontFamily: fDisp, color: T.textoFuerte, fontSize: 30, lineHeight: 1 }}>58 — 52</span>
                     <span style={{ color: T.tenue, fontSize: 11 }}>3er cuarto</span>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, flex: 1 }}>
@@ -370,18 +952,18 @@ export default function PantallaTorneos({ esAdmin = false, onVolver, onAccion })
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                   <div>
                     <div style={{ color: T.tenue, fontSize: 11 }}>Balance del fondo</div>
-                    <div style={{ color: T.acento, fontSize: 24, fontWeight: 800 }}>RD$ 84,000</div>
+                    <div style={{ fontFamily: fDisp, color: cajaBalance >= 0 ? T.acento : '#f09595', fontSize: 26, lineHeight: 1 }}>{fmtRD(cajaBalance)}</div>
                   </div>
                   <span style={{ color: T.tenue, fontSize: 16 }}>›</span>
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <div style={{ flex: 1, background: T.esClaro ? 'rgba(93,202,165,.08)' : 'rgba(93,202,165,.1)', borderRadius: 10, padding: '8px 10px' }}>
                     <div style={{ color: T.muyTenue, fontSize: 10 }}>Ingresos</div>
-                    <div style={{ color: '#5dcaa5', fontSize: 14, fontWeight: 800 }}>+126K</div>
+                    <div style={{ color: '#5dcaa5', fontSize: 14, fontWeight: 800 }}>+{fmtCorto(cajaIngresos)}</div>
                   </div>
                   <div style={{ flex: 1, background: T.esClaro ? 'rgba(240,149,149,.08)' : 'rgba(240,149,149,.1)', borderRadius: 10, padding: '8px 10px' }}>
                     <div style={{ color: T.muyTenue, fontSize: 10 }}>Gastos</div>
-                    <div style={{ color: '#f09595', fontSize: 14, fontWeight: 800 }}>−42K</div>
+                    <div style={{ color: '#f09595', fontSize: 14, fontWeight: 800 }}>−{fmtCorto(cajaGastos)}</div>
                   </div>
                 </div>
               </div>
@@ -529,13 +1111,22 @@ export default function PantallaTorneos({ esAdmin = false, onVolver, onAccion })
                 {abierto && (
                   <div style={{ borderTop: `0.5px solid ${T.bordeSuave}`, padding: '6px 13px 12px' }}>
                     {jugs.length === 0 && <div style={{ color: T.muyTenue, fontSize: 12, padding: '8px 2px' }}>Este equipo no tiene jugadores todavía.</div>}
+                    {esAdmin && (
+                      <button onClick={() => { cerrarModalInvitar(); setInvitarEquipo(eq) }} style={{ width: '100%', marginTop: 6, marginBottom: jugs.length ? 6 : 2, border: `1px dashed ${T.borde}`, borderRadius: 11, padding: 11, fontFamily: fCond, fontWeight: 700, fontSize: 13, letterSpacing: 0.5, textTransform: 'uppercase', cursor: 'pointer', background: 'rgba(245,184,46,.1)', color: T.acento }}>＋ Invitar jugador</button>
+                    )}
                     {jugs.map((j) => (
                       <div key={j.jugador_id} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '9px 0', borderBottom: `0.5px solid ${T.bordeSuave}` }}>
-                        <span style={{ width: 30, height: 30, borderRadius: 8, background: T.esClaro ? 'rgba(0,0,0,.05)' : 'rgba(255,255,255,.06)', color: T.acento, fontSize: 13, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{j.numero ?? '–'}</span>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ color: T.textoFuerte, fontSize: 13.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>{j.nombre}{j.esCapitan && <span style={{ fontSize: 9, fontWeight: 800, color: T.botonTexto, background: T.boton, padding: '1px 6px', borderRadius: 8 }}>CAP</span>}{j.esRefuerzo && <span style={{ fontSize: 9, fontWeight: 800, color: T.tenue, border: `1px solid ${T.bordeSuave}`, padding: '1px 6px', borderRadius: 8 }}>R</span>}</div>
-                          <div style={{ color: T.muyTenue, fontSize: 11.5 }}>{j.posicion || '—'}</div>
+                        {j.foto ? (
+                          <img src={j.foto} alt="" style={{ width: 34, height: 34, borderRadius: 9, objectFit: 'cover', flexShrink: 0, border: `1px solid ${T.bordeSuave}` }} />
+                        ) : (
+                          <span style={{ width: 34, height: 34, borderRadius: 9, background: T.esClaro ? 'rgba(0,0,0,.05)' : 'rgba(255,255,255,.06)', color: T.acento, fontSize: 13, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{j.numero ?? '–'}</span>
+                        )}
+                        <div onClick={() => setJugadorVer({ ...j, equipoNombre: eq.nombre })} style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}>
+                          <div style={{ color: T.textoFuerte, fontSize: 13.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>{j.nombre}{j.esCapitan && <span style={{ fontSize: 9, fontWeight: 800, color: T.botonTexto, background: T.boton, padding: '1px 6px', borderRadius: 8 }}>CAP</span>}{j.esRefuerzo && <span style={{ fontSize: 9, fontWeight: 800, color: T.tenue, border: `1px solid ${T.bordeSuave}`, padding: '1px 6px', borderRadius: 8 }}>R</span>}{j.estado === 'pendiente' && <span style={{ fontSize: 9, fontWeight: 800, color: '#e8a33a', background: 'rgba(232,163,58,.15)', border: '1px solid rgba(232,163,58,.4)', padding: '1px 6px', borderRadius: 8, letterSpacing: 0.3 }}>POR CONFIRMAR</span>}{j.estado === 'confirmado' && <span style={{ fontSize: 9, fontWeight: 800, color: '#34c759', background: 'rgba(52,199,89,.13)', border: '1px solid rgba(52,199,89,.4)', padding: '1px 6px', borderRadius: 8, letterSpacing: 0.3 }}>CONFIRMADO</span>}</div>
+                          <div style={{ color: T.muyTenue, fontSize: 11.5 }}>{j.numero != null ? `#${j.numero} · ` : ''}{j.posicion || 'Jugador'}</div>
                         </div>
+                        {esAdmin && j.estado === 'pendiente' && <button onClick={() => { setPinCodigo(''); setErrorPin(''); setConfirmarJug({ ...j, equipoNombre: eq.nombre }) }} style={{ flexShrink: 0, height: 30, padding: '0 10px', borderRadius: 8, border: '1px solid rgba(52,199,89,.45)', background: 'rgba(52,199,89,.12)', color: '#34c759', fontFamily: fCond, fontWeight: 700, fontSize: 11, letterSpacing: 0.3, textTransform: 'uppercase', cursor: 'pointer', display: 'flex', alignItems: 'center', whiteSpace: 'nowrap' }} title="Confirmar con código">Confirmar</button>}
+                        {esAdmin && <button onClick={() => setEliminarJug({ ...j, equipoNombre: eq.nombre })} style={{ flexShrink: 0, width: 30, height: 30, borderRadius: 8, border: `1px solid ${T.bordeSuave}`, background: 'transparent', color: T.tenue, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Eliminar jugador">🗑️</button>}
                       </div>
                     ))}
                   </div>
@@ -564,13 +1155,21 @@ export default function PantallaTorneos({ esAdmin = false, onVolver, onAccion })
           ) : (
             <div style={tarjeta}>
               {todos.map((j) => (
-                <div key={j.jugador_id} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '11px 14px', borderBottom: `0.5px solid ${T.bordeSuave}` }}>
-                  {avatarEquipo(j.cod, j.color, '#fff', 32)}
+                <div key={j.jugador_id} onClick={() => setJugadorVer(j)} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '11px 14px', borderBottom: `0.5px solid ${T.bordeSuave}`, cursor: 'pointer' }}>
+                  {j.foto ? (
+                    <div style={{ position: 'relative', width: 34, height: 34, flexShrink: 0 }}>
+                      <img src={j.foto} alt="" style={{ width: 34, height: 34, borderRadius: 9, objectFit: 'cover', border: `1px solid ${T.bordeSuave}`, display: 'block' }} />
+                      <span style={{ position: 'absolute', right: -5, bottom: -5, minWidth: 18, height: 15, padding: '0 3px', borderRadius: 5, background: j.color || T.avatar, color: '#fff', fontFamily: fCond, fontSize: 8.5, fontWeight: 800, letterSpacing: 0.2, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1.5px solid ${T.tarjeta}`, boxSizing: 'border-box', lineHeight: 1 }}>{j.cod}</span>
+                    </div>
+                  ) : (
+                    avatarEquipo(j.cod, j.color, '#fff', 32)
+                  )}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ color: T.textoFuerte, fontSize: 13.5, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>#{j.numero ?? '–'} {j.nombre}</div>
-                    <div style={{ color: T.muyTenue, fontSize: 11.5 }}>{j.posicion || '—'} · {j.equipoNombre}</div>
+                    <div style={{ color: T.muyTenue, fontSize: 11.5 }}>{j.posicion ? `${j.posicion} · ` : ''}{j.equipoNombre}</div>
                   </div>
                   {j.esCapitan && <span style={{ fontSize: 9, fontWeight: 800, color: T.botonTexto, background: T.boton, padding: '2px 7px', borderRadius: 8 }}>CAP</span>}
+                  <span style={{ color: T.tenue, fontSize: 16, flexShrink: 0 }}>›</span>
                 </div>
               ))}
             </div>
@@ -582,45 +1181,132 @@ export default function PantallaTorneos({ esAdmin = false, onVolver, onAccion })
     if (pestana === 'contabilidad') {
       return (
         <>
-          {tituloModulo('Contabilidad del torneo', '#5dcaa5')}
-          <div style={{ ...tarjeta, padding: 16, marginBottom: 16, textAlign: 'center', background: `${T.acento}10`, border: `0.5px solid ${T.borde}` }}>
-            <div style={{ color: T.tenue, fontSize: 12, marginBottom: 5 }}>Balance del fondo</div>
-            <div style={{ color: T.acento, fontSize: 32, fontWeight: 800 }}>RD$ 84,000</div>
+          {tituloModulo('Caja del torneo', '#5dcaa5')}
+          <div style={{ ...tarjeta, padding: 18, marginBottom: 12, textAlign: 'center', background: `linear-gradient(160deg, ${cajaBalance >= 0 ? 'rgba(93,202,165,.12)' : 'rgba(240,149,149,.12)'}, ${T.tarjeta})`, border: `0.5px solid ${T.borde}` }}>
+            <div style={{ color: T.tenue, fontSize: 11, marginBottom: 5, textTransform: 'uppercase', letterSpacing: 0.6, fontFamily: fCond, fontWeight: 600 }}>Balance del fondo</div>
+            <div style={{ color: cajaBalance >= 0 ? '#5dcaa5' : '#f09595', fontSize: 32, fontWeight: 800, fontFamily: fCond, letterSpacing: 0.3 }}>{fmtRD(cajaBalance)}</div>
           </div>
-          <div style={tarjeta}>
-            {[{ l: 'Inscripciones (16 equipos)', v: '+ RD$ 96,000', verde: true }, { l: 'Patrocinadores', v: '+ RD$ 30,000', verde: true }, { l: 'Pago de árbitros', v: '− RD$ 24,000', verde: false }, { l: 'Premiación + logística', v: '− RD$ 18,000', verde: false }].map((m, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '13px 14px', borderBottom: `0.5px solid ${T.bordeSuave}`, fontSize: 13.5 }}>
-                <span style={{ color: T.textoBody }}>{m.l}</span>
-                <span style={{ color: m.verde ? '#5dcaa5' : '#f09595', fontWeight: 700 }}>{m.v}</span>
-              </div>
-            ))}
+          <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+            <div style={{ flex: 1, ...tarjeta, padding: 13, textAlign: 'center' }}>
+              <div style={{ color: T.muyTenue, fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5, fontFamily: fCond, fontWeight: 600 }}>Ingresos</div>
+              <div style={{ color: '#5dcaa5', fontSize: 17, fontWeight: 800, fontFamily: fCond, marginTop: 3 }}>{fmtRD(cajaIngresos)}</div>
+            </div>
+            <div style={{ flex: 1, ...tarjeta, padding: 13, textAlign: 'center' }}>
+              <div style={{ color: T.muyTenue, fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5, fontFamily: fCond, fontWeight: 600 }}>Gastos</div>
+              <div style={{ color: '#f09595', fontSize: 17, fontWeight: 800, fontFamily: fCond, marginTop: 3 }}>{fmtRD(cajaGastos)}</div>
+            </div>
           </div>
-          <button onClick={() => alert('Agregar movimiento (demo)')} style={{ width: '100%', marginTop: 14, border: `1px solid ${T.borde}`, borderRadius: 13, padding: 13, background: 'transparent', color: T.acento, fontSize: 13.5, fontWeight: 700, cursor: 'pointer' }}>＋ Registrar movimiento</button>
+
+          {puedeAdministrar && (
+            <button onClick={() => abrirCajaModal('ingreso')} style={{ width: '100%', marginBottom: 16, border: 'none', borderRadius: 13, padding: 13, fontFamily: fCond, fontWeight: 700, fontSize: 14, letterSpacing: 0.5, textTransform: 'uppercase', cursor: 'pointer', background: T.boton, color: T.botonTexto }}>＋ Registrar movimiento</button>
+          )}
+
+          {caja.length === 0 ? (
+            <div style={{ ...tarjeta, padding: 18, textAlign: 'center', color: T.tenue, fontSize: 13 }}>Todavía no hay movimientos.{puedeAdministrar ? ' Registra el primero arriba.' : ''}</div>
+          ) : (
+            <div style={tarjeta}>
+              {caja.map((m, i) => {
+                const ci = catInfo(m.tipo, m.categoria)
+                const esIng = m.tipo === 'ingreso'
+                return (
+                  <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '12px 14px', borderTop: i > 0 ? `0.5px solid ${T.bordeSuave}` : 'none' }}>
+                    <span style={{ flexShrink: 0, width: 34, height: 34, borderRadius: 10, background: esIng ? 'rgba(93,202,165,.16)' : 'rgba(240,149,149,.16)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>{ci.emoji}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ color: T.textoFuerte, fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.concepto}</div>
+                      <div style={{ color: T.muyTenue, fontSize: 11, marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ci.t}{m.registrado_nombre ? ' · ' + m.registrado_nombre : ''} · {tiempoRelativo(m.creado_en)}</div>
+                    </div>
+                    <span style={{ flexShrink: 0, color: esIng ? '#5dcaa5' : '#f09595', fontWeight: 700, fontFamily: fCond, fontSize: 14 }}>{esIng ? '+ ' : '− '}{fmtRD(m.monto)}</span>
+                    {puedeAdministrar && <button onClick={() => setCajaEliminar(m)} style={{ flexShrink: 0, border: 'none', background: 'transparent', color: T.muyTenue, fontSize: 15, cursor: 'pointer', padding: '2px 2px' }}>🗑️</button>}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {cajaToast && (
+            <div onClick={() => setCajaToast(null)} style={{ position: 'fixed', left: 16, right: 16, bottom: 'calc(env(safe-area-inset-bottom) + 18px)', zIndex: 90, background: T.textoFuerte, color: T.fondo, padding: '12px 16px', borderRadius: 12, fontSize: 13, fontWeight: 600, textAlign: 'center', boxShadow: '0 10px 30px rgba(0,0,0,.4)' }}>{cajaToast}</div>
+          )}
         </>
       )
     }
 
     if (pestana === 'directiva') {
-      const DIR = [
-        { rol: 'Presidente', nombre: 'Vladimir Mercado', cod: 'VM' },
-        { rol: 'Vicepresidente', nombre: 'Joel Brito', cod: 'JB' },
-        { rol: 'Tesorero', nombre: 'Héctor Tavárez', cod: 'HT' },
-        { rol: 'Vocal', nombre: 'Pedro Julio', cod: 'PJ' },
-      ]
+      const miembros = [...directiva].sort((a, b) => (RANK_DIR[a.rol] ?? 9) - (RANK_DIR[b.rol] ?? 9))
+      const esOficial = (rol) => rol === 'presidente' || rol === 'vicepresidente'
       return (
         <>
           {tituloModulo('Directiva del torneo', '#6fb0ec')}
-          {DIR.map((d, i) => (
-            <div key={i} style={{ ...tarjeta, padding: 13, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ width: 44, height: 44, borderRadius: '50%', background: T.avatar, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.avatarTexto, fontWeight: 800, fontSize: 14, flexShrink: 0 }}>{d.cod}</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ color: T.textoFuerte, fontSize: 14.5, fontWeight: 700 }}>{d.nombre}</div>
-                <div style={{ color: T.acento, fontSize: 12, fontWeight: 600 }}>{d.rol}</div>
+          <div style={{ color: T.tenue, fontSize: 12, marginTop: -4, marginBottom: 14, lineHeight: 1.5 }}>
+            El presidente y el vicepresidente administran todo. A los demás miembros, el presidente o el vice les pueden dar acceso con el switch.
+          </div>
+
+          {miembros.length === 0 ? (
+            <div style={{ ...tarjeta, padding: 18, textAlign: 'center', color: T.tenue, fontSize: 13 }}>Todavía no hay directiva.</div>
+          ) : miembros.map((m) => {
+            const oficial = esOficial(m.rol)
+            const tieneAcceso = oficial || m.puede_administrar
+            const yo = m.perfil_id && m.perfil_id === miId
+            return (
+              <div key={m.id} style={{ ...tarjeta, padding: 13, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 12 }}>
+                {m.foto ? (
+                  <img src={m.foto} alt="" style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, border: `1px solid ${T.bordeSuave}` }} />
+                ) : (
+                  <span style={{ width: 44, height: 44, borderRadius: '50%', background: T.avatar, color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: fCond, fontWeight: 700, fontSize: 16, flexShrink: 0 }}>{(m.nombre || '?').trim().split(/\s+/).slice(0, 2).map((w) => w[0] || '').join('').toUpperCase() || '?'}</span>
+                )}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ color: T.textoFuerte, fontSize: 14.5, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.nombre}{yo ? <span style={{ color: T.tenue, fontWeight: 600 }}> · tú</span> : null}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3 }}>
+                    <span style={{ color: T.acento, fontSize: 12, fontWeight: 600 }}>{ROL_DIR[m.rol] || m.rol}</span>
+                    {!oficial && (m.estado === 'pendiente'
+                      ? <span style={{ fontSize: 9, fontWeight: 800, color: '#e8a93a', background: 'rgba(232,169,58,.14)', padding: '2px 7px', borderRadius: 6, letterSpacing: 0.3 }}>POR CONFIRMAR</span>
+                      : <span style={{ fontSize: 9, fontWeight: 800, color: '#34c759', background: 'rgba(52,199,89,.14)', padding: '2px 7px', borderRadius: 6, letterSpacing: 0.3 }}>EN LA DIRECTIVA</span>)}
+                  </div>
+                </div>
+                {oficial ? (
+                  <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 800, color: T.acento, background: 'rgba(245,184,46,.12)', border: `1px solid ${T.borde}`, padding: '5px 9px', borderRadius: 8, letterSpacing: 0.3 }}>ACCESO TOTAL</span>
+                ) : (
+                  <button
+                    onClick={() => togglePermiso(m, !m.puede_administrar)}
+                    disabled={!puedeGestionar || togglingId === m.id}
+                    title={tieneAcceso ? 'Puede administrar' : 'Sin acceso'}
+                    style={{ flexShrink: 0, position: 'relative', width: 46, height: 27, borderRadius: 999, border: 'none', cursor: puedeGestionar ? 'pointer' : 'default', background: tieneAcceso ? '#34c759' : T.bordeSuave, opacity: togglingId === m.id ? 0.5 : 1, transition: 'background .2s', padding: 0 }}>
+                    <span style={{ position: 'absolute', top: 3, left: tieneAcceso ? 22 : 3, width: 21, height: 21, borderRadius: '50%', background: '#fff', transition: 'left .2s', boxShadow: '0 1px 3px rgba(0,0,0,.4)' }} />
+                  </button>
+                )}
               </div>
-              <span style={{ color: T.tenue, fontSize: 18 }}>⋯</span>
-            </div>
-          ))}
-          <button onClick={() => alert('Agregar miembro (demo)')} style={{ width: '100%', marginTop: 4, border: `1px solid ${T.borde}`, borderRadius: 13, padding: 13, background: 'transparent', color: T.acento, fontSize: 13.5, fontWeight: 700, cursor: 'pointer' }}>＋ Agregar a la directiva</button>
+            )
+          })}
+
+          {puedeGestionar && (
+            <button onClick={() => { setAgregarDir(true); setDirSel(null); setDirBusqueda(''); setDirResultados([]); setDirRol('vocal') }} style={{ width: '100%', marginTop: 4, border: `1px solid ${T.borde}`, borderRadius: 13, padding: 13, background: 'transparent', color: T.acento, fontSize: 13.5, fontWeight: 700, cursor: 'pointer' }}>＋ Agregar a la directiva</button>
+          )}
+
+          <div style={{ marginTop: 26 }}>
+            {tituloModulo('Historial', '#9b8cff')}
+            <div style={{ color: T.tenue, fontSize: 12, marginTop: -4, marginBottom: 12 }}>Quién hizo qué, y cuándo. No se puede borrar.</div>
+            {bitacora.length === 0 ? (
+              <div style={{ ...tarjeta, padding: 16, textAlign: 'center', color: T.tenue, fontSize: 12.5 }}>Todavía no hay movimientos registrados.</div>
+            ) : (
+              <div style={tarjeta}>
+                {bitacora.map((b, i) => {
+                  const ico = ICONO_BITACORA[b.accion] || ['•', '#8a93a6']
+                  return (
+                    <div key={b.id} style={{ display: 'flex', gap: 11, padding: '11px 14px', borderTop: i > 0 ? `0.5px solid ${T.bordeSuave}` : 'none' }}>
+                      <span style={{ flexShrink: 0, width: 30, height: 30, borderRadius: 9, background: ico[1] + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>{ico[0]}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ color: T.textoBody, fontSize: 13, lineHeight: 1.4 }}>{b.detalle || b.accion}</div>
+                        <div style={{ color: T.muyTenue, fontSize: 11, marginTop: 2 }}>{b.actor_nombre ? b.actor_nombre + ' · ' : ''}{tiempoRelativo(b.creado_en)}</div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {dirToast && (
+            <div onClick={() => setDirToast(null)} style={{ position: 'fixed', left: 16, right: 16, bottom: 'calc(env(safe-area-inset-bottom) + 18px)', zIndex: 90, background: T.textoFuerte, color: T.fondo, padding: '12px 16px', borderRadius: 12, fontSize: 13, fontWeight: 600, textAlign: 'center', boxShadow: '0 10px 30px rgba(0,0,0,.4)' }}>{dirToast}</div>
+          )}
         </>
       )
     }
@@ -703,25 +1389,36 @@ export default function PantallaTorneos({ esAdmin = false, onVolver, onAccion })
                       const vivo = j.estado === 'vivo'
                       const ganoA = fin && j.puntosA > j.puntosB
                       const ganoB = fin && j.puntosB > j.puntosA
+                      const ultimo = i === porJornada[jn].length - 1
+                      const puedeAnotar = !fin && esAdmin && onAnotarJuego
                       return (
-                        <div key={j.id || i} style={{ display: 'flex', alignItems: 'center', padding: '11px 14px', borderBottom: i < porJornada[jn].length - 1 ? `0.5px solid ${T.bordeSuave}` : 'none', gap: 10 }}>
-                          <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-                            {avatarEquipo(codEq(j.equipoA_id), colorEq(j.equipoA_id), '#fff', 26)}
-                            <span style={{ color: ganoA ? T.textoFuerte : T.textoBody, fontSize: 13, fontWeight: ganoA ? 800 : 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nombreEq(j.equipoA_id)}</span>
+                        <div key={j.id || i} style={{ borderBottom: !ultimo ? `0.5px solid ${T.bordeSuave}` : 'none' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', padding: puedeAnotar ? '11px 14px 7px' : '11px 14px', gap: 10 }}>
+                            <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                              {avatarEquipo(codEq(j.equipoA_id), colorEq(j.equipoA_id), '#fff', 26)}
+                              <span style={{ color: ganoA ? T.textoFuerte : T.textoBody, fontSize: 13, fontWeight: ganoA ? 800 : 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nombreEq(j.equipoA_id)}</span>
+                            </div>
+                            <div style={{ flexShrink: 0, textAlign: 'center', minWidth: 54 }}>
+                              {fin ? (
+                                <span style={{ color: T.textoFuerte, fontSize: 15, fontWeight: 800 }}>{j.puntosA}-{j.puntosB}</span>
+                              ) : vivo ? (
+                                <span style={{ color: '#f09595', fontSize: 10, fontWeight: 800 }}>● VIVO</span>
+                              ) : (
+                                <span style={{ color: T.muyTenue, fontSize: 11 }}>vs</span>
+                              )}
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
+                              <span style={{ color: ganoB ? T.textoFuerte : T.textoBody, fontSize: 13, fontWeight: ganoB ? 800 : 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textAlign: 'right' }}>{nombreEq(j.equipoB_id)}</span>
+                              {avatarEquipo(codEq(j.equipoB_id), colorEq(j.equipoB_id), '#fff', 26)}
+                            </div>
                           </div>
-                          <div style={{ flexShrink: 0, textAlign: 'center', minWidth: 54 }}>
-                            {fin ? (
-                              <span style={{ color: T.textoFuerte, fontSize: 15, fontWeight: 800 }}>{j.puntosA}-{j.puntosB}</span>
-                            ) : vivo ? (
-                              <span style={{ color: '#f09595', fontSize: 10, fontWeight: 800 }}>● VIVO</span>
-                            ) : (
-                              <span style={{ color: T.muyTenue, fontSize: 11 }}>vs</span>
-                            )}
-                          </div>
-                          <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
-                            <span style={{ color: ganoB ? T.textoFuerte : T.textoBody, fontSize: 13, fontWeight: ganoB ? 800 : 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textAlign: 'right' }}>{nombreEq(j.equipoB_id)}</span>
-                            {avatarEquipo(codEq(j.equipoB_id), colorEq(j.equipoB_id), '#fff', 26)}
-                          </div>
+                          {puedeAnotar && (
+                            <div style={{ padding: '0 14px 10px' }}>
+                              <button onClick={() => onAnotarJuego({ id: j.id, torneoId: torneoRow.id, jornada: j.jornada, equipoA_id: j.equipoA_id, equipoB_id: j.equipoB_id, nombreA: nombreEq(j.equipoA_id), nombreB: nombreEq(j.equipoB_id) })} style={{ width: '100%', border: `1px solid ${vivo ? '#f09595' : T.borde}`, borderRadius: 10, padding: '8px', background: vivo ? 'rgba(240,149,149,.10)' : 'transparent', color: vivo ? '#f09595' : T.acento, fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>
+                                {vivo ? '● Continuar anotando' : '✎ Anotar este juego'}
+                              </button>
+                            </div>
+                          )}
                         </div>
                       )
                     })}
@@ -766,11 +1463,12 @@ export default function PantallaTorneos({ esAdmin = false, onVolver, onAccion })
 
       {/* HEADER FIJO */}
       <div style={{ position: 'relative', zIndex: 3, flexShrink: 0, paddingTop: 'env(safe-area-inset-top)', background: T.panel, borderBottom: `0.5px solid ${T.borde}`, backdropFilter: 'blur(14px)' }}>
+        <div style={{ height: 4, display: 'flex', maxWidth: maxAncho, margin: '0 auto' }}><i style={{ flex: 1, background: '#1b3a8c' }} /><i style={{ flex: 1, background: '#fff' }} /><i style={{ flex: 1, background: '#ce1126' }} /></div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '8px 12px', maxWidth: maxAncho, margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
           <button onClick={() => onVolver && onVolver()} style={{ flexShrink: 0, width: 40, height: 40, borderRadius: 12, border: 'none', background: T.esClaro ? 'rgba(0,0,0,.05)' : 'rgba(255,255,255,.06)', color: T.textoFuerte, fontSize: 22, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>‹</button>
-          <div style={{ width: 42, height: 42, borderRadius: 11, background: T.boton, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 21, flexShrink: 0 }}>{tj.emoji}</div>
+          <div style={{ width: 42, height: 42, borderRadius: 11, background: T.boton, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 21, flexShrink: 0, overflow: 'hidden' }}>{torneoRow?.logo_url ? <img src={torneoRow.logo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : tj.emoji}</div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ color: T.textoFuerte, fontSize: 16, fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tj.nombre}</div>
+            <div style={{ fontFamily: fCond, color: T.textoFuerte, fontSize: 18, fontWeight: 700, letterSpacing: 0.3, textTransform: 'uppercase', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tj.nombre}</div>
             <div style={{ color: T.tenue, fontSize: 11.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tj.subtitulo} · {tj.lugar}</div>
           </div>
           {esAdmin && (
@@ -788,7 +1486,7 @@ export default function PantallaTorneos({ esAdmin = false, onVolver, onAccion })
             const activa = p.id === pestana
             const esModAdmin = PESTANAS_ADMIN.some((x) => x.id === p.id)
             return (
-              <button key={p.id} onClick={() => setPestana(p.id)} style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 5, padding: '8px 14px', borderRadius: 20, border: activa ? 'none' : `0.5px solid ${esModAdmin ? T.borde : T.bordeSuave}`, background: activa ? T.boton : (esModAdmin ? `${T.acento}10` : (T.esClaro ? 'rgba(255,255,255,.5)' : 'rgba(255,255,255,.04)')), color: activa ? T.botonTexto : (esModAdmin ? T.acento : T.tenue), fontSize: 13, fontWeight: activa ? 800 : 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+              <button key={p.id} onClick={() => setPestana(p.id)} style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 5, padding: '8px 14px', borderRadius: 20, border: activa ? 'none' : `0.5px solid ${esModAdmin ? T.borde : T.bordeSuave}`, background: activa ? T.boton : (esModAdmin ? `${T.acento}10` : (T.esClaro ? 'rgba(255,255,255,.5)' : 'rgba(255,255,255,.04)')), color: activa ? T.botonTexto : (esModAdmin ? T.acento : T.tenue), fontFamily: fCond, fontSize: 13, fontWeight: activa ? 700 : 600, letterSpacing: 0.4, textTransform: 'uppercase', cursor: 'pointer', whiteSpace: 'nowrap' }}>
                 <span style={{ fontSize: 13 }}>{p.icono}</span>{p.txt}
               </button>
             )
@@ -803,6 +1501,17 @@ export default function PantallaTorneos({ esAdmin = false, onVolver, onAccion })
           {Contenido()}
         </div>
       </div>
+
+      {modalInvitar()}
+      {modalEliminar()}
+      {modalConfirmar()}
+      {modalJugador()}
+      {modalAgregarDir()}
+      {modalCaja()}
+      {modalEliminarCaja()}
+      {toastInvitar && (
+        <div style={{ position: 'fixed', left: '50%', bottom: 'calc(env(safe-area-inset-bottom) + 22px)', transform: 'translateX(-50%)', zIndex: 90, background: T.tarjeta, border: `1px solid ${T.borde}`, borderRadius: 14, padding: '12px 20px', color: T.textoFuerte, fontSize: 13.5, fontWeight: 600, boxShadow: '0 12px 30px rgba(0,0,0,.5)', maxWidth: '88%', textAlign: 'center' }}>{toastInvitar}</div>
+      )}
     </div>
   )
 }
