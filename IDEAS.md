@@ -730,6 +730,25 @@ Hecho en: logo de torneo, foto de perfil (forma círculo). Falta enchufar en: eq
 
 ---
 
+### 3.8 CENTRO DE RANKINGS — el producto principal
+
+**LA VISIÓN (definida por Vladimir, jun 2026):** el **Ranking General es la joya y el producto principal.** La NBA y la LNB cualquiera las baja de internet — son vitrina y referencia de alto nivel. El ranking que sale de NUESTRA materia prima (los torneos del baloncesto dominicano de barrio) **no lo tiene nadie más en el mundo.** Cuando exista el General, se presenta como el ranking PRINCIPAL; NBA y LNB quedan como referencia.
+
+**ESTADO ACTUAL — ✅ HECHO (jun 2026):** vista de Rankings dentro de `PantallaPublica`, se abre con el botón ★ de la barra inferior (ya NO va a la pantalla NBA completa). Tres pestañas: **NBA / LNB / General**. Reusa los componentes que ya existían: `RankingsNBA` (data real de `nba_stats_temporada` + rating "ADN MC") y `RankingsLNB` (data real de `lnb_lideres`). General = cartel "Próximamente". El ★ se pone dorado cuando está activo; la casa 🏠 (Inicio) regresa al feed.
+
+**R-001 — Ranking General (MC) · `PENDIENTE` · PRIORIDAD ALTA (es el producto)**
+El ranking que junta TODOS los torneos y ligas de Media Cancha. Sale de los juegos anotados → depende de que la anotación del torneo escriba en las tablas (ver T-013). Se presenta como el ranking principal de la app.
+
+**R-002 — Torneos élite certificados · `PENDIENTE`**
+El organizador puede tener un torneo **certificado como élite**, y un torneo élite **cuenta más** para el Ranking General. Crea una rueda que se alimenta sola: mejores torneos → mejor data → ranking más creíble → más jugadores quieren entrar → más organizadores buscan el sello. El sello tiene valor.
+
+**R-003 — Jugador certificado / perfil dorado · `PENDIENTE`**
+Estatus visible: un **perfil dorado verificado** que marca al jugador como de **más alto nivel** (ej. "alto nivel de República Dominicana"). La gente persigue estatus. A futuro: emparejar a los jugadores inscritos con su data de la NBA/ligas y darles un certificado/badge especial.
+
+**🔒 CANDADO DE CREDIBILIDAD (lo más importante):** todo esto se sostiene en que la certificación sea **creíble**. El día que se certifique un torneo (o jugador) que no lo merece, **se cae la confianza del ranking entero.** Los criterios de qué hace élite a un torneo y certificado a un jugador hay que definirlos con cuidado ANTES de lanzar la certificación.
+
+---
+
 ## 4. REGISTRO DE LO YA CONSTRUIDO  (`HECHO`)
 *Esto es "qué hemos incorporado". Cuando una idea de arriba se construye, se anota aquí.*
 
@@ -855,3 +874,32 @@ Hecho en: logo de torneo, foto de perfil (forma círculo). Falta enchufar en: eq
 **Respetar siempre los chequeos:** template oficial (1.3), safe-area (1.15), preservación — no borrar lo que sirve (1.17), grants de tablas nuevas (2.8).
 
 ---
+---
+
+## SESIÓN — jun 26, 2026 · Pulido de la Pantalla Pública (iOS) + Rankings
+
+**Lo que se hizo y subió (commit `5649239`):**
+1. **Barra superior que se esconde al leer** — al subir el contenido se esconde, al bajar reaparece. Método de raíz (tras 4 rondas con Gemini): la barra flota fija arriba y se esconde con `transform: translateY` (corre en GPU, **no** reajusta el layout). El primer intento usaba `margin-top` (reflow) y se "alocaba" por un bucle de scroll que se retroalimentaba.
+2. **Botón Inicio = casa dorada** (sin texto), sube al tope con animación cuadro por cuadro (rAF). El salto seco `scrollTop=0` y el `behavior:'smooth'` los ignora WKWebView; la animación rAF sí pega.
+3. **Estructura iOS anti-glitch del armazón:** raíz con coordenadas absolutas (NO flex), área de scroll con `position:absolute` y `bottom` clavado al alto MEDIDO de la barra inferior, `contain:'content'`, `translate3d(0,0,0)` + `backface-visibility:hidden` en el contenido, `overscroll-behavior:'none'`. La barra inferior dejó de flotar (`position:fixed`) y pasó a estar **clavada abajo** (`position:absolute bottom:0`); así el rebote de iOS frena justo encima y no glitchea.
+4. **Torneos populares con DATA REAL** (`leerTorneos`): se quitaron los 3 torneos demo; aparece el torneo de verdad (Copa Jícome), tocarlo abre `torneoPublico`.
+5. **Inicio más limpio:** solo historias + techado + destacados + torneos reales. Se quitó la sección Rankings del feed.
+6. **Vista de Rankings** (ver 3.8): botón ★ → pestañas NBA/LNB/General.
+
+**LA CAUSA REAL del glitch del final (lección):** eran DOS cosas juntas — (a) el componente pesado `RankingsNBA` al final de un scroll largo, y (b) **doble scroll anidado** (el `#root` global tiene su propio `-webkit-overflow-scrolling:touch` + el scroll interno de la pantalla). Al quitar Rankings del fondo, el glitch desapareció. En móvil ahora se apaga el scroll del `#root` mientras esta pantalla está montada (se restaura al salir).
+
+**LECCIONES iOS / WKWebView (candado — NO repetir):**
+- `padding` directo en un contenedor con `-webkit-overflow-scrolling:touch` **recorta/distorsiona el fondo** al rebotar. Mover el espacio a un `<div>` espaciador interno.
+- `scrollTo({behavior:'smooth'})` en un div con overflow **se ignora en silencio** en WKWebView. Usar `scrollTop` directo o animación rAF.
+- **Dos scrolls con inercia, uno dentro del otro, glitchean.** Un solo dueño del scroll.
+- Un **componente pesado al final** de un scroll largo glitchea el rebote inferior.
+- Una **alerta nativa (`alert()`) de relleno contamina el WebView** al cerrarse (la pantalla "se va para atrás"). Toda acción de la barra que NO esté conectada en el `onAccion` del móvil cae en el `alert` de `App.jsx` (línea ~393). Conectar las acciones o no llamarlas.
+
+**PRÓXIMO PASO (acordado):** arrancar el torneo DE VERDAD por el **paso 1 de T-013: capitanes + invitaciones (T-004)** — meter jugadores a los equipos. Sin nómina real, la tabla de puntuación y los rankings de jugadores no tienen de dónde salir. El plan completo del torneo (7 pasos) está en **T-013**.
+
+**PENDIENTES NUEVOS (mencionados por Vladimir, fuera de T-013):**
+- **Crear la Liga** — ACLARAR qué significa: ¿que la gente cree sus propias ligas (formato liga larga, distinto al torneo de copa)? Definir antes de construir.
+- **Historias / videos** — sistema para que la gente suba fotos y videos a las historias del inicio.
+- **Por-torneo:** que cada torneo abra el SUYO (hoy abre el más reciente).
+- **Cerrar inscripción** (el organizador cierra la nómina y arranca formal) + **notificaciones** (te invitan a un equipo, tu juego está en vivo, salió un resultado).
+- **Tabla de puntuación:** quitar la entrada de anotar de la PÚBLICA y que la tabla se llene desde el lado del organizador y se transmita a la pública (esto es el paso 2 de T-013, ya documentado).
