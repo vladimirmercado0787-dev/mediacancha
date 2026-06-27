@@ -111,7 +111,7 @@ export default function PantallaRegistro({ onListo, onIrLogin, onVolver }) {
   }
 
   const [modo, setModo] = useState(null)
-  const [f, setF] = useState({ nombre: '', apellido: '', correo: '', clave: '', clave2: '', sexo: '', fechaNac: '', pais: 'rd', provincia: '', municipio: '', pies: '', pulgadas: '', posiciones: [], pin: '', pin2: '' })
+  const [f, setF] = useState({ nombre: '', apellido: '', apodo: '', correo: '', clave: '', clave2: '', sexo: '', fechaNac: '', pais: 'rd', provincia: '', municipio: '', pies: '', pulgadas: '', posiciones: [], pin: '', pin2: '' })
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState('')
   const [ok, setOk] = useState(false)
@@ -173,6 +173,7 @@ export default function PantallaRegistro({ onListo, onIrLogin, onVolver }) {
       const nombreProvincia = paisActual.datos[f.provincia]?.provincia || f.provincia
       const perfil = {
         id: userId, nombre: f.nombre.trim(), apellido: f.apellido.trim() || null,
+        apodo: f.apodo.trim() || null,
         pais: paisActual.nombre, modo,
         sexo: f.sexo, fecha_nacimiento: f.fechaNac,
         provincia: nombreProvincia, municipio: f.municipio || null,
@@ -295,6 +296,11 @@ export default function PantallaRegistro({ onListo, onIrLogin, onVolver }) {
           <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
             <div style={{ flex: 1 }}><label style={label}>Nombre *</label><input style={inputStyle} value={f.nombre} onChange={(e) => set('nombre', e.target.value)} placeholder="Ej: Brayan" /></div>
             <div style={{ flex: 1 }}><label style={label}>Apellido</label><input style={inputStyle} value={f.apellido} onChange={(e) => set('apellido', e.target.value)} placeholder="Ej: Tavárez" /></div>
+          </div>
+
+          <div style={{ marginBottom: 14 }}>
+            <label style={label}>Apodo</label>
+            <input style={inputStyle} value={f.apodo} onChange={(e) => set('apodo', e.target.value)} placeholder='Como te conocen en la cancha. Ej: "El Tigre"' maxLength={24} />
           </div>
 
           <div style={{ marginBottom: 14 }}><label style={label}>Correo *</label><input style={inputStyle} type="email" value={f.correo} onChange={(e) => set('correo', e.target.value)} placeholder="tucorreo@ejemplo.com" autoCapitalize="none" /></div>

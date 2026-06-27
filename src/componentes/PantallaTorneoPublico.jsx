@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../supabaseClient'
 import { cargarTorneoPublico } from '../torneoData'
+import { sigoTorneo, contarSeguidoresTorneo, alternarSeguirTorneo } from '../torneos'
 
 // ============================================================================
 //  PANTALLA PÚBLICA DEL TORNEO (vista de fanáticos) — Media Cancha · T-012
@@ -39,6 +40,8 @@ export default function PantallaTorneoPublico({ torneoId = null, onVolver, onVer
   const [cargando, setCargando] = useState(true)
   const [ancho, setAncho] = useState(typeof window !== 'undefined' ? window.innerWidth : 390)
   const [siguiendo, setSiguiendo] = useState(false)
+  const [seguidoresCount, setSeguidoresCount] = useState(0)
+  const [procesandoSeguir, setProcesandoSeguir] = useState(false)
   const refMomentos = useRef(null)
   const [miId, setMiId] = useState(null)
 
@@ -64,6 +67,25 @@ export default function PantallaTorneoPublico({ torneoId = null, onVolver, onVer
 
   useEffect(() => { supabase.auth.getUser().then(({ data }) => setMiId(data?.user?.id || null)) }, [])
 
+  // Seguir / dejar de seguir el torneo (se guarda de verdad)
+  const onSeguir = async () => {
+    if (procesandoSeguir || !torneoRow) return
+    setProcesandoSeguir(true)
+    const previo = siguiendo
+    // Respuesta optimista para que se sienta inmediato
+    setSiguiendo(!previo)
+    setSeguidoresCount((n) => Math.max(0, n + (previo ? -1 : 1)))
+    const r = await alternarSeguirTorneo(torneoRow.id)
+    if (r.error) {
+      // Si falló, revertir
+      setSiguiendo(previo)
+      setSeguidoresCount((n) => Math.max(0, n + (previo ? 1 : -1)))
+    } else {
+      setSiguiendo(r.siguiendo)
+    }
+    setProcesandoSeguir(false)
+  }
+
   useEffect(() => {
     const y = window.scrollY
     document.body.style.position = 'fixed'; document.body.style.top = `-${y}px`
@@ -77,7 +99,7 @@ export default function PantallaTorneoPublico({ torneoId = null, onVolver, onVer
 
   useEffect(() => {
     let vivo = true
-    ;(async () => {
+    const cargar = async (primera) => {
       try {
         let t = null
         if (torneoId) {
@@ -87,15 +109,23 @@ export default function PantallaTorneoPublico({ torneoId = null, onVolver, onVer
           const { data } = await supabase.from('torneos').select('*').order('creado_en', { ascending: false }).limit(1)
           t = (data || [])[0]
         }
-        if (!t || !vivo) { if (vivo) setCargando(false); return }
+        if (!t || !vivo) { if (vivo && primera) setCargando(false); return }
         setTorneoRow(t)
+        if (primera) {
+          // Lee el estado real de "seguir" para que no se reinicie al volver a entrar
+          sigoTorneo(t.id).then((s) => { if (vivo) setSiguiendo(s) })
+          contarSeguidoresTorneo(t.id).then((n) => { if (vivo) setSeguidoresCount(n) })
+        }
         const pub = await cargarTorneoPublico(t.id, t.estadisticas)
         const { count } = await supabase.from('torneo_jugadores').select('id', { count: 'exact', head: true }).eq('torneo_id', t.id)
         if (!vivo) return
-        setDatos(pub); setJugCount(count || 0); setCargando(false)
-      } catch (e) { if (vivo) setCargando(false) }
-    })()
-    return () => { vivo = false }
+        setDatos(pub); setJugCount(count || 0); if (primera) setCargando(false)
+      } catch (e) { if (vivo && primera) setCargando(false) }
+    }
+    cargar(true)
+    // Refresco automático: el marcador en vivo sube solo cada doce segundos.
+    const id = setInterval(() => cargar(false), 12000)
+    return () => { vivo = false; clearInterval(id) }
   }, [torneoId])
 
   // ---------- DATOS DERIVADOS ----------
@@ -799,9 +829,7 @@ export default function PantallaTorneoPublico({ torneoId = null, onVolver, onVer
         <div style={{ maxWidth: maxAncho, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px' }}>
           <button onClick={onVolver} style={{ display: 'flex', alignItems: 'center', gap: 6, border: 'none', background: 'transparent', color: C.tenue, fontSize: 14, fontWeight: 600, cursor: 'pointer', minWidth: 70 }}>‹ Volver</button>
           <span style={{ fontFamily: fCond, fontWeight: 700, fontSize: 12, letterSpacing: 2, textTransform: 'uppercase', color: C.oro }}>Media Cancha</span>
-          {onAnotar && torneoRow ? (
-            <button onClick={() => onAnotar(torneoRow.id)} style={{ minWidth: 70, textAlign: 'right', border: 'none', background: 'transparent', color: C.oro, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>✎ Anotar</button>
-          ) : <span style={{ minWidth: 70 }} />}
+          <span style={{ minWidth: 70 }} />
         </div>
       </div>
 
@@ -850,9 +878,14 @@ export default function PantallaTorneoPublico({ torneoId = null, onVolver, onVer
 
             {/* ACCIONES */}
             <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
-              <button onClick={() => setSiguiendo((s) => !s)} style={{ flex: 1, border: siguiendo ? `1px solid ${C.borde}` : 'none', borderRadius: 13, padding: 13, fontFamily: fCond, fontWeight: 600, fontSize: 14, letterSpacing: 0.6, textTransform: 'uppercase', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: siguiendo ? 'rgba(245,184,46,.10)' : `linear-gradient(180deg, ${C.oroClaro}, ${C.oro})`, color: siguiendo ? C.oro : '#1a1205', boxShadow: siguiendo ? 'none' : '0 8px 22px rgba(245,184,46,.26)' }}>{siguiendo ? '✓ Siguiendo' : '＋ Seguir'}</button>
+              <button onClick={onSeguir} disabled={procesandoSeguir} style={{ flex: 1, border: siguiendo ? `1px solid ${C.borde}` : 'none', borderRadius: 13, padding: 13, fontFamily: fCond, fontWeight: 600, fontSize: 14, letterSpacing: 0.6, textTransform: 'uppercase', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: siguiendo ? 'rgba(245,184,46,.10)' : `linear-gradient(180deg, ${C.oroClaro}, ${C.oro})`, color: siguiendo ? C.oro : '#1a1205', boxShadow: siguiendo ? 'none' : '0 8px 22px rgba(245,184,46,.26)' }}>{siguiendo ? '✓ Siguiendo' : '＋ Seguir'}</button>
               <button onClick={compartir} style={{ flex: 1, border: `1px solid ${C.bordeSuave}`, borderRadius: 13, padding: 13, fontFamily: fCond, fontWeight: 600, fontSize: 14, letterSpacing: 0.6, textTransform: 'uppercase', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: 'rgba(255,255,255,.05)', color: C.txt }}>↗ Compartir</button>
             </div>
+            {seguidoresCount > 0 && (
+              <div style={{ textAlign: 'center', marginTop: 10, fontSize: 12.5, color: C.tenue }}>
+                <b style={{ color: C.txt, fontWeight: 700 }}>{seguidoresCount.toLocaleString('es-DO')}</b> {seguidoresCount === 1 ? 'persona sigue' : 'personas siguen'} este torneo
+              </div>
+            )}
           </div>
         </div>
 

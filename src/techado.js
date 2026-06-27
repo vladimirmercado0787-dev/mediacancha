@@ -139,7 +139,91 @@ export async function publicarJuego(resultado) {
   return { data }
 }
 
-// Genera una narración tipo crónica del juego (inteligencia básica)
+// Publica un juego de LIGA en el Techado. A diferencia del juego rápido,
+// NO expira (queda fijo, es actividad oficial de la liga) y lleva la
+// etiqueta de la liga. Reusa la misma inteligencia de resumen.
+export async function publicarJuegoLiga(resultado, contexto = {}) {
+  const { data: userData } = await supabase.auth.getUser()
+  const user = userData?.user
+  if (!user) return { error: 'Debes iniciar sesión para publicar.' }
+
+  const { ligaId = null, ligaNombre = null, modo = null } = contexto
+
+  const jugadores = resultado.jugadores || []
+  const totalEq = (eq) => jugadores.filter((j) => j.equipo === eq).reduce((a, j) => a + (j.pts || 0), 0)
+  const totalA = resultado.totalA != null ? Number(resultado.totalA) : totalEq(0)
+  const totalB = resultado.totalB != null ? Number(resultado.totalB) : totalEq(1)
+  const hayEmpate = totalA === totalB
+
+  let destacado = null
+  jugadores.forEach((j) => { if (!destacado || (j.pts || 0) > (destacado.pts || 0)) destacado = j })
+
+  let titulo, texto
+  if (hayEmpate) {
+    titulo = `${resultado.nombreA} y ${resultado.nombreB} empataron`
+    texto = `Quedaron ${totalA}-${totalB}.`
+  } else {
+    const ganador = totalA > totalB ? resultado.nombreA : resultado.nombreB
+    const perdedor = totalA > totalB ? resultado.nombreB : resultado.nombreA
+    titulo = `${ganador} venció a ${perdedor}`
+    texto = `Ganaron ${Math.max(totalA, totalB)}-${Math.min(totalA, totalB)}.`
+    if (destacado) {
+      const nombreDest = destacado.nombre || ('#' + destacado.numero)
+      texto += ` Destacado: ${nombreDest} con ${destacado.pts || 0} pts.`
+    }
+  }
+
+  const jugadoresGuardar = jugadores.map((j) => ({
+    nombre: j.nombre || ('#' + (j.numero || '')), numero: j.numero || '', equipo: j.equipo,
+    perfilId: j.perfilId || null,
+    pts: j.pts || 0, reb: j.reb || 0, ast: j.ast || 0, rob: j.rob || 0, tap: j.tap || 0,
+    fal: j.fal || 0, per: j.per || 0, min: j.min || 0,
+    m2: j.m2 || 0, m3: j.m3 || 0, fa2: j.fa2 || 0, fa3: j.fa3 || 0,
+    tlm: j.tlm || 0, tlf: j.tlf || 0,
+  }))
+
+  const momentos = (resultado.momentos || []).map((m) => ({
+    tipo: m.tipo || 'momento', etiqueta: m.etiqueta || '', jugId: m.jugId || null,
+    equipo: typeof m.equipo === 'number' ? m.equipo : null, valor: m.valor || null, manual: !!m.manual,
+  }))
+
+  const historialNarrado = (resultado.historial || []).map((h) => ({
+    equipo: h.equipo, sub: h.sub, narracion: h.narracion || null, tono: h.tono || null,
+    asistDe: h.asistDe || null, asistA: h.asistA || null,
+  }))
+
+  const narracion = generarNarracion({ nombreA: resultado.nombreA, nombreB: resultado.nombreB, totalA, totalB, hayEmpate, jugadores: jugadoresGuardar, destacado })
+
+  const etiqueta = (ligaNombre ? ligaNombre : 'Liga').toUpperCase()
+
+  const { data, error } = await supabase.from('publicaciones').insert({
+    autor_id: user.id,
+    tipo: 'liga',
+    tag: etiqueta,
+    tag_color: '#27d3c2',
+    titulo,
+    texto,
+    datos: {
+      fuente: 'liga',
+      ligaId, ligaNombre, modo,
+      nombreA: resultado.nombreA, nombreB: resultado.nombreB,
+      logoA: resultado.logoA || null, logoB: resultado.logoB || null,
+      logoUrlA: resultado.logoUrlA || null, logoUrlB: resultado.logoUrlB || null,
+      totalA, totalB, hayEmpate,
+      jugadores: jugadoresGuardar,
+      momentos,
+      historialNarrado,
+      narracion,
+      plantilla: resultado.plantilla || 'estilo_tema',
+      statsActivas: resultado.statsActivas || null,
+      tipoJuego: modo || null,
+    },
+    expira_en: null, // los juegos de liga quedan fijos en el Techado
+  }).select().single()
+
+  if (error) return { error: error.message }
+  return { data }
+}
 export function generarNarracion({ nombreA, nombreB, totalA, totalB, hayEmpate, jugadores, destacado }) {
   if (hayEmpate) {
     return `${nombreA} y ${nombreB} se fueron parejo de principio a fin y terminaron empatados ${totalA}-${totalB}. Un duelo que pudo caer para cualquier lado.`

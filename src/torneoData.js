@@ -169,7 +169,19 @@ export async function anotarResultado(juegoId, datos) {
   return { juego: data, error: error?.message || null }
 }
 
-// ---------- GUARDAR ANOTACIÓN DE TORNEO ----------
+// ---------- MARCADOR EN VIVO ----------
+//  Mientras se anota un juego del torneo, escribe el marcador actual y lo deja
+//  en estado 'vivo' para que la pantalla pública lo muestre en "En vivo ahora".
+//  Solo toca el marcador y el estado; NO cierra el juego (eso lo hace guardarAnotacionTorneo).
+export async function marcarJuegoVivo(juegoId, puntosA, puntosB) {
+  if (!juegoId) return { error: 'Falta el juego.' }
+  const { error } = await supabase
+    .from('torneo_juegos')
+    .update({ estado: 'vivo', puntos_a: puntosA ?? 0, puntos_b: puntosB ?? 0 })
+    .eq('id', juegoId)
+    .neq('estado', 'final')
+  return { error: error?.message || null }
+}
 //  Recibe el 'res' que entrega el anotador (PantallaJuegoVivo) al terminar y lo
 //  guarda DONDE VA: cierra el partido del calendario con su marcador y guarda las
 //  estadísticas de cada jugador. ctx lleva la info del partido del torneo.

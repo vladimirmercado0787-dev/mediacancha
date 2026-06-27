@@ -903,3 +903,44 @@ Estatus visible: un **perfil dorado verificado** que marca al jugador como de **
 - **Por-torneo:** que cada torneo abra el SUYO (hoy abre el más reciente).
 - **Cerrar inscripción** (el organizador cierra la nómina y arranca formal) + **notificaciones** (te invitan a un equipo, tu juego está en vivo, salió un resultado).
 - **Tabla de puntuación:** quitar la entrada de anotar de la PÚBLICA y que la tabla se llene desde el lado del organizador y se transmita a la pública (esto es el paso 2 de T-013, ya documentado).
+---
+
+## SESIÓN — jun 26, 2026 · Anotación conectada + Transmisión en vivo + Panel de Configuración del Torneo
+
+**HECHO en esta sesión:**
+
+1. **EL BUG QUE LO TENÍA TODO TRABADO (resuelto):** la anotación de torneo nunca guardaba nada. Causa: el botón "Anotar este juego" mandaba el id del juego con la etiqueta `id`, pero `guardarAnotacionTorneo`/`marcarJuegoVivo` lo buscan como `juegoId`. No se encontraban → la función se devolvía con "Falta el juego" sin guardar. **Arreglo:** `PantallaTorneos` ahora manda `juegoId: j.id`. (Lección: cuando algo "no guarda y no da error visible", revisar que los nombres de los campos del contexto coincidan punta a punta.)
+
+2. **Anotación conectada de verdad:** Mis Torneos → torneo → Calendario → "✎ Anotar este juego" → config → anotar → al terminar guarda marcador final + estadísticas por jugador en `torneo_juegos` y `torneo_juego_jugadores`. Llena Tabla y Líderes con datos reales.
+
+3. **Transmisión EN VIVO** (era el paso 2 de T-013, ya HECHO):
+   - `torneoData.marcarJuegoVivo(juegoId, puntosA, puntosB)` — escribe el marcador y deja el juego en estado `'vivo'` (no lo cierra; `.neq('estado','final')` para no pisar uno ya terminado).
+   - `PantallaJuegoVivo` recibe `onMarcadorVivo` y avisa el marcador cada vez que cambia (con retardo de 600ms y solo si cambió; solo en juegos de torneo).
+   - `App.jsx` conecta `onMarcadorVivo` → `marcarJuegoVivo`.
+   - `PantallaTorneoPublico` se **refresca sola cada 12s** (setInterval, sin mostrar "cargando" en los refrescos) → el juego sube solito en la sección "En vivo ahora" que ya existía.
+
+4. **Quitada la entrada de anotar de la PÚBLICA** (era el otro pedazo del paso 2 de T-013): se eliminó el botón "✎ Anotar" de la barra superior de `PantallaTorneoPublico` y su `onAnotar` en `App.jsx`. Anotar es SOLO desde el calendario del lado del organizador.
+
+5. **PANEL DE CONFIGURACIÓN DEL TORNEO (nuevo):** `PantallaConfigTorneo.jsx`. Se llega desde la pantalla de admin con el botón **⚙️** en la cabecera. Tiene dos partes:
+   - **Reglas por defecto** (cuartos, minutos, faltas para expulsión, bonus, modo de anotar) → se guardan en el torneo (`torneos.reglas`, columna nueva JSONB). `PantallaTorneoConfig` las carga al anotar un juego, así no hay que reconfigurar cada vez (afinación pedida por Vladimir).
+   - **Estado del torneo: Terminar / Reactivar.** Usa la columna `estado` que ya existía (`activo`/`finalizado`). **Regla de oro: terminar NUNCA borra nada** — los juegos y las estadísticas se quedan guardados, y se reactiva cuando se quiera. Es prender/apagar un interruptor.
+   - Funciones nuevas en `torneos.js`: `guardarReglasTorneo`, `cambiarEstadoTorneo`.
+
+**⚠️ HAY QUE CORRER EL SQL:** `configuracion_torneo.sql` (agrega la columna `reglas` a `torneos`). Sin eso, guardar reglas no funciona.
+
+**Archivos tocados:** `torneoData.js`, `PantallaJuegoVivo.jsx`, `App.jsx`, `PantallaTorneoPublico.jsx`, `PantallaTorneos.jsx`, `torneos.js`, `PantallaTorneoConfig.jsx`, y NUEVO `PantallaConfigTorneo.jsx`.
+
+**PENDIENTES DEL TORNEO — lista viva (lo que falta para que esté redondo):**
+
+- `PENDIENTE` **Motor de playoffs** (el grande): de la tabla salen los clasificados → #1 a la final, #2 vs #3 semifinal → series al mejor de 5 o 3. Hoy `torneoFormato.js` solo hace liga (todos contra todos) y copa (juego único), NO series. Es lo que corona campeón.
+- `PENDIENTE` **Pantalla de pirámide** (versión React de la maqueta aprobada) en pública y admin.
+- `PENDIENTE` **Capitanes + invitaciones (T-004):** el capitán arma su equipo invitando jugadores. Depende de tener gente registrada. El cableado de cargar el roster al anotar YA está; falta probarlo con usuarios reales.
+- `PENDIENTE` **Link de invitación por WhatsApp** + página para unirse.
+- `PENDIENTE` **Permiso de quién puede anotar** (gate con `torneo_directiva.puede_administrar` — la variable `puedeAdministrar` ya existe en `PantallaTorneos`).
+- `PENDIENTE` **Bitácora:** registrar `juego_creado` y `marcador_cambiado` (y terminar/reactivar el torneo) en `torneo_bitacora`.
+- `PENDIENTE` **Cantidad de juegos editable desde el panel** (hoy se hace en el Calendario con "Regenerar", que ya respeta los juegos jugados — solo borra los `proximo`). Evaluar moverlo/enlazarlo desde el panel de Configuración.
+- `PENDIENTE` **Cerrar inscripción** (el organizador cierra la nómina y arranca formal) + **notificaciones** (te invitan a un equipo, tu juego está en vivo, salió un resultado).
+- `HECHO` **Por-torneo:** cada torneo abre el SUYO. Las tarjetas de torneo en el feed mandan `torneoPublico:<id>` (antes mandaban la orden genérica y abría el más reciente). El botón "Vista pública" del admin abre la pública de ESE torneo (`verPublico:<id>`). La orden genérica "Torneos / Ver todos" sigue abriendo el más reciente. `PantallaTorneoPublico` ya sabía cargar por `torneoId`; solo faltaba pasárselo. (jun 26, 2026)
+- `HECHO` **Selector "Mis Torneos" (admin):** antes "Mis torneos" metía directo al torneo más reciente (la pantalla de admin cargaba `limit(1)` sin importar de quién). Ahora "Mis torneos"/"Donde juego" abren `PantallaMisTorneos.jsx` (NUEVO) — lista los torneos que el usuario organiza (`misTorneos()`, con su estado activo/finalizado) para elegir en cuál entrar. Una persona puede administrar varios torneos a la vez. `PantallaTorneos` ahora recibe `torneoId` y carga ESE; Volver regresa al selector; crear un torneo entra directo a administrarlo. (jun 26, 2026)
+- `PENDIENTE` **Centro de Comando** completo (panel del dueño que junta todo).
+- `PENDIENTE (sin Tailwind / 3 niveles)` adaptar el flujo de anotar (Config/Vivo/Resultado) a iPad y escritorio — ver L-008.

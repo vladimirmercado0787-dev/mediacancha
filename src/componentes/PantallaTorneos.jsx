@@ -168,7 +168,7 @@ const EQUIPOS_DEMO = [
   },
 ]
 
-export default function PantallaTorneos({ esAdmin = false, onVolver, onAccion, onVerPerfil, onAnotarJuego }) {
+export default function PantallaTorneos({ esAdmin = false, torneoId = null, onVolver, onAccion, onVerPerfil, onAnotarJuego, onConfigurar }) {
   const [tema] = useState(() => {
     const validos = ['dorado', 'azul', 'claro', 'larimar']
     if (typeof window !== 'undefined') {
@@ -311,9 +311,16 @@ export default function PantallaTorneos({ esAdmin = false, onVolver, onAccion, o
     let vivo = true
     ;(async () => {
       try {
-        // por ahora carga el torneo que exista; más adelante vendrá por id desde una lista
-        const { data: ts } = await supabase.from('torneos').select('*').order('creado_en', { ascending: false }).limit(1)
-        const t = (ts || [])[0]
+        // Carga el torneo ELEGIDO (por id desde el selector "Mis Torneos").
+        // Si no viene id, cae al más reciente como respaldo.
+        let t = null
+        if (torneoId) {
+          const { data } = await supabase.from('torneos').select('*').eq('id', torneoId).single()
+          t = data
+        } else {
+          const { data: ts } = await supabase.from('torneos').select('*').order('creado_en', { ascending: false }).limit(1)
+          t = (ts || [])[0]
+        }
         if (!t || !vivo) return
         setTorneoRow(t)
         const pub = await cargarTorneoPublico(t.id)
@@ -333,7 +340,7 @@ export default function PantallaTorneos({ esAdmin = false, onVolver, onAccion, o
       }
     })()
     return () => { vivo = false }
-  }, [recarga])
+  }, [recarga, torneoId])
 
   // mapa equipo_id -> equipo (para sacar código y color)
   const eqPorId = {}
@@ -1414,7 +1421,7 @@ export default function PantallaTorneos({ esAdmin = false, onVolver, onAccion, o
                           </div>
                           {puedeAnotar && (
                             <div style={{ padding: '0 14px 10px' }}>
-                              <button onClick={() => onAnotarJuego({ id: j.id, torneoId: torneoRow.id, jornada: j.jornada, equipoA_id: j.equipoA_id, equipoB_id: j.equipoB_id, nombreA: nombreEq(j.equipoA_id), nombreB: nombreEq(j.equipoB_id) })} style={{ width: '100%', border: `1px solid ${vivo ? '#f09595' : T.borde}`, borderRadius: 10, padding: '8px', background: vivo ? 'rgba(240,149,149,.10)' : 'transparent', color: vivo ? '#f09595' : T.acento, fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>
+                              <button onClick={() => onAnotarJuego({ juegoId: j.id, torneoId: torneoRow.id, jornada: j.jornada, equipoA_id: j.equipoA_id, equipoB_id: j.equipoB_id, nombreA: nombreEq(j.equipoA_id), nombreB: nombreEq(j.equipoB_id) })} style={{ width: '100%', border: `1px solid ${vivo ? '#f09595' : T.borde}`, borderRadius: 10, padding: '8px', background: vivo ? 'rgba(240,149,149,.10)' : 'transparent', color: vivo ? '#f09595' : T.acento, fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>
                                 {vivo ? '● Continuar anotando' : '✎ Anotar este juego'}
                               </button>
                             </div>
@@ -1472,7 +1479,10 @@ export default function PantallaTorneos({ esAdmin = false, onVolver, onAccion, o
             <div style={{ color: T.tenue, fontSize: 11.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tj.subtitulo} · {tj.lugar}</div>
           </div>
           {esAdmin && (
-            <button onClick={() => onAccion && onAccion('verPublico')} style={{ flexShrink: 0, border: `1px solid ${T.borde}`, background: 'transparent', color: T.acento, fontSize: 12, fontWeight: 700, padding: esAncho ? '7px 12px' : '7px 10px', borderRadius: 16, cursor: 'pointer', whiteSpace: 'nowrap' }}>{esAncho ? '👁️ Vista pública' : '👁️'}</button>
+            <button onClick={() => onAccion && onAccion('verPublico:' + (torneoRow ? torneoRow.id : ''))} style={{ flexShrink: 0, border: `1px solid ${T.borde}`, background: 'transparent', color: T.acento, fontSize: 12, fontWeight: 700, padding: esAncho ? '7px 12px' : '7px 10px', borderRadius: 16, cursor: 'pointer', whiteSpace: 'nowrap' }}>{esAncho ? '👁️ Vista pública' : '👁️'}</button>
+          )}
+          {esAdmin && onConfigurar && torneoRow && (
+            <button onClick={() => onConfigurar(torneoRow.id)} title="Configuración del torneo" style={{ flexShrink: 0, width: 36, height: 36, borderRadius: 12, border: `1px solid ${T.borde}`, background: 'transparent', color: T.acento, fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>⚙️</button>
           )}
           {esAdmin ? (
             <span style={{ flexShrink: 0, background: T.boton, color: T.botonTexto, fontSize: 11, fontWeight: 800, padding: '6px 12px', borderRadius: 16 }}>ADMIN</span>

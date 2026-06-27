@@ -5,6 +5,8 @@ import PantallaPublica from './componentes/PantallaPublica'
 import PantallaRegistro from './componentes/PantallaRegistro'
 import PantallaLogin from './componentes/PantallaLogin'
 import PantallaPerfil from './componentes/PantallaPerfil'
+import PantallaSiguiendo from './componentes/PantallaSiguiendo'
+import PantallaConfiguracion from './componentes/PantallaConfiguracion'
 import PantallaJuegoConfig from './componentes/PantallaJuegoConfig'
 import PantallaJuegoJugadores from './componentes/PantallaJuegoJugadores'
 import PantallaJuegoVivo from './componentes/PantallaJuegoVivo'
@@ -18,11 +20,18 @@ import PantallaTorneos from './componentes/PantallaTorneos'
 import PantallaTorneoPublico from './componentes/PantallaTorneoPublico'
 import PantallaInvitaciones from './componentes/PantallaInvitaciones'
 import PantallaTorneoConfig from './componentes/PantallaTorneoConfig'
+import PantallaConfigTorneo from './componentes/PantallaConfigTorneo'
+import PantallaMisTorneos from './componentes/PantallaMisTorneos'
 import PantallaNoticiasCrudas from './componentes/PantallaNoticiasCrudas'
 import PantallaCrearTorneo from './componentes/PantallaCrearTorneo'
 import { guardarJuegoDelDia } from './historialDia'
-import { leerRosterTorneo, guardarAnotacionTorneo } from './torneoData'
+import { leerRosterTorneo, guardarAnotacionTorneo, marcarJuegoVivo } from './torneoData'
 import PantallaLigas from './componentes/PantallaLigas'
+import PantallaLiga from './componentes/PantallaLiga'
+import PantallaInvitarLiga from './componentes/PantallaInvitarLiga'
+import PantallaCrearLiga from './componentes/PantallaCrearLiga'
+import { leerLiga, guardarJuegoLiga } from './ligas'
+import { publicarJuegoLiga } from './techado'
 import PantallaLNB from './componentes/PantallaLNB'
 import PantallaNBA from './componentes/PantallaNBA'
 import PantallaNoticias from './componentes/PantallaNoticias'
@@ -62,6 +71,19 @@ function App() {
   const [destinoTrasLogin, setDestinoTrasLogin] = useState('perfil')
   const [perfilViendo, setPerfilViendo] = useState(null)
   const [torneoEnJuego, setTorneoEnJuego] = useState(null)
+  const [torneoConfigId, setTorneoConfigId] = useState(null)
+  const [torneoPublicoId, setTorneoPublicoId] = useState(null)
+  const [torneoAdminId, setTorneoAdminId] = useState(null)
+  const [ligaActivaId, setLigaActivaId] = useState(null)
+  const [ligaActiva, setLigaActiva] = useState(null)
+  const [juegoLigaCtx, setJuegoLigaCtx] = useState(null)
+
+  useEffect(() => {
+    if (!ligaActivaId) { setLigaActiva(null); return }
+    let vivo = true
+    leerLiga(ligaActivaId).then(({ liga }) => { if (vivo) setLigaActiva(liga) }).catch(() => {})
+    return () => { vivo = false }
+  }, [ligaActivaId])
   const [juegoTorneoCtx, setJuegoTorneoCtx] = useState(null)
   const [chatCon, setChatCon] = useState(null)
   const [esEscritorio, setEsEscritorio] = useState(typeof window !== 'undefined' ? window.innerWidth >= 900 : false)
@@ -120,7 +142,8 @@ function App() {
     else if (id === 'noticias') setVista('noticias')
     else if (id === 'rosters') setVista('rosters')
     else if (id === 'comando') setVista('comando')
-    else if (id === 'torneos') setVista('torneoPublico')
+    else if (id === 'torneos') { setTorneoPublicoId(null); setVista('torneoPublico') }
+    else if (id && id.startsWith && id.startsWith('torneoPublico:')) { setTorneoPublicoId(id.slice('torneoPublico:'.length)); setVista('torneoPublico') }
     else if (id === 'buscar') setVista(sesion ? 'buscar' : 'login')
     else if (id === 'mensajes') { setChatCon(null); setVista(sesion ? 'chat' : 'login') }
     else if (id === 'perfil') { setDestinoTrasLogin('perfil'); setVista(sesion ? 'perfil' : 'login') }
@@ -146,7 +169,21 @@ function App() {
   }
 
   if (vista === 'perfil') {
-    return <PantallaPerfil onVolver={() => setVista('publica')} onSalir={() => setVista('publica')} />
+    return <PantallaPerfil onVolver={() => setVista('publica')} onSalir={() => setVista('publica')} onSiguiendo={() => setVista('siguiendo')} onConfig={() => setVista('configuracion')} />
+  }
+
+  if (vista === 'configuracion') {
+    return <PantallaConfiguracion onVolver={() => setVista('perfil')} onSalir={() => setVista('publica')} />
+  }
+
+  if (vista === 'siguiendo') {
+    return (
+      <PantallaSiguiendo
+        onVolver={() => setVista('perfil')}
+        onVerPerfil={(id) => { if (id && sesion?.user?.id === id) { setVista('perfil') } else { setPerfilViendo(id); setVista('perfilAjeno') } }}
+        onVerTorneo={(id) => { setTorneoPublicoId(id); setVista('torneoPublico') }}
+      />
+    )
   }
 
   if (vista === 'buscar') {
@@ -197,9 +234,9 @@ function App() {
   if (vista === 'torneoPublico') {
     return (
       <PantallaTorneoPublico
+        torneoId={torneoPublicoId}
         onVolver={() => setVista('publica')}
         onVerPerfil={(id) => { if (id && sesion?.user?.id === id) { setVista('perfil') } else { setPerfilViendo(id); setVista('perfilAjeno') } }}
-        onAnotar={(id) => { setTorneoEnJuego(id); setVista('torneoConfig') }}
       />
     )
   }
@@ -224,14 +261,35 @@ function App() {
     )
   }
 
+  if (vista === 'misTorneos') {
+    return (
+      <PantallaMisTorneos
+        onElegir={(id) => { setTorneoAdminId(id); setVista('torneosAdmin') }}
+        onCrear={() => setVista(sesion ? 'crearTorneo' : 'login')}
+        onVolver={() => setVista('publica')}
+      />
+    )
+  }
+
   if (vista === 'torneosAdmin') {
     return (
       <PantallaTorneos
         esAdmin={true}
-        onVolver={() => setVista('publica')}
-        onAccion={() => {}}
+        torneoId={torneoAdminId}
+        onVolver={() => setVista('misTorneos')}
+        onAccion={(id) => { if (typeof id === 'string' && id.startsWith('verPublico:')) { setTorneoPublicoId(id.slice('verPublico:'.length)); setVista('torneoPublico') } }}
         onVerPerfil={(id) => { if (id && sesion?.user?.id === id) { setVista('perfil') } else { setPerfilViendo(id); setVista('perfilAjeno') } }}
         onAnotarJuego={(juego) => { setJuegoTorneoCtx(juego); setTorneoEnJuego(juego.torneoId); setVista('torneoConfig') }}
+        onConfigurar={(id) => { setTorneoConfigId(id); setVista('configTorneo') }}
+      />
+    )
+  }
+
+  if (vista === 'configTorneo') {
+    return (
+      <PantallaConfigTorneo
+        torneoId={torneoConfigId}
+        onVolver={() => setVista('torneosAdmin')}
       />
     )
   }
@@ -239,8 +297,8 @@ function App() {
   if (vista === 'crearTorneo') {
     return (
       <PantallaCrearTorneo
-        onVolver={() => setVista('publica')}
-        onCreado={(torneo) => setVista('torneosAdmin')}
+        onVolver={() => setVista('misTorneos')}
+        onCreado={(torneo) => { if (torneo?.id) setTorneoAdminId(torneo.id); setVista('torneosAdmin') }}
       />
     )
   }
@@ -292,7 +350,13 @@ function App() {
       <PantallaJuegoVivo
         config={configJuego}
         onTerminar={async (res) => {
-          if (res?.juegoTorneo) {
+          if (juegoLigaCtx) {
+            await guardarJuegoLiga(juegoLigaCtx.ligaId, juegoLigaCtx.modo, res)
+            try { await publicarJuegoLiga(res, { ligaId: juegoLigaCtx.ligaId, ligaNombre: ligaActiva?.nombre || null, modo: juegoLigaCtx.modo }) } catch (e) { /* el juego ya quedó guardado aunque falle el Techado */ }
+            setJuegoLigaCtx(null)
+            setConfigJuego(null)
+            setVista('liga')
+          } else if (res?.juegoTorneo) {
             await guardarAnotacionTorneo(res.juegoTorneo, res)
             setConfigJuego(null)
             setVista('torneosAdmin')
@@ -300,7 +364,8 @@ function App() {
             guardarJuegoDelDia(res); setResultadoJuego(res); setVista('juegoResultado')
           }
         }}
-        onVolver={() => { if (configJuego?.juegoTorneo) { setConfigJuego(null); setVista('torneosAdmin') } else { setVista('publica') } }}
+        onVolver={() => { if (juegoLigaCtx) { setJuegoLigaCtx(null); setConfigJuego(null); setVista('liga') } else if (configJuego?.juegoTorneo) { setConfigJuego(null); setVista('torneosAdmin') } else { setVista('publica') } }}
+        onMarcadorVivo={(a, b) => { const jt = configJuego?.juegoTorneo; if (jt?.juegoId) marcarJuegoVivo(jt.juegoId, a, b) }}
       />
     )
   }
@@ -335,11 +400,44 @@ function App() {
     )
   }
 
+  if (vista === 'liga') {
+    return (
+      <PantallaLiga
+        liga={ligaActiva}
+        onVolver={() => setVista('ligas')}
+        onInvitar={() => { setDestinoTrasLogin('ligaInvitar'); setVista(sesion ? 'ligaInvitar' : 'login') }}
+        onAnotar={(modo) => {
+          setJuegoLigaCtx({ ligaId: ligaActivaId, modo: modo || 'normal' })
+          setDestinoTrasLogin('juegoConfig')
+          setVista(sesion ? 'juegoConfig' : 'login')
+        }}
+      />
+    )
+  }
+
+  if (vista === 'ligaInvitar') {
+    return (
+      <PantallaInvitarLiga
+        liga={ligaActiva}
+        onVolver={() => setVista('liga')}
+      />
+    )
+  }
+
+  if (vista === 'crearLiga') {
+    return (
+      <PantallaCrearLiga
+        onVolver={() => setVista('ligas')}
+        onCreada={(liga) => { setLigaActivaId(liga?.id || null); setLigaActiva(liga || null); setVista('liga') }}
+      />
+    )
+  }
+
   if (vista === 'ligas') {
     return (
       <PantallaLigas
         onVolver={() => setVista('publica')}
-        onAccion={(id) => { if (id === 'lnb') setVista('lnb'); else if (id === 'nba') setVista('nba'); else if (id === 'noticias') setVista('noticias'); else if (id === 'rosters') setVista('rosters'); else if (id === 'comando') setVista('comando') }}
+        onAccion={(id) => { if (id === 'lnb') setVista('lnb'); else if (id === 'nba') setVista('nba'); else if (id === 'noticias') setVista('noticias'); else if (id === 'rosters') setVista('rosters'); else if (id === 'comando') setVista('comando'); else if (id === 'crearLiga') setVista(sesion ? 'crearLiga' : 'login'); else if (id && id.indexOf('abrirLiga:') === 0) { setLigaActivaId(id.slice('abrirLiga:'.length)); setVista('liga') } }}
       />
     )
   }
@@ -413,9 +511,17 @@ function App() {
         } else if (id === 'resultados') {
           setVista('resultados')
         } else if (id === 'torneos') {
+          setTorneoPublicoId(null)
+          setVista('torneoPublico')
+        } else if (id.startsWith && id.startsWith('torneoPublico:')) {
+          setTorneoPublicoId(id.slice('torneoPublico:'.length))
           setVista('torneoPublico')
         } else if (id === 'misTorneos' || id === 'dondeJuego') {
-          setVista('torneosAdmin')
+          setVista('misTorneos')
+        } else if (id === 'crearLiga') {
+          setVista(sesion ? 'crearLiga' : 'login')
+        } else if (id === 'misLigas') {
+          setVista('ligas')
         } else if (id === 'invitaciones') {
           setVista(sesion ? 'invitaciones' : 'login')
         } else if (id === 'crearTorneo') {

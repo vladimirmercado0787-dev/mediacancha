@@ -67,7 +67,7 @@ const META_ACCION = {
 // Etiquetas cortas para la tabla de detalles (box score en vivo)
 const ETIQUETA_STAT = { pts: 'PTS', reb: 'REB', ast: 'AST', rob: 'ROB', tap: 'TAP', fal: 'FAL', per: 'PER', tlm: 'TL', min: 'MIN' }
 
-export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
+export default function PantallaJuegoVivo({ config, onTerminar, onVolver, onMarcadorVivo }) {
   const [tema, setTema] = useState(() => {
     const validos = ['dorado', 'azul', 'claro', 'larimar']
     if (typeof window !== 'undefined') {
@@ -193,6 +193,22 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver }) {
     const b = jugadores.filter((j) => j.equipo === 1).reduce((x, j) => x + j.pts, 0)
     const lider = Math.max(a, b), dif = Math.abs(a - b)
     if (lider >= config.puntosMeta && (!config.porDif2 || dif >= 2)) setAvisoFin('puntos')
+  }, [jugadores])
+
+  // ----- TRANSMISIÓN EN VIVO -----
+  // Si este juego es de un torneo, cada vez que cambia el marcador lo avisamos
+  // hacia afuera (App lo escribe en la base de datos y lo deja 'vivo'). Solo
+  // avisamos cuando el marcador realmente cambió, con un pequeño retardo.
+  const ultimoVivoRef = useRef('')
+  useEffect(() => {
+    if (!config?.juegoTorneo || !onMarcadorVivo) return
+    const a = jugadores.filter((j) => j.equipo === 0).reduce((x, j) => x + (j.pts || 0), 0)
+    const b = jugadores.filter((j) => j.equipo === 1).reduce((x, j) => x + (j.pts || 0), 0)
+    const clave = a + '-' + b
+    if (ultimoVivoRef.current === clave) return
+    ultimoVivoRef.current = clave
+    const t = setTimeout(() => { try { onMarcadorVivo(a, b) } catch (e) {} }, 600)
+    return () => clearTimeout(t)
   }, [jugadores])
 
   // Detecta cuándo un jugador llegó al límite de faltas y pide confirmar la expulsión.

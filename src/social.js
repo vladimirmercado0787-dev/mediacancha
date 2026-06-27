@@ -99,3 +99,62 @@ export async function statsSociales(usuarioId) {
   ])
   return { seguidores, siguiendo, sigo }
 }
+// ============================================================================
+//  JUEGOS JUGADOS — cuenta real (los juegos donde la persona aparece vinculada)
+//  Antes el perfil leía una columna 'juegos_jugados' que nadie actualizaba (0).
+//  Ahora contamos de verdad: publicaciones de juego cuyo box score incluye
+//  el perfilId de la persona.
+// ============================================================================
+export async function contarJuegosJugador(perfilId) {
+  if (!perfilId) return 0
+  const { count, error } = await supabase
+    .from('publicaciones')
+    .select('id', { count: 'exact', head: true })
+    .contains('datos', { jugadores: [{ perfilId }] })
+  if (error) return 0
+  return count || 0
+}
+
+// Personas que sigo (lista con su perfil), para la pantalla "Siguiendo".
+export async function aQuienesSigo() {
+  const yo = await miUsuarioId()
+  if (!yo) return { personas: [], error: 'No hay sesión' }
+  const { data: rel, error } = await supabase
+    .from('seguidores')
+    .select('seguido_id, creado_en')
+    .eq('seguidor_id', yo)
+    .order('creado_en', { ascending: false })
+  if (error) return { personas: [], error: error.message }
+  const ids = (rel || []).map((r) => r.seguido_id).filter(Boolean)
+  if (!ids.length) return { personas: [], error: null }
+  const { data: perfiles } = await supabase
+    .from('perfiles')
+    .select('id, nombre, apellido, foto_url, codigo_unico, municipio')
+    .in('id', ids)
+  return { personas: perfiles || [], error: null }
+}
+
+// ============================================================================
+//  MI PERFIL — cargar y guardar (para la pantalla de Configuración)
+// ============================================================================
+export async function cargarMiPerfil() {
+  const yo = await miUsuarioId()
+  if (!yo) return { perfil: null, error: 'No hay sesión' }
+  const { data, error } = await supabase.from('perfiles').select('*').eq('id', yo).single()
+  return { perfil: data || null, error: error?.message || null }
+}
+
+export async function guardarMiPerfil(cambios) {
+  const yo = await miUsuarioId()
+  if (!yo) return { error: 'No hay sesión' }
+  const { error } = await supabase.from('perfiles').update(cambios).eq('id', yo)
+  return { error: error?.message || null }
+}
+
+// Cambiar el código secreto de jugador (PIN de 4 dígitos)
+export async function cambiarMiPin(nuevoPin) {
+  const pin = String(nuevoPin || '').trim()
+  if (!/^[0-9]{4}$/.test(pin)) return { error: 'El código es de cuatro dígitos' }
+  const { error } = await supabase.rpc('set_pin', { nuevo_pin: pin })
+  return { error: error?.message || null }
+}

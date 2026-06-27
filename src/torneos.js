@@ -99,6 +99,25 @@ export async function leerTorneoCompleto(torneoId) {
   }
 }
 
+// ---------- CONFIGURACIÓN DEL TORNEO ----------
+//  Guarda las reglas por defecto del torneo (cuartos, minutos, faltas, bonus,
+//  modo de anotar, estadísticas). Cada vez que se anota un juego, estas reglas
+//  son el punto de partida, así no hay que configurarlas una y otra vez.
+export async function guardarReglasTorneo(torneoId, reglas) {
+  if (!torneoId) return { error: 'Falta el torneo.' }
+  const { error } = await supabase.from('torneos').update({ reglas }).eq('id', torneoId)
+  return { error: error?.message || null }
+}
+
+//  Cambia el estado del torneo (activo / finalizado). NO borra absolutamente
+//  nada: los juegos, los marcadores y las estadísticas se quedan guardados.
+//  Terminar y reactivar es solo prender o apagar un interruptor.
+export async function cambiarEstadoTorneo(torneoId, estado) {
+  if (!torneoId) return { error: 'Falta el torneo.' }
+  const { error } = await supabase.from('torneos').update({ estado }).eq('id', torneoId)
+  return { error: error?.message || null }
+}
+
 // ---------- EQUIPOS ----------
 export async function crearEquipo(torneoId, datos) {
   const { data, error } = await supabase
@@ -313,8 +332,78 @@ export async function buscarPersonas(termino) {
   if (t.length < 2) return { personas: [], error: null }
   const { data, error } = await supabase
     .from('perfiles')
-    .select('id, nombre, apellido, codigo_unico, foto_url, municipio')
-    .or(`nombre.ilike.%${t}%,apellido.ilike.%${t}%,codigo_unico.ilike.%${t}%`)
+    .select('id, nombre, apellido, apodo, codigo_unico, foto_url, municipio')
+    .or(`nombre.ilike.%${t}%,apellido.ilike.%${t}%,apodo.ilike.%${t}%,codigo_unico.ilike.%${t}%`)
     .limit(12)
   return { personas: data || [], error: error?.message || null }
+}
+// ============================================================================
+//  SEGUIR TORNEOS — guardado de verdad (arregla el botón que no se quedaba)
+// ============================================================================
+
+// ¿Sigo este torneo?
+export async function sigoTorneo(torneoId) {
+  const yo = await miUsuarioId()
+  if (!yo || !torneoId) return false
+  const { data, error } = await supabase
+    .from('torneo_seguidores')
+    .select('id')
+    .eq('torneo_id', torneoId)
+    .eq('seguidor_id', yo)
+    .maybeSingle()
+  if (error) return false
+  return !!data
+}
+
+// Cuántos siguen este torneo
+export async function contarSeguidoresTorneo(torneoId) {
+  if (!torneoId) return 0
+  const { count, error } = await supabase
+    .from('torneo_seguidores')
+    .select('id', { count: 'exact', head: true })
+    .eq('torneo_id', torneoId)
+  if (error) return 0
+  return count || 0
+}
+
+// Alterna seguir / dejar de seguir. Devuelve { siguiendo: true/false }.
+export async function alternarSeguirTorneo(torneoId) {
+  const yo = await miUsuarioId()
+  if (!yo) return { error: 'Inicia sesión para seguir' }
+  if (!torneoId) return { error: 'Falta el torneo' }
+  const yaSigo = await sigoTorneo(torneoId)
+  if (yaSigo) {
+    const { error } = await supabase
+      .from('torneo_seguidores')
+      .delete()
+      .eq('torneo_id', torneoId)
+      .eq('seguidor_id', yo)
+    if (error) return { error: error.message }
+    return { siguiendo: false }
+  } else {
+    const { error } = await supabase
+      .from('torneo_seguidores')
+      .insert({ torneo_id: torneoId, seguidor_id: yo })
+    if (error && !String(error.message || '').includes('duplicate')) return { error: error.message }
+    return { siguiendo: true }
+  }
+}
+
+// Torneos que sigo (lista), para la pantalla "Siguiendo".
+export async function torneosQueSigo() {
+  const yo = await miUsuarioId()
+  if (!yo) return { torneos: [], error: 'No hay sesión' }
+  const { data: rel, error } = await supabase
+    .from('torneo_seguidores')
+    .select('torneo_id, creado_en')
+    .eq('seguidor_id', yo)
+    .order('creado_en', { ascending: false })
+  if (error) return { torneos: [], error: error.message }
+  const ids = (rel || []).map((r) => r.torneo_id).filter(Boolean)
+  if (!ids.length) return { torneos: [], error: null }
+  const { data: torneos } = await supabase
+    .from('torneos')
+    .select('id, nombre, emoji, logo_url, lugar, estado')
+    .in('id', ids)
+  return { torneos: torneos || [], error: null }
 }

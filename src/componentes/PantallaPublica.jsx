@@ -974,7 +974,7 @@ export default function PantallaPublica({ onAccion, haySesion }) {
     return (<>{torneosReales.map((t, i) => {
       const col = colorNivel(t.nivel)
       return (
-        <div key={t.id || i} onClick={() => click('torneos')} style={{ marginBottom: 10, cursor: 'pointer' }}>
+        <div key={t.id || i} onClick={() => click('torneoPublico:' + t.id)} style={{ marginBottom: 10, cursor: 'pointer' }}>
           <Placa radio={15} pad={13}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 13 }}>
               <div style={{ width: 44, height: 44, borderRadius: 11, flexShrink: 0, background: T.esClaro ? 'rgba(176,122,38,.12)' : 'linear-gradient(150deg, rgba(50,46,40,.6), rgba(18,18,20,.6))', border: `1px solid ${T.navActivoBorde}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>{t.emoji || <Balon size={28} sw={4} gid={`gtb${i}`} cols={T.balon} />}</div>

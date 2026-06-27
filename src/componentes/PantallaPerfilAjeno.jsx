@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
-import { statsSociales, alternarSeguir } from '../social'
+import { statsSociales, alternarSeguir, contarJuegosJugador } from '../social'
 import { haceCuanto } from '../techado'
 import TarjetaResultado from './TarjetaResultado'
 import fondoCancha from '../assets/fondo-cancha.png'
@@ -44,6 +44,7 @@ export default function PantallaPerfilAjeno({ usuarioId, onVolver, onMensaje }) 
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState('')
   const [stats, setStats] = useState({ seguidores: 0, siguiendo: 0, sigo: false })
+  const [juegosCount, setJuegosCount] = useState(0)
   const [procesando, setProcesando] = useState(false)
   const [publicaciones, setPublicaciones] = useState([])
   const [tema2] = useState(() => (typeof window !== 'undefined' ? (localStorage.getItem('mc_tema') || 'dorado') : 'dorado'))
@@ -56,6 +57,7 @@ export default function PantallaPerfilAjeno({ usuarioId, onVolver, onMensaje }) 
         if (err) throw err
         setPerfil(data)
         setStats(await statsSociales(usuarioId))
+        try { setJuegosCount(await contarJuegosJugador(usuarioId)) } catch (e) {}
         // sus publicaciones públicas
         const { data: pubs } = await supabase
           .from('publicaciones_completas')
@@ -139,13 +141,14 @@ export default function PantallaPerfilAjeno({ usuarioId, onVolver, onMensaje }) 
               <div style={{ width: 76, height: 76, borderRadius: '50%', background: perfil.foto_url ? `url(${perfil.foto_url}) center/cover` : T.avatar, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, fontWeight: 800, color: T.avatarTexto, flexShrink: 0, boxShadow: `0 0 0 2px ${T.esClaro ? '#15110b' : '#0c0e12'}, 0 0 0 4px ${T.acento}` }}>{!perfil.foto_url && iniciales}</div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 21, fontWeight: 800, color: T.textoFuerte, lineHeight: 1.1 }}>{nombreCompleto}</div>
+                {perfil.apodo && <div style={{ fontSize: 13, fontWeight: 700, color: T.acento, marginTop: 2, fontStyle: 'italic' }}>"{perfil.apodo}"</div>}
                 <div style={{ fontSize: 12.5, color: T.tenue, marginTop: 3 }}>{esJugador ? '🏀 Jugador' : '👤 Fanático'}{edad ? ` · ${edad} años` : ''}</div>
               </div>
             </div>
 
             {/* contadores */}
             <div style={{ display: 'flex', alignItems: 'center', padding: '14px 0', borderTop: `1px solid ${T.tarjetaBorde}`, borderBottom: `1px solid ${T.tarjetaBorde}`, marginBottom: 16 }}>
-              <Stat valor={perfil?.juegos_jugados != null ? perfil.juegos_jugados : 0} etiqueta="Juegos" />
+              <Stat valor={juegosCount} etiqueta="Juegos" />
               <div style={{ width: 1, height: 30, background: T.tarjetaBorde }} />
               <Stat valor={stats.seguidores} etiqueta="Seguidores" />
               <div style={{ width: 1, height: 30, background: T.tarjetaBorde }} />

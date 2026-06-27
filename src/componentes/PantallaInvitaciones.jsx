@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { misInvitaciones, responderInvitacion } from '../torneos'
+import { misInvitacionesLiga, responderInvitacionLiga } from '../ligas'
 
 // ============================================================================
 //  MIS INVITACIONES — bandeja del jugador (T-004)
@@ -29,6 +30,7 @@ const ROL = {
 
 export default function PantallaInvitaciones({ onVolver }) {
   const [invitaciones, setInvitaciones] = useState([])
+  const [ligaInvs, setLigaInvs] = useState([])
   const [cargando, setCargando] = useState(true)
   const [procesando, setProcesando] = useState(null)
   const [toast, setToast] = useState(null)
@@ -66,8 +68,9 @@ export default function PantallaInvitaciones({ onVolver }) {
 
   const cargar = async () => {
     setCargando(true)
-    const { invitaciones } = await misInvitaciones()
-    setInvitaciones(invitaciones || [])
+    const [tor, lig] = await Promise.all([misInvitaciones(), misInvitacionesLiga()])
+    setInvitaciones(tor.invitaciones || [])
+    setLigaInvs(lig.invitaciones || [])
     setCargando(false)
   }
   useEffect(() => { cargar() }, [])
@@ -82,6 +85,16 @@ export default function PantallaInvitaciones({ onVolver }) {
     if (error) { mostrarToast('No se pudo: ' + error); return }
     setInvitaciones((prev) => prev.filter((x) => x.id !== inv.id))
     mostrarToast(aceptar ? '¡Aceptaste la invitación! 🏀' : 'Invitación rechazada')
+  }
+
+  const responderLiga = async (inv, aceptar) => {
+    if (procesando) return
+    setProcesando(inv.id)
+    const { error } = await responderInvitacionLiga(inv.id, aceptar)
+    setProcesando(null)
+    if (error) { mostrarToast('No se pudo: ' + error); return }
+    setLigaInvs((prev) => prev.filter((x) => x.id !== inv.id))
+    mostrarToast(aceptar ? '¡Entraste a la liga! 🤝' : 'Invitación rechazada')
   }
 
   const tarjeta = (inv) => {
@@ -122,6 +135,39 @@ export default function PantallaInvitaciones({ onVolver }) {
     )
   }
 
+  const tarjetaLiga = (inv) => {
+    const lg = inv.ligas || {}
+    const yo = procesando === inv.id
+    const teal = '#27d3c2'
+    return (
+      <div key={inv.id} style={{ background: `linear-gradient(160deg, ${C.card}, ${C.card2})`, border: `0.5px solid rgba(39,211,194,.3)`, borderRadius: 18, overflow: 'hidden', marginBottom: 13 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', borderBottom: `0.5px solid ${C.bordeSuave}` }}>
+          <div style={{ width: 46, height: 46, borderRadius: 13, flexShrink: 0, display: 'grid', placeItems: 'center', fontSize: 24, background: lg.logo_url ? `url(${lg.logo_url}) center/cover` : `linear-gradient(150deg, #36e3d2, #0e9c90)`, border: '1.5px solid rgba(255,255,255,.16)' }}>{!lg.logo_url && (lg.emoji || '🤝')}</div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontFamily: fCond, fontWeight: 600, fontSize: 10.5, letterSpacing: 1, textTransform: 'uppercase', color: C.muyTenue }}>Te invitaron a la liga</div>
+            <div style={{ fontFamily: fCond, fontWeight: 700, fontSize: 18, letterSpacing: 0.3, textTransform: 'uppercase', color: C.txt, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{lg.nombre || 'Liga'}</div>
+          </div>
+        </div>
+        <div style={{ padding: '14px 16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: inv.mensaje ? 11 : 14 }}>
+            <span style={{ color: C.tenue, fontSize: 13.5 }}>Unirte como</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: fCond, fontWeight: 700, fontSize: 11.5, letterSpacing: 0.6, textTransform: 'uppercase', padding: '4px 10px', borderRadius: 8, color: teal, background: `${teal}1c`, border: `1px solid ${teal}3a` }}>🤝 Miembro</span>
+            {lg.lugar && <span style={{ color: C.muyTenue, fontSize: 12 }}>· {lg.lugar}</span>}
+          </div>
+          {inv.mensaje && (
+            <div style={{ background: 'rgba(255,255,255,.04)', border: `0.5px solid ${C.bordeSuave}`, borderRadius: 11, padding: '10px 13px', marginBottom: 14, color: C.body, fontSize: 13, lineHeight: 1.45, fontStyle: 'italic' }}>“{inv.mensaje}”</div>
+          )}
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button disabled={yo} onClick={() => responderLiga(inv, true)} style={{ flex: 2, border: 'none', borderRadius: 12, padding: '12px', fontFamily: fCond, fontWeight: 700, fontSize: 14, letterSpacing: 0.6, textTransform: 'uppercase', cursor: yo ? 'default' : 'pointer', background: `linear-gradient(180deg, #36e3d2, #0e9c90)`, color: '#04161a', opacity: yo ? 0.6 : 1, boxShadow: '0 6px 18px rgba(39,211,194,.24)' }}>{yo ? '…' : '✓ Aceptar'}</button>
+            <button disabled={yo} onClick={() => responderLiga(inv, false)} style={{ flex: 1, border: `1px solid ${C.bordeSuave}`, borderRadius: 12, padding: '12px', fontFamily: fCond, fontWeight: 600, fontSize: 14, letterSpacing: 0.6, textTransform: 'uppercase', cursor: yo ? 'default' : 'pointer', background: 'rgba(255,255,255,.04)', color: C.tenue, opacity: yo ? 0.6 : 1 }}>Rechazar</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const total = invitaciones.length + ligaInvs.length
+
   return (
     <div style={{ position: 'fixed', inset: 0, height: '100dvh', display: 'flex', flexDirection: 'column', background: C.bg, fontFamily: font, overflow: 'hidden' }}>
       {/* glow */}
@@ -134,27 +180,38 @@ export default function PantallaInvitaciones({ onVolver }) {
           <button onClick={onVolver} style={{ flexShrink: 0, width: 40, height: 40, borderRadius: 12, border: 'none', background: 'rgba(255,255,255,.06)', color: C.txt, fontSize: 22, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>‹</button>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontFamily: fCond, fontWeight: 700, fontSize: 18, letterSpacing: 0.4, textTransform: 'uppercase', color: C.txt }}>Mis invitaciones</div>
-            <div style={{ color: C.tenue, fontSize: 11.5 }}>Equipos que te invitaron a jugar</div>
+            <div style={{ color: C.tenue, fontSize: 11.5 }}>Torneos y ligas que te invitaron</div>
           </div>
-          {invitaciones.length > 0 && <span style={{ flexShrink: 0, fontFamily: fCond, fontWeight: 700, fontSize: 13, color: '#1a1205', background: `linear-gradient(180deg, ${C.oroClaro}, ${C.oro})`, borderRadius: 14, padding: '4px 12px' }}>{invitaciones.length}</span>}
+          {total > 0 && <span style={{ flexShrink: 0, fontFamily: fCond, fontWeight: 700, fontSize: 13, color: '#1a1205', background: `linear-gradient(180deg, ${C.oroClaro}, ${C.oro})`, borderRadius: 14, padding: '4px 12px' }}>{total}</span>}
         </div>
       </div>
 
       {/* CONTENIDO */}
       <div style={{ position: 'relative', zIndex: 1, flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}>
         <div style={{ maxWidth: maxAncho, margin: '0 auto', padding: esAncho ? '22px 24px calc(env(safe-area-inset-bottom) + 40px)' : '16px 14px calc(env(safe-area-inset-bottom) + 34px)' }}>
+
           {cargando ? (
-            <div style={{ textAlign: 'center', color: C.tenue, fontSize: 13, padding: '50px 0' }}>Cargando invitaciones…</div>
-          ) : invitaciones.length === 0 ? (
+            <div style={{ textAlign: 'center', color: C.tenue, fontSize: 13, padding: '40px 0' }}>Cargando invitaciones…</div>
+          ) : total === 0 ? (
             <div style={{ textAlign: 'center', padding: '46px 24px' }}>
               <div style={{ fontSize: 54, marginBottom: 14, opacity: 0.9 }}>✉️</div>
               <div style={{ fontFamily: fCond, fontWeight: 700, fontSize: 19, textTransform: 'uppercase', letterSpacing: 0.4, color: C.txt, marginBottom: 9 }}>No tienes invitaciones</div>
-              <div style={{ color: C.tenue, fontSize: 13.5, lineHeight: 1.55, maxWidth: 320, margin: '0 auto' }}>Cuando un capitán u organizador te invite a su equipo, la invitación te llegará aquí para que la aceptes.</div>
+              <div style={{ color: C.tenue, fontSize: 13.5, lineHeight: 1.55, maxWidth: 320, margin: '0 auto' }}>Cuando te inviten a un equipo de torneo o a una liga, la invitación te llegará aquí para que la aceptes.</div>
             </div>
           ) : (
             <>
-              <div style={{ color: C.tenue, fontSize: 12.5, marginBottom: 14, lineHeight: 1.5 }}>Acepta para unirte al equipo. El torneo te aparecerá en tu perfil.</div>
-              {invitaciones.map((inv) => tarjeta(inv))}
+              {ligaInvs.length > 0 && (
+                <>
+                  <div style={{ fontFamily: fCond, fontWeight: 700, fontSize: 12, letterSpacing: 1, textTransform: 'uppercase', color: '#27d3c2', margin: '4px 0 11px' }}>Ligas</div>
+                  {ligaInvs.map((inv) => tarjetaLiga(inv))}
+                </>
+              )}
+              {invitaciones.length > 0 && (
+                <>
+                  <div style={{ fontFamily: fCond, fontWeight: 700, fontSize: 12, letterSpacing: 1, textTransform: 'uppercase', color: C.oro, margin: (ligaInvs.length ? '18px 0 11px' : '4px 0 11px') }}>Torneos</div>
+                  {invitaciones.map((inv) => tarjeta(inv))}
+                </>
+              )}
             </>
           )}
         </div>

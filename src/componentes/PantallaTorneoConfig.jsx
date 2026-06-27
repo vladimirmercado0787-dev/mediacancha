@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { leerTorneoCompleto } from '../torneos'
 
 // ============================================================
 //  CONFIGURAR JUEGO DE TORNEO  (formal, por reloj)
@@ -61,6 +62,28 @@ export default function PantallaTorneoConfig({ torneoId = null, nombreTorneo = '
       window.scrollTo(0, y)
     }
   }, [])
+
+  // Carga las reglas por defecto del torneo (las que se guardan en el panel de
+  // Configuración) y deja la pantalla ya lista con esas reglas. Así no hay que
+  // configurar lo mismo en cada juego; solo confirmas o cambias lo puntual.
+  useEffect(() => {
+    let vivo = true
+    ;(async () => {
+      if (!torneoId) return
+      try {
+        const r = await leerTorneoCompleto(torneoId)
+        if (!vivo || !r || !r.torneo || !r.torneo.reglas) return
+        const rg = r.torneo.reglas
+        if (rg.cuartos != null) setCuartos(rg.cuartos)
+        if (rg.minutos != null) setMinutos(rg.minutos)
+        if (rg.expulsionA != null) setExpulsionA(rg.expulsionA)
+        if (rg.bonusCada != null) setBonusCada(rg.bonusCada)
+        if (rg.modoAnotacion) setModoAnotacion(rg.modoAnotacion)
+        if (Array.isArray(rg.statsActivas) && rg.statsActivas.length) setStatsActivas(rg.statsActivas)
+      } catch (e) { /* si falla, se quedan los valores por defecto */ }
+    })()
+    return () => { vivo = false }
+  }, [torneoId])
 
   const toggleStat = (id) => {
     if (id === 'pts') return

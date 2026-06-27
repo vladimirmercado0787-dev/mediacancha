@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { misLigas } from '../ligas'
 
 // ============================================================
 //  LIGAS PROFESIONALES — el hub de ligas de Media Cancha
@@ -30,7 +31,31 @@ export default function PantallaLigas({ onVolver, onAccion }) {
     texto: '#eef3fc',
     texto2: '#c2cce0',
     tenue: '#8a9bc0',
+    teal: '#27d3c2',
+    tealBorde: 'rgba(39,211,194,0.34)',
   }
+  const TEAL_BTN = 'linear-gradient(150deg, #36e3d2, #0e9c90)'
+
+  // Etiquetas de días para mostrar bonito
+  const DIA_LBL = { lun: 'Lun', mar: 'Mar', mie: 'Mié', jue: 'Jue', vie: 'Vie', sab: 'Sáb', dom: 'Dom' }
+  const diasTexto = (arr) => {
+    if (!arr || arr.length === 0) return 'Días por definir'
+    if (arr.length === 7) return 'Todos los días'
+    return arr.map((d) => DIA_LBL[d] || d).join(' · ')
+  }
+
+  // Ligas DE LA COMUNIDAD — se cargan de verdad (las que tú creaste).
+  const [ligasComunidad, setLigasComunidad] = useState([])
+  const [cargandoLigas, setCargandoLigas] = useState(true)
+
+  useEffect(() => {
+    let vivo = true
+    misLigas()
+      .then(({ ligas }) => { if (vivo) setLigasComunidad(ligas || []) })
+      .catch(() => { if (vivo) setLigasComunidad([]) })
+      .finally(() => { if (vivo) setCargandoLigas(false) })
+    return () => { vivo = false }
+  }, [])
 
   // Definición de las ligas. activa=true abre su pantalla; activa=false muestra "próximamente".
   const ligas = [
@@ -167,8 +192,8 @@ export default function PantallaLigas({ onVolver, onAccion }) {
         <div style={{ maxWidth: esEscritorio ? 720 : '100%', margin: '0 auto', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px' }}>
           <button onClick={onVolver} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 38, height: 38, borderRadius: 11, border: `1px solid ${C.borde}`, background: C.panel, color: C.texto, fontSize: 19, cursor: 'pointer', flexShrink: 0 }}>‹</button>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 18, fontWeight: 900, color: C.texto, letterSpacing: 0.2 }}>Ligas Profesionales</div>
-            <div style={{ fontSize: 11.5, color: C.tenue, marginTop: 1 }}>El baloncesto profesional, en un solo lugar</div>
+            <div style={{ fontSize: 18, fontWeight: 900, color: C.texto, letterSpacing: 0.2 }}>Ligas</div>
+            <div style={{ fontSize: 11.5, color: C.tenue, marginTop: 1 }}>Las tuyas y las profesionales</div>
           </div>
           <div style={{ width: 38, height: 38, borderRadius: 11, flexShrink: 0, display: 'grid', placeItems: 'center', background: C.panel, border: `1px solid ${C.borde}`, fontSize: 18 }}>🏀</div>
         </div>
@@ -177,7 +202,70 @@ export default function PantallaLigas({ onVolver, onAccion }) {
       {/* CUERPO */}
       <div style={{ position: 'relative', zIndex: 1, flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
         <div style={{ maxWidth: esEscritorio ? 720 : '100%', margin: '0 auto', padding: '20px 16px calc(env(safe-area-inset-bottom) + 40px)' }}>
-          <div style={{ fontSize: 12.5, color: C.texto2, lineHeight: 1.55, marginBottom: 20 }}>
+          {/* ===================== APARTADO 1: LIGAS DE LA COMUNIDAD ===================== */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            <span style={{ width: 7, height: 7, borderRadius: '50%', background: C.teal, boxShadow: `0 0 10px ${C.teal}` }} />
+            <span style={{ fontSize: 15, fontWeight: 900, color: C.texto, letterSpacing: 0.2 }}>Ligas de la comunidad</span>
+          </div>
+          <div style={{ fontSize: 12, color: C.tenue, lineHeight: 1.5, marginBottom: 14 }}>
+            Donde tú juegas u organizas. Una persona puede estar en varias, y cada liga tiene sus propios días.
+          </div>
+
+          {cargandoLigas ? (
+            <div style={{ color: C.tenue, fontSize: 13, padding: '14px 4px' }}>Cargando tus ligas…</div>
+          ) : ligasComunidad.length === 0 ? (
+            <div style={{ border: `1px dashed ${C.tealBorde}`, background: 'rgba(39,211,194,0.05)', borderRadius: 16, padding: '20px 16px', marginBottom: 12, textAlign: 'center' }}>
+              <div style={{ fontSize: 30, marginBottom: 8 }}>🤝</div>
+              <div style={{ color: C.texto, fontSize: 14.5, fontWeight: 800, marginBottom: 4 }}>Aún no tienes ligas</div>
+              <div style={{ color: C.tenue, fontSize: 12.5, lineHeight: 1.5 }}>Crea la primera y aparecerá aquí. Puedes pertenecer a varias a la vez.</div>
+            </div>
+          ) : (
+            ligasComunidad.map((lg) => (
+              <button
+                key={lg.id}
+                onClick={() => onAccion && onAccion('abrirLiga:' + lg.id)}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: 14, textAlign: 'left', cursor: 'pointer',
+                  position: 'relative', overflow: 'hidden', borderRadius: 20, marginBottom: 12,
+                  border: `1px solid ${C.tealBorde}`,
+                  background: 'linear-gradient(135deg, rgba(39,211,194,0.12) 0%, rgba(255,255,255,0.05) 55%, rgba(39,211,194,0.07) 100%)',
+                  padding: '16px 16px', boxShadow: '0 10px 26px rgba(8,16,40,0.34)',
+                }}
+              >
+                <span style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: C.teal }} />
+                <div style={{ width: 56, height: 56, borderRadius: 15, flexShrink: 0, display: 'grid', placeItems: 'center', background: lg.logo_url ? `url(${lg.logo_url}) center/cover` : 'rgba(0,0,0,0.28)', border: '1px solid rgba(255,255,255,0.10)', fontSize: 26 }}>{!lg.logo_url && (lg.emoji || '🤝')}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 16.5, fontWeight: 900, color: C.texto, letterSpacing: 0.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{lg.nombre}</div>
+                  <div style={{ display: 'inline-block', fontSize: 10.5, fontWeight: 800, color: '#0a2b28', background: C.teal, borderRadius: 20, padding: '3px 10px', marginTop: 5 }}>{diasTexto(lg.dias)}</div>
+                  <div style={{ fontSize: 11.5, color: C.tenue, marginTop: 5 }}>{lg.lugar || 'Sin lugar'}{lg.estado && lg.estado !== 'activa' ? ` · ${lg.estado}` : ''}</div>
+                </div>
+                <span style={{ fontSize: 24, color: C.teal, flexShrink: 0 }}>›</span>
+              </button>
+            ))
+          )}
+
+          {/* + Crear liga */}
+          <button
+            onClick={() => onAccion && onAccion('crearLiga')}
+            style={{
+              width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9,
+              cursor: 'pointer', borderRadius: 16, marginBottom: 8,
+              border: `1px dashed ${C.tealBorde}`, background: 'rgba(39,211,194,0.07)',
+              padding: '15px', color: C.teal, fontSize: 14.5, fontWeight: 800,
+            }}
+          >
+            <span style={{ fontSize: 19 }}>＋</span> Crear una liga
+          </button>
+
+          {/* separador entre los dos mundos */}
+          <div style={{ height: 1, background: C.borde, margin: '26px 0 22px' }} />
+
+          {/* ===================== APARTADO 2: LIGAS PROFESIONALES ===================== */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#F5B82E', boxShadow: '0 0 10px #F5B82E' }} />
+            <span style={{ fontSize: 15, fontWeight: 900, color: C.texto, letterSpacing: 0.2 }}>Ligas profesionales</span>
+          </div>
+          <div style={{ fontSize: 12.5, color: C.texto2, lineHeight: 1.55, marginBottom: 16 }}>
             Hoy: la <strong style={{ color: C.texto }}>LNB</strong> de República Dominicana, en vivo. Pronto: la <strong style={{ color: C.texto }}>NBA</strong> y más ligas del mundo dentro de Media Cancha.
           </div>
 

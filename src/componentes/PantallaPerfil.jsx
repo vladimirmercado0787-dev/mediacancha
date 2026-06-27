@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../supabaseClient'
 import { subirFotoPerfil } from '../fotos'
-import { statsSociales } from '../social'
+import { statsSociales, contarJuegosJugador } from '../social'
 import RecortadorFoto from './RecortadorFoto'
 import TarjetaResultado from './TarjetaResultado'
 import { haceCuanto } from '../techado'
@@ -102,7 +102,7 @@ const NAV_PRINCIPAL = [
   { id: 'mapa', txt: 'Mapa', icono: '🗺️' },
 ]
 
-export default function PantallaPerfil({ onSalir, onVolver, onAccion }) {
+export default function PantallaPerfil({ onSalir, onVolver, onAccion, onSiguiendo, onConfig }) {
   const [tema, setTema] = useState(() => {
     const validos = ['dorado', 'azul', 'claro', 'larimar']
     if (typeof window !== 'undefined') {
@@ -125,6 +125,7 @@ export default function PantallaPerfil({ onSalir, onVolver, onAccion }) {
   const [menuFotoAbierto, setMenuFotoAbierto] = useState(false)
   const [pestanaPerfil, setPestanaPerfil] = useState('publicaciones')
   const [statsSoc, setStatsSoc] = useState({ seguidores: 0, siguiendo: 0 })
+  const [juegosCount, setJuegosCount] = useState(0)
   const [publicaciones, setPublicaciones] = useState([])
   const [cargandoPubs, setCargandoPubs] = useState(true)
   const inputFotoRef = useRef(null)
@@ -207,6 +208,8 @@ export default function PantallaPerfil({ onSalir, onVolver, onAccion }) {
           const s = await statsSociales(user.id)
           setStatsSoc({ seguidores: s.seguidores || 0, siguiendo: s.siguiendo || 0 })
         } catch (e) {}
+        // Cargar juegos jugados de verdad (donde aparezco vinculado)
+        try { setJuegosCount(await contarJuegosJugador(user.id)) } catch (e) {}
         // Cargar mis publicaciones
         try {
           const { data: pubs } = await supabase
@@ -306,7 +309,10 @@ export default function PantallaPerfil({ onSalir, onVolver, onAccion }) {
       {/* Barra superior: volver (izq) + tema (der esquina) */}
       <div style={{ position: 'relative', zIndex: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px 0' }}>
         <button onClick={() => irA('inicio')} style={{ width: 36, height: 36, borderRadius: 10, border: 'none', background: 'rgba(0,0,0,.3)', color: '#fff', fontSize: 20, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(6px)' }}>‹</button>
-        <BotonTema />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button onClick={() => onConfig && onConfig()} aria-label="Configuración" style={{ width: 36, height: 36, borderRadius: 10, border: 'none', background: 'rgba(0,0,0,.3)', color: '#fff', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(6px)' }}>⚙️</button>
+          <BotonTema />
+        </div>
       </div>
 
       {/* Identidad: foto grande arriba, nombre y datos centrados debajo */}
@@ -322,6 +328,7 @@ export default function PantallaPerfil({ onSalir, onVolver, onAccion }) {
             <span style={{ fontSize: 21, fontWeight: 800, color: '#fff', lineHeight: 1.05, textShadow: '0 1px 6px rgba(0,0,0,.7)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nombreCompleto}</span>
             <span style={{ flexShrink: 0, fontSize: 8.5, letterSpacing: 1, color: '#1c160d', background: T.boton, padding: '2px 8px', borderRadius: 10, fontWeight: 800, textTransform: 'uppercase' }}>{esJugador ? 'Jugador' : 'Fan'}</span>
           </div>
+          {perfil.apodo && <div style={{ fontSize: 13.5, fontWeight: 700, color: T.acento, marginBottom: 6, marginTop: -1, fontStyle: 'italic' }}>"{perfil.apodo}"</div>}
           <div style={{ fontSize: 12, color: '#d3c4a0', display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: 8 }}>
             {posicion && <span>{posicion}</span>}
             {posicion && ubicacion && <span style={{ width: 3, height: 3, borderRadius: '50%', background: '#7d6b49' }} />}
@@ -346,11 +353,11 @@ export default function PantallaPerfil({ onSalir, onVolver, onAccion }) {
       {/* Números sociales: Juegos · Siguiendo · Seguidores */}
       <div style={{ position: 'relative', zIndex: 2, display: 'flex', background: T.esClaro ? 'rgba(21,17,11,.92)' : 'rgba(12,14,18,.9)', borderTop: '1px solid rgba(234,182,79,.18)', borderRadius: '0 0 16px 16px' }}>
         {[
-          { v: perfil.juegos_jugados != null ? perfil.juegos_jugados : 0, l: 'Juegos' },
+          { v: juegosCount, l: 'Juegos' },
           { v: statsSoc.siguiendo, l: 'Siguiendo' },
           { v: statsSoc.seguidores, l: 'Seguidores' },
         ].map((s, i) => (
-          <div key={s.l} style={{ flex: 1, textAlign: 'center', padding: '10px 6px', borderLeft: i > 0 ? '1px solid rgba(234,182,79,.14)' : 'none' }}>
+          <div key={s.l} onClick={s.l === 'Siguiendo' ? () => onSiguiendo && onSiguiendo() : undefined} style={{ flex: 1, textAlign: 'center', padding: '10px 6px', borderLeft: i > 0 ? '1px solid rgba(234,182,79,.14)' : 'none', cursor: s.l === 'Siguiendo' ? 'pointer' : 'default' }}>
             <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', lineHeight: 1 }}>{s.v}</div>
             <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.6, color: T.acento, marginTop: 4, textTransform: 'uppercase' }}>{s.l}</div>
           </div>
@@ -385,9 +392,9 @@ export default function PantallaPerfil({ onSalir, onVolver, onAccion }) {
           {[
             { v: statsSoc.seguidores, l: 'Seguidores' },
             { v: statsSoc.siguiendo, l: 'Siguiendo' },
-            { v: perfil.juegos_jugados != null ? perfil.juegos_jugados : 0, l: 'Juegos' },
+            { v: juegosCount, l: 'Juegos' },
           ].map((s, i) => (
-            <div key={s.l} style={{ flex: 1, textAlign: 'center', padding: '12px 6px', borderLeft: i > 0 ? `1px solid ${T.lineaSuave}` : 'none' }}>
+            <div key={s.l} onClick={s.l === 'Siguiendo' ? () => onSiguiendo && onSiguiendo() : undefined} style={{ flex: 1, textAlign: 'center', padding: '12px 6px', borderLeft: i > 0 ? `1px solid ${T.lineaSuave}` : 'none', cursor: s.l === 'Siguiendo' ? 'pointer' : 'default' }}>
               <div style={{ fontSize: 20, fontWeight: 800, color: T.textoFuerte, lineHeight: 1 }}>{s.v}</div>
               <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 0.5, color: C.tenue, marginTop: 5, textTransform: 'uppercase' }}>{s.l}</div>
             </div>
