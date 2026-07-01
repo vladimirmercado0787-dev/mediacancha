@@ -1,51 +1,82 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, lazy, Suspense } from 'react'
 import { supabase } from './supabaseClient'
 import IntroMediaCancha from './componentes/IntroMediaCancha'
 import PantallaPublica from './componentes/PantallaPublica'
 import PantallaRegistro from './componentes/PantallaRegistro'
 import PantallaLogin from './componentes/PantallaLogin'
-import PantallaPerfil from './componentes/PantallaPerfil'
-import PantallaComando from './componentes/PantallaComando'
-import PantallaSiguiendo from './componentes/PantallaSiguiendo'
-import PantallaConfiguracion from './componentes/PantallaConfiguracion'
-import PantallaJuegoConfig from './componentes/PantallaJuegoConfig'
-import PantallaJuegoJugadores from './componentes/PantallaJuegoJugadores'
-import PantallaJuegoVivo from './componentes/PantallaJuegoVivo'
-import PantallaJuegoResultado from './componentes/PantallaJuegoResultado'
-import PantallaResultados from './componentes/PantallaResultados'
-import PantallaBuscar from './componentes/PantallaBuscar'
-import PantallaPerfilAjeno from './componentes/PantallaPerfilAjeno'
-import PantallaChat from './componentes/PantallaChat'
-import PantallaGrupo from './componentes/PantallaGrupo'
-import PantallaCrearGrupo from './componentes/PantallaCrearGrupo'
-import PantallaPublicar from './componentes/PantallaPublicar'
-import PantallaTorneos from './componentes/PantallaTorneos'
-import PantallaTorneoPublico from './componentes/PantallaTorneoPublico'
-import PantallaInvitaciones from './componentes/PantallaInvitaciones'
-import PantallaTorneoConfig from './componentes/PantallaTorneoConfig'
-import PantallaConfigTorneo from './componentes/PantallaConfigTorneo'
-import PantallaMisTorneos from './componentes/PantallaMisTorneos'
-import PantallaNoticiasCrudas from './componentes/PantallaNoticiasCrudas'
-import PantallaCrearTorneo from './componentes/PantallaCrearTorneo'
+import ShellEscritorio from './componentes/ShellEscritorio'
 import { guardarJuegoDelDia } from './historialDia'
 import { registrarCartero, intentarOEncolar, iniciarCartero, alCambiarCola } from './offline'
 import { leerRosterTorneo, guardarAnotacionTorneo, marcarJuegoVivo } from './torneoData'
-import PantallaLigas from './componentes/PantallaLigas'
-import PantallaLiga from './componentes/PantallaLiga'
-import PantallaLigaPublica from './componentes/PantallaLigaPublica'
-import PantallaInvitarLiga from './componentes/PantallaInvitarLiga'
-import PantallaCrearLiga from './componentes/PantallaCrearLiga'
 import { leerLiga, guardarJuegoLiga } from './ligas'
 import { registrarStatsJugadores } from './estadisticas'
 import { publicarJuegoLiga } from './techado'
-import PantallaLNB from './componentes/PantallaLNB'
-import PantallaNBA from './componentes/PantallaNBA'
-import PantallaNoticias from './componentes/PantallaNoticias'
-import PantallaRosters from './componentes/PantallaRosters'
-import PantallaCentroComando from './componentes/PantallaCentroComando'
-import PantallaSalaDraft from './componentes/PantallaSalaDraft'
-import ShellEscritorio from './componentes/ShellEscritorio'
 import { StatusBar, Style } from '@capacitor/status-bar'
+
+// ============================================================================
+//  CARGA POR PANTALLA (code splitting)
+//  Antes, TODA la app bajaba de golpe al abrir (un solo JavaScript gigante).
+//  Ahora solo el arranque (intro, feed, login/registro) carga de inmediato;
+//  cada pantalla pesada baja la primera vez que la persona entra a ella,
+//  y de ahí en adelante queda guardada. En el teléfono (Capacitor) los
+//  pedazos viven en el propio aparato, así que la "descarga" es instantánea:
+//  la ganancia es que el arranque procesa muchísimo menos código.
+// ============================================================================
+function CargaPantalla() {
+  return (
+    <div style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ width: 34, height: 34, borderRadius: '50%', border: '3px solid rgba(202,162,74,.25)', borderTopColor: '#caa24a', animation: 'mcGiroCarga .8s linear infinite' }} />
+      <style>{'@keyframes mcGiroCarga { to { transform: rotate(360deg) } }'}</style>
+    </div>
+  )
+}
+
+// Envuelve una pantalla perezosa con su pantallita de carga, una sola vez.
+function pantalla(cargar) {
+  const Perezosa = lazy(cargar)
+  return function PantallaConCarga(props) {
+    return (
+      <Suspense fallback={<CargaPantalla />}>
+        <Perezosa {...props} />
+      </Suspense>
+    )
+  }
+}
+
+const PantallaPerfil = pantalla(() => import('./componentes/PantallaPerfil'))
+const PantallaComando = pantalla(() => import('./componentes/PantallaComando'))
+const PantallaSiguiendo = pantalla(() => import('./componentes/PantallaSiguiendo'))
+const PantallaConfiguracion = pantalla(() => import('./componentes/PantallaConfiguracion'))
+const PantallaJuegoConfig = pantalla(() => import('./componentes/PantallaJuegoConfig'))
+const PantallaJuegoJugadores = pantalla(() => import('./componentes/PantallaJuegoJugadores'))
+const PantallaJuegoVivo = pantalla(() => import('./componentes/PantallaJuegoVivo'))
+const PantallaJuegoResultado = pantalla(() => import('./componentes/PantallaJuegoResultado'))
+const PantallaResultados = pantalla(() => import('./componentes/PantallaResultados'))
+const PantallaBuscar = pantalla(() => import('./componentes/PantallaBuscar'))
+const PantallaPerfilAjeno = pantalla(() => import('./componentes/PantallaPerfilAjeno'))
+const PantallaChat = pantalla(() => import('./componentes/PantallaChat'))
+const PantallaGrupo = pantalla(() => import('./componentes/PantallaGrupo'))
+const PantallaCrearGrupo = pantalla(() => import('./componentes/PantallaCrearGrupo'))
+const PantallaPublicar = pantalla(() => import('./componentes/PantallaPublicar'))
+const PantallaTorneos = pantalla(() => import('./componentes/PantallaTorneos'))
+const PantallaTorneoPublico = pantalla(() => import('./componentes/PantallaTorneoPublico'))
+const PantallaInvitaciones = pantalla(() => import('./componentes/PantallaInvitaciones'))
+const PantallaTorneoConfig = pantalla(() => import('./componentes/PantallaTorneoConfig'))
+const PantallaConfigTorneo = pantalla(() => import('./componentes/PantallaConfigTorneo'))
+const PantallaMisTorneos = pantalla(() => import('./componentes/PantallaMisTorneos'))
+const PantallaNoticiasCrudas = pantalla(() => import('./componentes/PantallaNoticiasCrudas'))
+const PantallaCrearTorneo = pantalla(() => import('./componentes/PantallaCrearTorneo'))
+const PantallaLigas = pantalla(() => import('./componentes/PantallaLigas'))
+const PantallaLiga = pantalla(() => import('./componentes/PantallaLiga'))
+const PantallaLigaPublica = pantalla(() => import('./componentes/PantallaLigaPublica'))
+const PantallaInvitarLiga = pantalla(() => import('./componentes/PantallaInvitarLiga'))
+const PantallaCrearLiga = pantalla(() => import('./componentes/PantallaCrearLiga'))
+const PantallaLNB = pantalla(() => import('./componentes/PantallaLNB'))
+const PantallaNBA = pantalla(() => import('./componentes/PantallaNBA'))
+const PantallaNoticias = pantalla(() => import('./componentes/PantallaNoticias'))
+const PantallaRosters = pantalla(() => import('./componentes/PantallaRosters'))
+const PantallaCentroComando = pantalla(() => import('./componentes/PantallaCentroComando'))
+const PantallaSalaDraft = pantalla(() => import('./componentes/PantallaSalaDraft'))
 
 // Convierte el roster de dos equipos en los jugadores que el anotador espera.
 // Los primeros cinco de cada equipo entran en cancha; el resto, a la banca.
