@@ -6,7 +6,7 @@ import { statsSociales, alternarSeguir, contarJuegosJugador } from '../social'
 import { haceCuanto } from '../techado'
 import TarjetaResultado from './TarjetaResultado'
 import GaleriaPublicaciones from './GaleriaPublicaciones'
-import fondoCancha from '../assets/fondo-cancha.png'
+import fondoCancha from '../assets/fondo-cancha.webp'
 
 const TEMAS = {
   dorado: { esClaro: false, acento: '#e8b65a', fondo: '#08090c', textoFuerte: '#f4f7f9', textoBody: '#eef3f6', tenue: '#9aa7b2', subTexto: '#c3ccd4', borde: 'linear-gradient(140deg,#f7d785,#b9802c 40%,#5e4318 70%,#caa050)', boton: 'linear-gradient(150deg, #f3cf63, #c8842e)', avatar: 'linear-gradient(150deg, #e0b057, #9a6420)', avatarTexto: '#241a07', texto: 'linear-gradient(120deg,#fbe08a,#c8842e)', tarjetaBg: 'rgba(20,22,26,.72)', tarjetaBorde: 'rgba(255,255,255,.08)', glow: 'rgba(190,135,55,0.18)', navDorada: 'linear-gradient(180deg,#eab64f,#c8842e 55%,#9c6518)', veloGrad: 'linear-gradient(180deg, rgba(8,9,12,0.84), rgba(8,9,12,0.92))' },

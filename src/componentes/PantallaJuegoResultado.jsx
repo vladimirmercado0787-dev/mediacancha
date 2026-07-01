@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import fondoJuego from '../assets/fondo-juego.png'
+import fondoJuego from '../assets/fondo-juego.webp'
 import LogoEquipo from './LogoEquipo'
 import { publicarJuego } from '../techado'
 import { compartirPdfResultado } from '../generarPdfResultado'

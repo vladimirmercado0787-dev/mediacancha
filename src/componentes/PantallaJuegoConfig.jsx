@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import fondoJuego from '../assets/fondo-juego.png'
+import fondoJuego from '../assets/fondo-juego.webp'
 
 const SUP_OSCURA = {
   esClaro: false, fondo: '#08090c', textoFuerte: '#f4f7f9', textoBody: '#eef3f6', tenue: '#9aa7b2', subTexto: '#c3ccd4',

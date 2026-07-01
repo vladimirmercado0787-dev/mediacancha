@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
 import { subirFotoPerfil } from '../fotos'
 import RecortadorFoto from './RecortadorFoto'
-import fondoCancha from '../assets/fondo-cancha.png'
+import fondoCancha from '../assets/fondo-cancha.webp'
 import { MUNICIPIOS_RD } from '../data/municipiosRD'
 import { ESTADOS_USA } from '../data/estadosUSA'
 

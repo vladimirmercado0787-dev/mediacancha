@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { Keyboard, KeyboardResize } from '@capacitor/keyboard'
-import plAroAtardecer from '../assets/plantillas/plantilla_aro_atardecer.png'
-import plBalonDorado from '../assets/plantillas/plantilla_balon_dorado.png'
-import plCanchaBarrioNoche from '../assets/plantillas/plantilla_cancha_barrio_noche.png'
-import plCanchaMadera from '../assets/plantillas/plantilla_cancha_madera.png'
-import plMonumentoSantiago from '../assets/plantillas/plantilla_monumento_santiago.png'
+import plAroAtardecer from '../assets/plantillas/plantilla_aro_atardecer.webp'
+import plBalonDorado from '../assets/plantillas/plantilla_balon_dorado.webp'
+import plCanchaBarrioNoche from '../assets/plantillas/plantilla_cancha_barrio_noche.webp'
+import plCanchaMadera from '../assets/plantillas/plantilla_cancha_madera.webp'
+import plMonumentoSantiago from '../assets/plantillas/plantilla_monumento_santiago.webp'
 import RecortadorFoto from './RecortadorFoto'
 
 const TEMAS = {

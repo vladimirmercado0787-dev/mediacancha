@@ -3,11 +3,11 @@
 // El default es el "estilo del tema" (limpio, sin imagen).
 // Luego 5 fondos gratis con imagen + 10 de pago. Las de pago se desbloquean con cualquier pago.
 
-import monumentoSantiago from './assets/plantillas/plantilla_monumento_santiago.png'
-import canchaBarrioNoche from './assets/plantillas/plantilla_cancha_barrio_noche.png'
-import balonDorado from './assets/plantillas/plantilla_balon_dorado.png'
-import aroAtardecer from './assets/plantillas/plantilla_aro_atardecer.png'
-import canchaMadera from './assets/plantillas/plantilla_cancha_madera.png'
+import monumentoSantiago from './assets/plantillas/plantilla_monumento_santiago.webp'
+import canchaBarrioNoche from './assets/plantillas/plantilla_cancha_barrio_noche.webp'
+import balonDorado from './assets/plantillas/plantilla_balon_dorado.webp'
+import aroAtardecer from './assets/plantillas/plantilla_aro_atardecer.webp'
+import canchaMadera from './assets/plantillas/plantilla_cancha_madera.webp'
 
 // Las 10 de pago todavía no tienen imagen (las generará Vladimir).
 // Cuando estén, se importan y se les pone la img.

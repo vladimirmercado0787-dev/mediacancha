@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../supabaseClient'
 import { miUsuarioId, alternarSeguir, idsQueSigo } from '../social'
-import fondoCancha from '../assets/fondo-cancha.png'
+import fondoCancha from '../assets/fondo-cancha.webp'
 
 // ============================================================
 //  IDENTIDAD MEDIA CANCHA (rediseño) — usa la misma clave 'mc_tema'

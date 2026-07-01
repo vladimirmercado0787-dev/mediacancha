@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import fondoJuego from '../assets/fondo-juego.png'
+import fondoJuego from '../assets/fondo-juego.webp'
 import LogoEquipo from './LogoEquipo'
 import { LOGOS_EQUIPO, CATEGORIAS_LOGO } from '../logosEquipos'
 import { supabase } from '../supabaseClient'

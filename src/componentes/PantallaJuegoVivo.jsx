@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import fondoJuego from '../assets/fondo-juego.png'
+import fondoJuego from '../assets/fondo-juego.webp'
 import { crearNarrador } from './narrador'
 
 const TEMAS = {
