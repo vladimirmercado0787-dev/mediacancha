@@ -944,3 +944,76 @@ Estatus visible: un **perfil dorado verificado** que marca al jugador como de **
 - `HECHO` **Selector "Mis Torneos" (admin):** antes "Mis torneos" metía directo al torneo más reciente (la pantalla de admin cargaba `limit(1)` sin importar de quién). Ahora "Mis torneos"/"Donde juego" abren `PantallaMisTorneos.jsx` (NUEVO) — lista los torneos que el usuario organiza (`misTorneos()`, con su estado activo/finalizado) para elegir en cuál entrar. Una persona puede administrar varios torneos a la vez. `PantallaTorneos` ahora recibe `torneoId` y carga ESE; Volver regresa al selector; crear un torneo entra directo a administrarlo. (jun 26, 2026)
 - `PENDIENTE` **Centro de Comando** completo (panel del dueño que junta todo).
 - `PENDIENTE (sin Tailwind / 3 niveles)` adaptar el flujo de anotar (Config/Vivo/Resultado) a iPad y escritorio — ver L-008.
+
+---
+
+## SESIÓN — jun 26, 2026 · Ligas de usuario (diseño) + pendiente de Configuración de la app
+
+**HECHO:**
+- `HECHO (diseño)` **Pantalla de Liga** (`PantallaLiga.jsx`, NUEVO). Concepto: una liga es un grupo MENOS formal que el torneo — gente que se reúne un día fijo a jugar. Lleva estadística igual, pero el modo de anotar es LIBRE (fogueo, rápido, 1v1, 3v3, 5v5 — todo cuenta). Tiene inscripciones, invitaciones en nombre de la liga (con logo), sirve para escuelas de baloncesto, y su pequeña contabilidad como el torneo.
+  - **IDENTIDAD DE COLOR (decisión):** el torneo es DORADO; la liga es TURQUESA/TEAL (`#27d3c2`), mismo tema oscuro pero acento distinto + franja turquesa en vez del tricolor, para diferenciar de un vistazo. (Regla: torneo = dorado, liga = turquesa.)
+  - Pestañas: Resumen · Miembros · Juegos (con modos libres) · Líderes · Invitar · Caja.
+  - Por AHORA con DATOS DE EJEMPLO (es el diseño). Botones "Crear liga" / "Mis ligas" del menú ya abren esta pantalla (antes no hacían nada → caían en el alert de relleno que contamina el WebView; de paso se arregló eso).
+
+**PENDIENTE — LIGAS (para hacerla real, después del diseño):**
+- `PENDIENTE` Backend de ligas: tabla `ligas` (+ `liga_miembros`, `liga_juegos`, `liga_caja`, etc.), RLS, y funciones (`crearLiga`, `misLigas`, etc.) — espejo de lo del torneo pero más flexible.
+- `PENDIENTE` Flujo "Crear liga" (como `PantallaCrearTorneo` pero para liga: nombre, logo, día de reunión, modo de inscripción).
+- `PENDIENTE` Separar "Mis ligas" (selector, como hicimos con Mis Torneos) de "Crear liga".
+- `PENDIENTE` Motor de anotación LIBRE: que el anotador acepte fogueo / rápido / 1v1 / 3v3 / 5v5 y todo guarde estadística para los líderes de la liga.
+- `PENDIENTE` Invitaciones en nombre de la liga (con logo) + inscripciones.
+- `PENDIENTE` Caja de la liga real (espejo de la caja del torneo).
+- `PENDIENTE` Pensada también para ESCUELAS de baloncesto (todo anotado, invitaciones, miembros).
+
+**PENDIENTE — CONFIGURACIÓN DE LA APP (lo apuntó Vladimir):**
+- `PENDIENTE` **Configuración de la app / del perfil donde se suban las FOTOS** — el logo y la foto del jugador — para conectarlas con todo (perfil, equipos, carnet, tarjetas de resultado). Hoy no existe ese sitio central. Relacionado con el "plan de tres fotos" (perfil / logo / carnet) que ya estaba apuntado. Construir un lugar claro para subir y administrar esas imágenes.
+
+---
+
+# ============================================================
+# SESIÓN 27-JUN-2026 — LIGAS REALES + MIEMBROS + PERFIL + CONFIGURACIÓN
+# (Resumen para retomar en una conversación nueva. Jarvis: leer esto primero.)
+# ============================================================
+
+## ⚠️ BUG ABIERTO — PRIMERO ESTO AL RETOMAR
+- **El botón ⚙️ de Configuración NO aparece en el iPhone de Vladimir.** Ya se subieron todos los archivos y se reconstruyó, pero no se ve.
+  - Se agregó el engranaje en `PantallaPerfil.jsx`, en la barra superior de portada (junto a `<BotonTema/>`, ~línea 310-313), con prop `onConfig`.
+  - SOSPECHA: `PantallaPerfil` tiene DOS cabeceras — la de PORTADA (móvil, donde se puso el ⚙️) y una STICKY (~línea 516-517) que quizá es la que se ve en su iPhone. Hay que revisar cuál renderiza en móvil y poner el ⚙️ también ahí. Ver el flag `esEscritorio` / `esJugador`.
+  - App ya tiene la vista `configuracion` y pasa `onConfig={() => setVista('configuracion')}`. Falta solo que el botón se vea.
+
+## QUÉ SE COMPLETÓ ESTA SESIÓN (todo validado con esbuild y entregado)
+1. **LIGA — anotar juego (reusa el motor general):** `juegoLigaCtx` en App. Botón "Anotar un juego" en `PantallaLiga` abre selector de modo (fogueo/rápido/normal/1v1/3v3/5v5) → entra al anotador de siempre → al terminar `guardarJuegoLiga(ligaId,modo,res)` y vuelve a la liga. Tabla `liga_juegos`. Historial real en pestaña Juegos + Resumen.
+2. **LIGA — compartir en Techado:** `publicarJuegoLiga(res,{ligaId,ligaNombre,modo})` en `techado.js` (tipo `'liga'`, etiqueta turquesa, NO expira). App lo llama al terminar el juego de liga.
+3. **LIGA — miembros:** tabla `liga_miembros` (creador queda admin al crear). `PantallaInvitarLiga.jsx`: buscar cuentas → INVITAR (queda pendiente, NO agrega de una) o CONFIRMAR EN PERSONA con el PIN del jugador. Compartir invitación (WhatsApp) a los que no están en la app. Pestaña Miembros real.
+4. **LIGA — invitaciones (igual que torneos):** tabla `liga_invitaciones` (pendiente/aceptada/rechazada). Llegan a "Mis invitaciones" (`PantallaInvitaciones.jsx` ahora muestra Ligas turquesa + Torneos dorado, aceptar/rechazar). RPC `confirmar_miembro_liga_con_codigo(p_liga_id,p_perfil_id,p_pin)` para confirmar en persona con el PIN secreto del jugador.
+   - ⚠️ Ese RPC ASUME que el PIN está en `perfiles.pin_hash` con pgcrypto (`crypt`). Si al confirmar da error, hay que pegar la definición de `confirmar_jugador_con_codigo` (la de torneos) y calcar el método exacto.
+   - (Se quitó un concepto equivocado de "código de la liga" que se había puesto por error.)
+5. **FIX — seguir torneo no se guardaba:** el botón solo cambiaba color (`setSiguiendo(s=>!s)`), nunca persistía. Ahora tabla `torneo_seguidores` + funciones (`sigoTorneo`, `contarSeguidoresTorneo`, `alternarSeguirTorneo`) en `torneos.js`. `PantallaTorneoPublico.jsx` lee el estado real al cargar + cuenta seguidores real + toggle optimista.
+6. **FIX — perfil decía 0 juegos:** la columna `juegos_jugados` no la actualizaba nadie (muerta). Ahora `contarJuegosJugador(perfilId)` en `social.js` cuenta de verdad: `publicaciones` cuyo `datos.jugadores` contiene el `perfilId` (jsonb `.contains`). Cableado en `PantallaPerfil` y `PantallaPerfilAjeno`. OJO: solo cuenta si el jugador estaba VINCULADO a su cuenta al anotar.
+7. **SIGUIENDO — pantalla:** `PantallaSiguiendo.jsx` (pestañas Personas + Torneos, cliqueables). Se abre tocando "Siguiendo N" en el perfil. Funciones `aQuienesSigo()` (social.js) y `torneosQueSigo()` (torneos.js). Las ligas se sumarán cuando exista el seguir de ligas.
+8. **APODO:** columna `perfiles.apodo`. Campo en el registro. Se muestra en ambos perfiles (dorado, cursiva, comillas). `buscarPersonas` busca y devuelve apodo.
+9. **CONFIGURACIÓN:** `PantallaConfiguracion.jsx` (NUEVO). Sección "Mi identidad" editable: foto + logo personal (se suben y guardan de una) + nombre/apellido/apodo/número/altura/posiciones/frase → `guardarMiPerfil`. Sección "Seguridad": cambiar PIN (`cambiarMiPin` → rpc `set_pin`) + cerrar sesión. Placeholders "Pronto": Apariencia, Notificaciones, Privacidad, Mis equipos y logos. Se entra desde el ⚙️ del perfil (BUG: no se ve, ver arriba). Funciones nuevas en social.js: `cargarMiPerfil`, `guardarMiPerfil`, `cambiarMiPin`.
+
+## SQL A CORRER EN SUPABASE (todos idempotentes)
+- `liga_juegos_schema.sql`, `liga_miembros_schema.sql`, `liga_invitaciones_schema.sql`, `liga_confirmar_codigo_rpc.sql`
+- `torneo_seguidores_schema.sql`
+- `perfil_apodo.sql` (columna apodo), `perfil_config.sql` (columnas logo_url, numero, frase)
+
+## TABLAS NUEVAS: liga_juegos, liga_miembros, liga_invitaciones, torneo_seguidores
+## COLUMNAS NUEVAS en perfiles: apodo, logo_url, numero, frase
+## RPC NUEVO: confirmar_miembro_liga_con_codigo
+
+## PENDIENTE — LIGAS (lo que falta, en orden recomendado)
+1. `PENDIENTE` **Pantalla pública de la liga** (esmerada, cliqueable, con SEGUIR liga). Necesita tabla `liga_seguidores` + funciones (espejo de `torneo_seguidores`). Mostrar escudo grande, miembros, juegos, líderes. Vladimir la pidió bonita ("que quede pegado").
+2. `PENDIENTE` **Líderes reales** de la liga (de los `liga_juegos`): más puntos/reb/ast.
+3. `PENDIENTE` **Detalle de un juego de liga** (box score completo; la data ya se guarda en `liga_juegos.datos`, falta la pantalla) + editar/borrar un juego.
+4. `PENDIENTE` **Repartir el juego en los perfiles de los miembros** (que salga en el perfil de cada jugador vinculado — ya cuenta para `contarJuegosJugador`, falta surfacearlo como lista).
+5. `PENDIENTE` **Caja** de la liga (real) + pestaña Invitar ya enlaza a PantallaInvitarLiga.
+6. `OPCIONAL` Equipos fijos + tabla de posiciones.
+
+## PENDIENTE — CONFIGURACIÓN (siguientes secciones)
+- Apariencia (tema claro/oscuro + tamaño de letra), Notificaciones, Privacidad, "Mis equipos y logos" (editar logo de cada equipo).
+
+## NOTAS TÉCNICAS
+- Clon de trabajo de Jarvis: `/home/claude/mc-fresh` (NO es el repo de Vladimir; él pega los archivos a mano en su Mac).
+- Validación esbuild: `--jsx=automatic --format=esm --bundle --external:react` + externals (`../ligas`, `../torneos`, `@supabase/supabase-js`); pantallas con imágenes `.png/.jpg/.svg` → `--loader:.png=dataurl` o syntax-only.
+- Reglas de siempre: inline styles, números como PALABRAS en prosa (TTS iPhone), archivos NUEVOS se crean con clic derecho → New File (pegar adentro, no dentro de otro archivo). Identidad: torneo=dorado, liga=turquesa (#27d3c2).

@@ -115,6 +115,33 @@ export async function contarJuegosJugador(perfilId) {
   return count || 0
 }
 
+// Personas que ME siguen (lista con su perfil), con si las sigo de vuelta.
+// Las más recientes primero. Para el cuadro "Te siguen" / notificaciones.
+export async function quienesMeSiguen(limite = 15) {
+  const yo = await miUsuarioId()
+  if (!yo) return { personas: [], error: 'No hay sesión' }
+  const { data: rel, error } = await supabase
+    .from('seguidores')
+    .select('seguidor_id, creado_en')
+    .eq('seguido_id', yo)
+    .order('creado_en', { ascending: false })
+    .limit(limite)
+  if (error) return { personas: [], error: error.message }
+  const ids = (rel || []).map((r) => r.seguidor_id).filter(Boolean)
+  if (!ids.length) return { personas: [], error: null }
+  const [{ data: perfiles }, { data: misSeguidos }] = await Promise.all([
+    supabase.from('perfiles').select('id, nombre, apellido, foto_url, codigo_unico, municipio').in('id', ids),
+    supabase.from('seguidores').select('seguido_id').eq('seguidor_id', yo).in('seguido_id', ids),
+  ])
+  const sigoSet = new Set((misSeguidos || []).map((r) => r.seguido_id))
+  const fecha = {}
+  ;(rel || []).forEach((r) => { fecha[r.seguidor_id] = r.creado_en })
+  const personas = (perfiles || [])
+    .map((p) => ({ ...p, loSigo: sigoSet.has(p.id), creado_en: fecha[p.id] }))
+    .sort((a, b) => new Date(b.creado_en) - new Date(a.creado_en))
+  return { personas, error: null }
+}
+
 // Personas que sigo (lista con su perfil), para la pantalla "Siguiendo".
 export async function aQuienesSigo() {
   const yo = await miUsuarioId()

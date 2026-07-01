@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../supabaseClient'
+import { cacheGet, cacheSet } from '../cache'
 import { publicarJuego } from '../techado'
 import CompartirAlChat from './CompartirAlChat'
 
@@ -220,8 +221,19 @@ export default function PantallaLNB({ onVolver, onAccion }) {
 
   useEffect(() => {
     let vivo = true
+    const clave = 'lnb'
+    // PASO 2: mostrar al instante lo último guardado (es una sola, llave única).
+    const g = cacheGet(clave)
+    if (g) {
+      setTemporada(g.temporada); setTemporadas(g.temporadas || []); setTemporadaSel(g.temporadaSel)
+      setEquipos(g.equipos || {}); setStanding(g.standing || [])
+      setJuegos(g.juegos || []); setLideres(g.lideres || []); setNoticias(g.noticias || [])
+      setJugadorSemana(g.jugadorSemana || null); setJugadores(g.jugadores || {}); setTempStats(g.tempStats || [])
+      setCargando(false)
+    }
     async function cargar() {
-      setCargando(true); setError(null)
+      if (!g) setCargando(true)
+      setError(null)
       try {
         const { data: temps, error: e1 } = await supabase
           .from('lnb_temporadas').select('*').order('year', { ascending: false })
@@ -266,6 +278,12 @@ export default function PantallaLNB({ onVolver, onAccion }) {
         setJuegos(jueLista); setLideres(ld); setNoticias(nt); setJugadorSemana(js); setJugadores(jMap)
         setTempStats(ts)
         setCargando(false)
+        // PASO 3: guardar lo nuevo para la próxima.
+        cacheSet(clave, {
+          temporada: actual, temporadas: lista, temporadaSel: actual ? actual.id : (lista[0] && lista[0].id),
+          equipos: eMap, standing: st, juegos: jueLista, lideres: ld, noticias: nt,
+          jugadorSemana: js, jugadores: jMap, tempStats: ts,
+        })
       } catch (err) {
         if (!vivo) return
         setError(err.message || 'Error cargando datos')

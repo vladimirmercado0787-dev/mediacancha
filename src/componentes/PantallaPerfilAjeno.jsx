@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
+import { cacheGet, cacheSet } from '../cache'
+import SeccionPromedios from './SeccionPromedios'
 import { statsSociales, alternarSeguir, contarJuegosJugador } from '../social'
 import { haceCuanto } from '../techado'
 import TarjetaResultado from './TarjetaResultado'
+import GaleriaPublicaciones from './GaleriaPublicaciones'
 import fondoCancha from '../assets/fondo-cancha.png'
 
 const TEMAS = {
@@ -51,13 +54,26 @@ export default function PantallaPerfilAjeno({ usuarioId, onVolver, onMensaje }) 
 
   useEffect(() => {
     (async () => {
-      setCargando(true)
+      const clave = 'perfil_' + usuarioId
+      // PASO 2: mostrar al instante lo último guardado de este perfil.
+      const guardado = cacheGet(clave)
+      if (guardado) {
+        if (guardado.perfil) setPerfil(guardado.perfil)
+        if (guardado.stats) setStats(guardado.stats)
+        if (typeof guardado.juegosCount === 'number') setJuegosCount(guardado.juegosCount)
+        if (guardado.publicaciones) setPublicaciones(guardado.publicaciones)
+        setCargando(false)
+      } else {
+        setCargando(true)
+      }
       try {
         const { data, error: err } = await supabase.from('perfiles').select('*').eq('id', usuarioId).single()
         if (err) throw err
         setPerfil(data)
-        setStats(await statsSociales(usuarioId))
-        try { setJuegosCount(await contarJuegosJugador(usuarioId)) } catch (e) {}
+        const st = await statsSociales(usuarioId)
+        setStats(st)
+        let jc = 0
+        try { jc = await contarJuegosJugador(usuarioId); setJuegosCount(jc) } catch (e) {}
         // sus publicaciones públicas
         const { data: pubs } = await supabase
           .from('publicaciones_completas')
@@ -66,6 +82,8 @@ export default function PantallaPerfilAjeno({ usuarioId, onVolver, onMensaje }) 
           .order('creado_en', { ascending: false })
           .limit(20)
         if (pubs) setPublicaciones(pubs)
+        // PASO 3: guardar lo nuevo para la próxima.
+        cacheSet(clave, { perfil: data, stats: st, juegosCount: jc, publicaciones: pubs || [] })
       } catch (e) {
         setError('No se pudo cargar el perfil.')
       }
@@ -184,43 +202,11 @@ export default function PantallaPerfilAjeno({ usuarioId, onVolver, onMensaje }) 
 
         </div>{/* fin columna izquierda */}
         <div style={{ flex: 1, minWidth: 0, marginTop: esEscritorio ? 0 : 22 }}>
+        <SeccionPromedios perfilId={usuarioId} T={T} />
         {/* SUS PUBLICACIONES */}
         <div>
           <div style={{ fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1, ...ORO, marginBottom: 14, paddingLeft: 2 }}>Publicaciones de {perfil.nombre || 'este jugador'}</div>
-          {publicaciones.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '34px 20px', color: T.tenue, background: T.tarjetaBg, border: `1px solid ${T.tarjetaBorde}`, borderRadius: 16 }}>
-              <div style={{ fontSize: 30, marginBottom: 10 }}>🏀</div>
-              <div style={{ fontSize: 13.5, lineHeight: 1.5 }}>Todavía no ha publicado nada.</div>
-            </div>
-          ) : (
-            publicaciones.map((p) => {
-              let datos = p.datos || {}
-              if (typeof datos === 'string') { try { datos = JSON.parse(datos) } catch (e) { datos = {} } }
-              const esJuego = datos && datos.nombreA && datos.nombreB && (datos.totalA != null || (datos.jugadores && datos.jugadores.length))
-              if (esJuego) {
-                const fuenteJuego = datos.fuente || (p.tipo === 'torneo' ? 'torneo' : p.tipo === 'liga' ? 'liga' : 'rapido')
-                return (
-                  <div key={p.id} style={{ marginBottom: 14 }}>
-                    <TarjetaResultado
-                      datos={datos}
-                      fuente={fuenteJuego}
-                      tiempo={haceCuanto(p.creado_en)}
-                      comentario={p.texto && !p.texto.startsWith('Ganaron') && !p.texto.startsWith('Quedaron') ? p.texto.split('\n')[0] : null}
-                      temaForzado={tema2}
-                    />
-                  </div>
-                )
-              }
-              // publicación de texto simple
-              return (
-                <div key={p.id} style={{ background: T.tarjetaBg, border: `1px solid ${T.tarjetaBorde}`, borderRadius: 16, padding: 16, marginBottom: 14 }}>
-                  {p.titulo && <div style={{ fontSize: 16, fontWeight: 800, color: T.textoFuerte, marginBottom: 6 }}>{p.titulo}</div>}
-                  {p.texto && <div style={{ fontSize: 14, color: T.textoBody, lineHeight: 1.55 }}>{p.texto}</div>}
-                  <div style={{ fontSize: 11, color: T.tenue, marginTop: 8 }}>{haceCuanto(p.creado_en)}</div>
-                </div>
-              )
-            })
-          )}
+          <GaleriaPublicaciones publicaciones={publicaciones} T={T} tema={tema2} />
         </div>
         </div>{/* fin columna derecha */}
         </div>{/* fin fila 2 columnas */}

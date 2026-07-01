@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../supabaseClient'
 import { cargarMiPerfil, guardarMiPerfil, cambiarMiPin } from '../social'
-import { subirFotoPerfil, subirFoto } from '../fotos'
+import { subirFotoPerfil, subirFoto, subirFotoJugador } from '../fotos'
+import RecortadorFoto from './RecortadorFoto'
 
 // ============================================================
 //  CONFIGURACIÓN — Media Cancha
@@ -37,8 +38,11 @@ export default function PantallaConfiguracion({ onVolver, onSalir }) {
   const [f, setF] = useState({ nombre: '', apellido: '', apodo: '', numero: '', posiciones: [], pies: '', pulgadas: '', frase: '' })
   const [fotoUrl, setFotoUrl] = useState(null)
   const [logoUrl, setLogoUrl] = useState(null)
+  const [fotoJugadorUrl, setFotoJugadorUrl] = useState(null)
   const [subiendoFoto, setSubiendoFoto] = useState(false)
   const [subiendoLogo, setSubiendoLogo] = useState(false)
+  const [subiendoJugador, setSubiendoJugador] = useState(false)
+  const [recorteJugador, setRecorteJugador] = useState(null)
   const [guardando, setGuardando] = useState(false)
   const [aviso, setAviso] = useState(null)
   const [pin, setPin] = useState('')
@@ -47,6 +51,7 @@ export default function PantallaConfiguracion({ onVolver, onSalir }) {
   const [cambiandoPin, setCambiandoPin] = useState(false)
   const refFoto = useRef(null)
   const refLogo = useRef(null)
+  const refJugador = useRef(null)
 
   useEffect(() => {
     let vivo = true
@@ -55,6 +60,7 @@ export default function PantallaConfiguracion({ onVolver, onSalir }) {
       setPerfil(perfil)
       setFotoUrl(perfil.foto_url || null)
       setLogoUrl(perfil.logo_url || null)
+      setFotoJugadorUrl(perfil.foto_jugador || null)
       setF({
         nombre: perfil.nombre || '', apellido: perfil.apellido || '', apodo: perfil.apodo || '',
         numero: perfil.numero || '', posiciones: Array.isArray(perfil.posiciones) ? perfil.posiciones : [],
@@ -100,6 +106,26 @@ export default function PantallaConfiguracion({ onVolver, onSalir }) {
   }
   const quitarLogo = async () => { setLogoUrl(null); await guardarMiPerfil({ logo_url: null }) }
 
+  // Foto de jugador tipo pasaporte: elegir abre el recortador (modo pasaporte),
+  // y al confirmar el recorte se sube y se guarda en perfiles.foto_jugador.
+  const alElegirJugador = (e) => {
+    const arch = e.target.files && e.target.files[0]; e.target.value = ''
+    if (!arch) return
+    setRecorteJugador(arch)
+  }
+  const alRecortarJugador = async (blob) => {
+    setRecorteJugador(null)
+    if (!blob) return
+    setSubiendoJugador(true)
+    try {
+      const { url, error } = await subirFotoJugador(blob)
+      if (error || !url) flash('No se pudo subir la foto de jugador')
+      else { setFotoJugadorUrl(url); await guardarMiPerfil({ foto_jugador: url }) }
+    } catch (err) { flash('Error con la foto de jugador') }
+    setSubiendoJugador(false)
+  }
+  const quitarJugador = async () => { setFotoJugadorUrl(null); await guardarMiPerfil({ foto_jugador: null }) }
+
   const guardar = async () => {
     if (guardando) return
     if (!f.nombre.trim()) { flash('Pon tu nombre'); return }
@@ -143,6 +169,15 @@ export default function PantallaConfiguracion({ onVolver, onSalir }) {
 
   return (
     <div style={{ fontFamily: FONT, color: C.txt, background: C.bg, position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, height: '100dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {recorteJugador && (
+        <RecortadorFoto
+          archivo={recorteJugador}
+          forma="pasaporte"
+          elegirForma={false}
+          onListo={alRecortarJugador}
+          onCancelar={() => setRecorteJugador(null)}
+        />
+      )}
       <div style={{ position: 'absolute', inset: 0, zIndex: 0, pointerEvents: 'none', background: 'radial-gradient(ellipse 70% 32% at 50% 0%, rgba(232,182,90,.10), transparent 72%)' }} />
 
       {/* HEADER */}
@@ -164,7 +199,7 @@ export default function PantallaConfiguracion({ onVolver, onSalir }) {
               <Seccion>Mi identidad</Seccion>
               <Tarjeta>
                 {/* Foto y logo */}
-                <div style={{ display: 'flex', gap: 18, marginBottom: 18 }}>
+                <div style={{ display: 'flex', gap: 18, marginBottom: 18, flexWrap: 'wrap' }}>
                   <div style={{ textAlign: 'center' }}>
                     <div onClick={() => !subiendoFoto && refFoto.current && refFoto.current.click()} style={{ width: 84, height: 84, borderRadius: '50%', cursor: 'pointer', background: fotoUrl ? `url(${fotoUrl}) center/cover` : 'rgba(255,255,255,.06)', display: 'grid', placeItems: 'center', fontSize: 26, fontWeight: 800, color: C.oro, border: `2px solid ${C.oro}`, opacity: subiendoFoto ? 0.5 : 1 }}>{!fotoUrl && (iniciales || '📷')}</div>
                     <div style={{ fontSize: 11.5, color: C.oro, fontWeight: 700, marginTop: 7 }}>{subiendoFoto ? 'Subiendo…' : 'Foto'}</div>
@@ -175,6 +210,12 @@ export default function PantallaConfiguracion({ onVolver, onSalir }) {
                     <div style={{ fontSize: 11.5, color: C.oro, fontWeight: 700, marginTop: 7 }}>{subiendoLogo ? 'Subiendo…' : 'Logo personal'}</div>
                     {logoUrl && <button onClick={quitarLogo} style={{ border: 'none', background: 'transparent', color: C.muyTenue, fontSize: 11, cursor: 'pointer', marginTop: 2 }}>Quitar</button>}
                     <input ref={refLogo} type="file" accept="image/*" onChange={alElegirLogo} style={{ display: 'none' }} />
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <div onClick={() => !subiendoJugador && refJugador.current && refJugador.current.click()} style={{ width: 66, height: 84, borderRadius: 12, cursor: 'pointer', background: fotoJugadorUrl ? `url(${fotoJugadorUrl}) center/cover` : 'rgba(255,255,255,.06)', display: 'grid', placeItems: 'center', fontSize: 24, border: `1.5px solid ${C.oro}`, opacity: subiendoJugador ? 0.5 : 1 }}>{!fotoJugadorUrl && (subiendoJugador ? '…' : '🪪')}</div>
+                    <div style={{ fontSize: 11.5, color: C.oro, fontWeight: 700, marginTop: 7 }}>{subiendoJugador ? 'Subiendo…' : 'Foto de jugador'}</div>
+                    {fotoJugadorUrl && <button onClick={quitarJugador} style={{ border: 'none', background: 'transparent', color: C.muyTenue, fontSize: 11, cursor: 'pointer', marginTop: 2 }}>Quitar</button>}
+                    <input ref={refJugador} type="file" accept="image/*" onChange={alElegirJugador} style={{ display: 'none' }} />
                   </div>
                 </div>
 

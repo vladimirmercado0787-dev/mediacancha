@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../supabaseClient'
 import { miUsuarioId } from '../social'
 import { leerConversacion, marcarLeido, listaConversaciones, perfilesDe } from '../mensajes'
+import { misGrupos } from '../grupos'
 import ResultadoEnChat from './ResultadoEnChat'
 import FichaEnChat from './FichaEnChat'
 import NoticiaEnChat from './NoticiaEnChat'
@@ -128,7 +129,7 @@ function ReproductorVoz({ src, dur, mio, id, activa, siguienteId, onActivar, onT
 }
 
 
-export default function PantallaChat({ abrirCon, onVolver, onVerPerfil }) {
+export default function PantallaChat({ abrirCon, onVolver, onVerPerfil, onAbrirGrupo, onCrearGrupo }) {
   const [tema] = useState(() => {
     const validos = ['dorado', 'azul', 'claro', 'larimar']
     if (typeof window !== 'undefined') {
@@ -143,6 +144,7 @@ export default function PantallaChat({ abrirCon, onVolver, onVerPerfil }) {
   const [yo, setYo] = useState(null)
   const [vistaChat, setVistaChat] = useState(abrirCon || null)
   const [convs, setConvs] = useState([])
+  const [grupos, setGrupos] = useState([])
   const [perfilesMap, setPerfilesMap] = useState({})
   const [cargandoInbox, setCargandoInbox] = useState(true)
   const [buscaInbox, setBuscaInbox] = useState('')
@@ -221,6 +223,8 @@ export default function PantallaChat({ abrirCon, onVolver, onVerPerfil }) {
     setConvs(lista)
     const ids = lista.map((c) => c.otroId)
     if (ids.length) setPerfilesMap(await perfilesDe(ids))
+    const { grupos: gs } = await misGrupos()
+    setGrupos(gs || [])
     setCargandoInbox(false)
   }
   useEffect(() => { if (!vistaChat) cargarInbox() }, [vistaChat])
@@ -1000,6 +1004,11 @@ export default function PantallaChat({ abrirCon, onVolver, onVerPerfil }) {
     const p = perfilesMap[c.otroId]
     return nombreDe(p).toLowerCase().includes(buscaInbox.toLowerCase())
   })
+  const gruposFiltrados = grupos.filter((g) => !buscaInbox.trim() || (g.nombre || '').toLowerCase().includes(buscaInbox.toLowerCase()))
+  const itemsInbox = [
+    ...convsFiltradas.map((c) => ({ esGrupo: false, c, t: new Date(c.ultimo.creado_en).getTime() })),
+    ...gruposFiltrados.map((g) => ({ esGrupo: true, g, t: g.ultimo ? new Date(g.ultimo.creado_en).getTime() : new Date(g.creado_en).getTime() })),
+  ].sort((a, b) => b.t - a.t)
 
   return (
     <div style={wrap}>
@@ -1012,19 +1021,38 @@ export default function PantallaChat({ abrirCon, onVolver, onVerPerfil }) {
           <span style={{ width: 40 }} />
         </div>
 
-        <div style={{ marginBottom: 16 }}>
-          <input value={buscaInbox} onChange={(e) => setBuscaInbox(e.target.value)} placeholder="🔍 Buscar conversación" style={{ width: '100%', boxSizing: 'border-box', background: T.tarjetaBg, border: `1px solid ${T.tarjetaBorde}`, borderRadius: 12, padding: '11px 14px', color: T.textoFuerte, fontSize: 14, outline: 'none', fontFamily: font }} />
+        <div style={{ marginBottom: 16, display: 'flex', gap: 8 }}>
+          <input value={buscaInbox} onChange={(e) => setBuscaInbox(e.target.value)} placeholder="🔍 Buscar conversación" style={{ flex: 1, boxSizing: 'border-box', background: T.tarjetaBg, border: `1px solid ${T.tarjetaBorde}`, borderRadius: 12, padding: '11px 14px', color: T.textoFuerte, fontSize: 14, outline: 'none', fontFamily: font }} />
+          <button onClick={() => onCrearGrupo && onCrearGrupo()} style={{ flexShrink: 0, border: `1px solid ${T.tarjetaBorde}`, borderRadius: 12, padding: '0 14px', background: T.tarjetaBg, color: T.acento, fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>＋ Grupo</button>
         </div>
 
         {cargandoInbox ? (
           <div style={{ textAlign: 'center', padding: '40px', color: T.tenue, fontSize: 14 }}>Cargando…</div>
-        ) : convsFiltradas.length === 0 ? (
+        ) : convsFiltradas.length === 0 && gruposFiltrados.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '60px 20px', color: T.tenue }}>
             <div style={{ fontSize: 40, marginBottom: 14 }}>💬</div>
-            <div style={{ fontSize: 14.5, lineHeight: 1.5 }}>{buscaInbox ? 'Nada con ese nombre.' : <>Todavía no tienes conversaciones.<br />Busca a un jugador y escríbele.</>}</div>
+            <div style={{ fontSize: 14.5, lineHeight: 1.5 }}>{buscaInbox ? 'Nada con ese nombre.' : <>Todavía no tienes conversaciones.<br />Busca a un jugador y escríbele, o crea un grupo.</>}</div>
           </div>
         ) : (
-          convsFiltradas.map((c) => {
+          itemsInbox.map((it) => {
+            if (it.esGrupo) {
+              const g = it.g
+              const badge = g.tipo === 'liga' ? '🤝' : g.tipo === 'torneo' ? '🏆' : '👥'
+              const prev = g.ultimo ? (g.ultimo.de_id === yo ? 'Tú: ' : '') + g.ultimo.texto : 'Grupo creado'
+              return (
+                <div key={'g-' + g.id} onClick={() => onAbrirGrupo && onAbrirGrupo(g)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: T.tarjetaBg, border: `1px solid ${T.tarjetaBorde}`, borderRadius: 14, marginBottom: 10, cursor: 'pointer' }}>
+                  <div style={{ width: 50, height: 50, borderRadius: '50%', flexShrink: 0, background: g.foto_url ? `url(${g.foto_url}) center/cover` : T.avatar, display: 'grid', placeItems: 'center', fontSize: 20 }}>{badge}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 14.5, fontWeight: 700, color: T.textoFuerte, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{g.nombre}</span>
+                      {g.ultimo && <span style={{ fontSize: 11, color: T.tenue, flexShrink: 0 }}>{fechaCorta(g.ultimo.creado_en)}</span>}
+                    </div>
+                    <div style={{ fontSize: 12.5, color: T.tenue, marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{prev}</div>
+                  </div>
+                </div>
+              )
+            }
+            const c = it.c
             const p = perfilesMap[c.otroId]
             const nom = nombreDe(p)
             const ultimoMio = c.ultimo.de_id === yo

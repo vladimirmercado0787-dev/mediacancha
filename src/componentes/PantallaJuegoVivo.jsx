@@ -498,7 +498,11 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver, onMarc
       border: `1.5px solid ${EQ[j.equipo].borde}`, borderRadius: 16, cursor: 'pointer', background: T.vidrio,
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '8px 2px', minHeight: 0, height: '100%', minWidth: 0, overflow: 'hidden',
     }}>
-      <span style={{ fontFamily: DISP, fontSize: 30, fontWeight: 900, lineHeight: 1, color: EQ[j.equipo].acento }}>{j.numero || (j.nombre || '?').slice(0, 1).toUpperCase()}</span>
+      {j.foto
+        ? <div style={{ width: 36, height: 36, borderRadius: '50%', position: 'relative', background: `url(${j.foto}) center/cover`, flexShrink: 0, boxShadow: `0 0 0 1.5px ${EQ[j.equipo].borde}` }}>
+            {j.numero && <span style={{ position: 'absolute', bottom: -3, right: -5, minWidth: 15, height: 15, padding: '0 3px', borderRadius: 8, background: EQ[j.equipo].solido, color: EQ[j.equipo].textoBoton, fontSize: 9, fontWeight: 800, display: 'grid', placeItems: 'center', border: `1px solid ${T.fondo}` }}>{j.numero}</span>}
+          </div>
+        : <span style={{ fontFamily: DISP, fontSize: 30, fontWeight: 900, lineHeight: 1, color: EQ[j.equipo].acento }}>{j.numero || (j.nombre || '?').slice(0, 1).toUpperCase()}</span>}
       <span style={{ fontSize: 10.5, color: T.tenue, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', padding: '0 1px' }}>{abreviarNombre(j.nombre || ('#' + j.numero), 9)}</span>
     </button>
   )
@@ -508,7 +512,11 @@ export default function PantallaJuegoVivo({ config, onTerminar, onVolver, onMarc
       border: `1.5px solid ${EQ[j.equipo].borde}`, borderRadius: 14, cursor: 'pointer', background: VIDRIO_CLARO,
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '16px 4px', minHeight: 96, minWidth: 0, overflow: 'hidden',
     }}>
-      <span style={{ fontFamily: DISP, fontSize: 32, fontWeight: 900, lineHeight: 1, color: EQ[j.equipo].acento }}>{j.numero || (j.nombre || '?').slice(0, 1).toUpperCase()}</span>
+      {j.foto
+        ? <div style={{ width: 42, height: 42, borderRadius: '50%', position: 'relative', background: `url(${j.foto}) center/cover`, flexShrink: 0, boxShadow: `0 0 0 1.5px ${EQ[j.equipo].borde}` }}>
+            {j.numero && <span style={{ position: 'absolute', bottom: -3, right: -5, minWidth: 16, height: 16, padding: '0 3px', borderRadius: 8, background: EQ[j.equipo].solido, color: EQ[j.equipo].textoBoton, fontSize: 9.5, fontWeight: 800, display: 'grid', placeItems: 'center', border: `1px solid ${T.fondo}` }}>{j.numero}</span>}
+          </div>
+        : <span style={{ fontFamily: DISP, fontSize: 32, fontWeight: 900, lineHeight: 1, color: EQ[j.equipo].acento }}>{j.numero || (j.nombre || '?').slice(0, 1).toUpperCase()}</span>}
       <span style={{ fontSize: 11, fontWeight: 600, color: TEXTO, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', padding: '0 1px' }}>{abreviarNombre(j.nombre || ('#' + j.numero), 9)}</span>
     </button>
   )

@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../supabaseClient'
-import { cargarTorneoPublico, generarCalendario } from '../torneoData'
-import { invitar, buscarPersonas, agregarJugador, agregarDirectiva, leerDirectiva, cambiarPermiso, registrarBitacora, leerBitacora, leerCaja, agregarMovimiento, eliminarMovimiento } from '../torneos'
+import { cargarTorneoPublico, generarCalendario, avanzarRondaCopa } from '../torneoData'
+import { invitar, buscarPersonas, agregarJugador, agregarDirectiva, leerDirectiva, cambiarPermiso, registrarBitacora, leerBitacora, leerCaja, agregarMovimiento, eliminarMovimiento, leerArbitros, agregarArbitro, eliminarArbitro, guardarReglasTorneo } from '../torneos'
+import { sincronizarGrupoTorneoSiExiste, tieneGrupoActivo, activarGrupoTorneo } from '../grupos'
 
 // Etiquetas y orden de los roles de la directiva
 const ROL_DIR = { presidente: 'Presidente', vicepresidente: 'Vicepresidente', tesorero: 'Tesorero', secretario: 'Secretario', vocal: 'Vocal' }
@@ -168,7 +169,7 @@ const EQUIPOS_DEMO = [
   },
 ]
 
-export default function PantallaTorneos({ esAdmin = false, torneoId = null, onVolver, onAccion, onVerPerfil, onAnotarJuego, onConfigurar }) {
+export default function PantallaTorneos({ esAdmin = false, torneoId = null, onVolver, onAccion, onVerPerfil, onAnotarJuego, onConfigurar, onAbrirGrupo }) {
   const [tema] = useState(() => {
     const validos = ['dorado', 'azul', 'claro', 'larimar']
     if (typeof window !== 'undefined') {
@@ -258,11 +259,30 @@ export default function PantallaTorneos({ esAdmin = false, torneoId = null, onVo
   // ---------- CARGA DEL TORNEO REAL (desde Supabase) ----------
   const [datos, setDatos] = useState(null)
   const [torneoRow, setTorneoRow] = useState(null)
+  const [grupoActivo, setGrupoActivo] = useState(false)
+  const [activandoGrupo, setActivandoGrupo] = useState(false)
+  const [pedirConfirmarGrupo, setPedirConfirmarGrupo] = useState(false)
+  useEffect(() => {
+    if (!torneoRow?.id) return
+    tieneGrupoActivo('torneo', torneoRow.id).then(setGrupoActivo).catch(() => {})
+  }, [torneoRow?.id])
+  const botonGrupoTocado = () => { if (grupoActivo) { activarGrupo() } else { setPedirConfirmarGrupo(true) } }
+  const activarGrupo = async () => {
+    if (!torneoRow?.id) return
+    setPedirConfirmarGrupo(false)
+    setActivandoGrupo(true)
+    const grupoId = await activarGrupoTorneo(torneoRow.id, torneoRow.nombre)
+    setActivandoGrupo(false)
+    setGrupoActivo(true)
+    onAbrirGrupo && grupoId && onAbrirGrupo({ id: grupoId, nombre: torneoRow.nombre, tipo: 'torneo' })
+  }
   const [jugCount, setJugCount] = useState(0)
   const [recarga, setRecarga] = useState(0)
   const [generando, setGenerando] = useState(false)
   const [vueltas, setVueltas] = useState(1)
   const [errorGen, setErrorGen] = useState(null)
+  const [avanzando, setAvanzando] = useState(false)
+  const [msgRonda, setMsgRonda] = useState(null) // { tipo:'ok'|'info'|'error'|'campeon', txt }
   // --- Invitar jugador (T-004) ---
   const [invitarEquipo, setInvitarEquipo] = useState(null)
   const [busqueda, setBusqueda] = useState('')
@@ -298,6 +318,11 @@ export default function PantallaTorneos({ esAdmin = false, torneoId = null, onVo
   // --- Caja (ingresos/gastos) ---
   const [caja, setCaja] = useState([])
   const [cajaModal, setCajaModal] = useState(false)
+  const [arbitros, setArbitros] = useState([])
+  const [cargandoArb, setCargandoArb] = useState(true)
+  const [arbModal, setArbModal] = useState(null) // null | { nombre, telefono, tarifa }
+  const [reglamentoEdit, setReglamentoEdit] = useState(null) // null = no editando; string = editando
+  const [guardandoRegl, setGuardandoRegl] = useState(false)
   const [cajaTipo, setCajaTipo] = useState('ingreso')
   const [cajaCategoria, setCajaCategoria] = useState('inscripcion')
   const [cajaConcepto, setCajaConcepto] = useState('')
@@ -458,6 +483,28 @@ export default function PantallaTorneos({ esAdmin = false, torneoId = null, onVo
           <div style={{ display: 'flex', gap: 10 }}>
             <button disabled={cajaEliminando} onClick={() => setCajaEliminar(null)} style={{ flex: 1, border: `1px solid ${T.bordeSuave}`, borderRadius: 12, padding: 13, fontFamily: fCond, fontWeight: 600, fontSize: 14, letterSpacing: 0.5, textTransform: 'uppercase', cursor: 'pointer', background: 'transparent', color: T.tenue }}>Cancelar</button>
             <button disabled={cajaEliminando} onClick={borrarMovimiento} style={{ flex: 1, border: 'none', borderRadius: 12, padding: 13, fontFamily: fCond, fontWeight: 700, fontSize: 14, letterSpacing: 0.5, textTransform: 'uppercase', cursor: 'pointer', background: cajaEliminando ? 'rgba(210,79,79,.5)' : '#d24f4f', color: '#fff' }}>{cajaEliminando ? '…' : 'Borrar'}</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const modalArbitro = () => {
+    if (!arbModal) return null
+    const inputBg = T.esClaro ? 'rgba(0,0,0,.04)' : 'rgba(255,255,255,.05)'
+    const inp = { width: '100%', boxSizing: 'border-box', border: `1px solid ${T.bordeSuave}`, borderRadius: 12, padding: '12px 14px', background: inputBg, color: T.textoFuerte, fontSize: 15, outline: 'none', marginBottom: 10 }
+    return (
+      <div onClick={() => setArbModal(null)} style={{ position: 'fixed', inset: 0, zIndex: 85, background: 'rgba(0,0,0,.72)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+        <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 460, background: T.fondo, borderTopLeftRadius: 24, borderTopRightRadius: 24, border: `1px solid ${T.borde}`, padding: '0 0 calc(env(safe-area-inset-bottom) + 20px)' }}>
+          <div style={{ padding: '18px 18px 0' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <div style={{ fontFamily: fCond, fontWeight: 700, fontSize: 19, textTransform: 'uppercase', letterSpacing: 0.4, color: T.textoFuerte }}>Agregar árbitro</div>
+              <button onClick={() => setArbModal(null)} style={{ width: 32, height: 32, borderRadius: 9, border: `0.5px solid ${T.bordeSuave}`, background: T.tarjeta, color: T.textoFuerte, fontSize: 15, cursor: 'pointer' }}>✕</button>
+            </div>
+            <input value={arbModal.nombre} onChange={(e) => setArbModal((s) => ({ ...s, nombre: e.target.value }))} placeholder="Nombre del árbitro" autoFocus style={inp} />
+            <input value={arbModal.telefono} onChange={(e) => setArbModal((s) => ({ ...s, telefono: e.target.value }))} type="tel" placeholder="Teléfono (opcional)" style={inp} />
+            <input value={arbModal.tarifa} onChange={(e) => setArbModal((s) => ({ ...s, tarifa: e.target.value.replace(/[^\d.]/g, '') }))} type="tel" inputMode="decimal" placeholder="Tarifa por juego en RD$ (opcional)" style={{ ...inp, marginBottom: 16 }} />
+            <button onClick={guardarArbitro} style={{ width: '100%', border: 'none', borderRadius: 14, padding: 14, background: T.boton, color: T.botonTexto, fontSize: 15, fontWeight: 800, cursor: 'pointer' }}>Guardar árbitro</button>
           </div>
         </div>
       </div>
@@ -670,7 +717,67 @@ export default function PantallaTorneos({ esAdmin = false, torneoId = null, onVo
     }
   }
 
+  const alAvanzarRonda = async () => {
+    if (!torneoRow || avanzando) return
+    setAvanzando(true); setMsgRonda(null)
+    try {
+      const r = await avanzarRondaCopa(torneoRow.id)
+      if (r.error) {
+        setMsgRonda({ tipo: 'error', txt: r.error })
+      } else if (r.faltan) {
+        setMsgRonda({ tipo: 'info', txt: `Aún faltan ${r.pendientes} partido${r.pendientes === 1 ? '' : 's'} de esta ronda por terminar.` })
+      } else if (r.campeonNombre || r.campeonId) {
+        setMsgRonda({ tipo: 'campeon', txt: `🏆 ¡Campeón: ${r.campeonNombre || 'definido'}!` })
+        await registrarBitacora(torneoRow.id, { accion: 'copa_campeon', detalle: `La copa terminó. Campeón: ${r.campeonNombre || ''}`, objeto_tipo: 'juego', actor_nombre: miNombre })
+        setRecarga((x) => x + 1)
+      } else if (r.generada) {
+        setMsgRonda({ tipo: 'ok', txt: `Se generó la ronda: ${r.ronda}.` })
+        await registrarBitacora(torneoRow.id, { accion: 'ronda_generada', detalle: `Generó la ronda ${r.ronda}`, objeto_tipo: 'juego', actor_nombre: miNombre })
+        setRecarga((x) => x + 1)
+      }
+    } catch (e) {
+      setMsgRonda({ tipo: 'error', txt: 'No se pudo avanzar la ronda.' })
+    } finally {
+      setAvanzando(false)
+    }
+  }
+
   const cerrarModalInvitar = () => { setInvitarEquipo(null); setBusqueda(''); setResultados([]); setSeleccionado(null); setRolInvitar('jugador'); setMensajeInvitar('') }
+
+  const cargarArbitros = () => {
+    if (!torneoRow?.id) { setArbitros([]); setCargandoArb(false); return }
+    setCargandoArb(true)
+    leerArbitros(torneoRow.id)
+      .then(({ arbitros }) => setArbitros(arbitros || []))
+      .catch(() => setArbitros([]))
+      .finally(() => setCargandoArb(false))
+  }
+  useEffect(() => { cargarArbitros() }, [torneoRow?.id])
+
+  const guardarArbitro = async () => {
+    const a = arbModal
+    if (!a || !torneoRow?.id) return
+    if (!(a.nombre || '').trim()) { alert('Escribe el nombre del árbitro'); return }
+    const { error } = await agregarArbitro(torneoRow.id, a)
+    if (error) { alert('No se pudo guardar: ' + error); return }
+    setArbModal(null); cargarArbitros()
+  }
+  const borrarArbitro = async (id) => {
+    if (!window.confirm('¿Quitar a este árbitro?')) return
+    const { error } = await eliminarArbitro(id)
+    if (!error) cargarArbitros()
+  }
+  const guardarReglamento = async () => {
+    if (!torneoRow?.id || guardandoRegl) return
+    setGuardandoRegl(true)
+    const reglas = { ...(torneoRow.reglas || {}), reglamento: reglamentoEdit || '' }
+    const { error } = await guardarReglasTorneo(torneoRow.id, reglas)
+    setGuardandoRegl(false)
+    if (error) { alert('No se pudo guardar: ' + error); return }
+    if (torneoRow) torneoRow.reglas = reglas
+    setReglamentoEdit(null)
+    setRecarga((r) => r + 1)
+  }
 
   const alBuscar = (texto) => {
     setBusqueda(texto); setSeleccionado(null)
@@ -815,7 +922,7 @@ export default function PantallaTorneos({ esAdmin = false, torneoId = null, onVo
       const nom = confirmarJug.nombre
       cerrarConfirmar()
       setToastInvitar('✓ ' + nom + ' confirmado'); setTimeout(() => setToastInvitar(null), 3000)
-      if (torneoRow) await registrarBitacora(torneoRow.id, { accion: 'jugador_confirmado', detalle: `Confirmó a ${nom} con su código`, objeto_tipo: 'jugador', actor_nombre: miNombre })
+      if (torneoRow) { await registrarBitacora(torneoRow.id, { accion: 'jugador_confirmado', detalle: `Confirmó a ${nom} con su código`, objeto_tipo: 'jugador', actor_nombre: miNombre }); try { await sincronizarGrupoTorneoSiExiste(torneoRow.id) } catch (e) {} }
       setRecarga((r) => r + 1)
     } else {
       setErrorPin('Código incorrecto. Inténtalo de nuevo.')
@@ -974,6 +1081,32 @@ export default function PantallaTorneos({ esAdmin = false, torneoId = null, onVo
                   </div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Chat grupal del torneo — el organizador decide si lo activa */}
+          {esAdmin && (
+            <div style={{ marginTop: 18 }}>
+              {tituloModulo('Chat del torneo', '#5dcaa5')}
+              <button onClick={botonGrupoTocado} disabled={activandoGrupo} style={{ width: '100%', ...tarjeta, padding: 14, cursor: activandoGrupo ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left', opacity: activandoGrupo ? 0.6 : 1 }}>
+                <span style={{ fontSize: 22 }}>💬</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ color: T.textoFuerte, fontSize: 14, fontWeight: 700 }}>{activandoGrupo ? 'Activando…' : grupoActivo ? 'Abrir grupo de chat' : 'Crear grupo de chat del torneo'}</div>
+                  <div style={{ color: T.tenue, fontSize: 11.5, marginTop: 2 }}>{grupoActivo ? 'Los jugadores confirmados ya están adentro' : 'Junta a todos los jugadores confirmados en un solo chat'}</div>
+                </div>
+              </button>
+
+              {pedirConfirmarGrupo && (
+                <div onClick={() => setPedirConfirmarGrupo(false)} style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'flex-end' }}>
+                  <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', background: T.fondo || '#0e0f12', borderTop: `1px solid ${T.bordeSuave}`, borderRadius: '20px 20px 0 0', padding: '20px 20px calc(env(safe-area-inset-bottom) + 20px)' }}>
+                    <div style={{ width: 40, height: 4, borderRadius: 2, background: T.bordeSuave, margin: '0 auto 16px' }} />
+                    <div style={{ fontSize: 16, fontWeight: 800, color: T.textoFuerte, marginBottom: 6 }}>¿Crear el grupo de chat?</div>
+                    <div style={{ fontSize: 13, color: T.tenue, lineHeight: 1.5, marginBottom: 18 }}>Se va a crear un chat de grupo con los jugadores y la directiva confirmados de "{torneoRow?.nombre}". Cada vez que alguien se confirme, el chat se actualiza solo.</div>
+                    <button onClick={activarGrupo} style={{ width: '100%', border: 'none', borderRadius: 12, padding: 13, background: T.boton, color: '#1a1205', fontWeight: 800, fontSize: 14.5, cursor: 'pointer', marginBottom: 10 }}>Sí, crear el grupo</button>
+                    <button onClick={() => setPedirConfirmarGrupo(false)} style={{ width: '100%', border: `1px solid ${T.bordeSuave}`, borderRadius: 12, padding: 12, background: 'transparent', color: T.tenue, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>Cancelar</button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </>
@@ -1318,6 +1451,144 @@ export default function PantallaTorneos({ esAdmin = false, torneoId = null, onVo
       )
     }
 
+    if (pestana === 'bracket') {
+      const esCopaB = torneoRow?.formato === 'copa'
+      if (!esCopaB) {
+        return (
+          <>
+            {tituloModulo('Llave del torneo', T.acento)}
+            <div style={{ ...tarjeta, padding: 22, textAlign: 'center' }}>
+              <div style={{ fontSize: 38, marginBottom: 10 }}>🎯</div>
+              <div style={{ color: T.textoFuerte, fontSize: 15, fontWeight: 700, marginBottom: 6 }}>La llave es solo para copa</div>
+              <div style={{ color: T.tenue, fontSize: 13, lineHeight: 1.5 }}>Este torneo es de liga (todos contra todos). Su clasificación está en la pestaña Tabla.</div>
+            </div>
+          </>
+        )
+      }
+      const juegosB = datos?.juegos || []
+      const porRonda = {}
+      juegosB.forEach((j) => { const r = Number(j.jornada) || 1; (porRonda[r] = porRonda[r] || []).push(j) })
+      const numsRonda = Object.keys(porRonda).map(Number).sort((a, b) => a - b)
+      const rondasReales = numsRonda.map((n) => porRonda[n].slice().sort((a, b) => (a.llave_pos ?? 0) - (b.llave_pos ?? 0)))
+      const rondaLabel = (teams) => ({ 2: 'Final', 4: 'Semifinal', 8: 'Cuartos', 16: 'Octavos', 32: 'Dieciseisavos', 64: '32avos' }[teams] || `${teams} equipos`)
+
+      if (!rondasReales.length) {
+        return (
+          <>
+            {tituloModulo('Llave del torneo', T.acento)}
+            <div style={{ ...tarjeta, padding: 22, textAlign: 'center' }}>
+              <div style={{ fontSize: 38, marginBottom: 10 }}>🎯</div>
+              <div style={{ color: T.textoFuerte, fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Todavía no hay llave</div>
+              <div style={{ color: T.tenue, fontSize: 13, lineHeight: 1.5 }}>Genera el calendario en la pestaña Juegos y la llave aparece aquí.</div>
+            </div>
+          </>
+        )
+      }
+
+      const M = rondasReales[0].length
+      const esPotencia2 = M > 0 && (M & (M - 1)) === 0
+      if (!esPotencia2) {
+        return (
+          <>
+            {tituloModulo('Llave del torneo', T.acento)}
+            <div style={{ ...tarjeta, padding: 22, textAlign: 'center' }}>
+              <div style={{ fontSize: 38, marginBottom: 10 }}>🔄</div>
+              <div style={{ color: T.textoFuerte, fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Vuelve a generar la llave</div>
+              <div style={{ color: T.tenue, fontSize: 13, lineHeight: 1.5 }}>Esta copa se armó con una versión anterior. En la pestaña Juegos, vuelve a generar el calendario para ver el árbol completo.</div>
+            </div>
+          </>
+        )
+      }
+
+      const colorSolido = (id) => { const c = eqPorId[id]?.color; return (typeof c === 'string' && c[0] === '#') ? c : '#7d8696' }
+      const codEqB = (id) => eqPorId[id]?.codigo || ''
+      const nombreEqB = (id) => eqPorId[id]?.nombre || ''
+      const Rfull = Math.max(1, Math.round(Math.log2(M)) + 1)
+      const rondas = []
+      for (let r = 0; r < Rfull; r++) {
+        const count = Math.max(1, M >> r)
+        if (rondasReales[r] && rondasReales[r].length === count) rondas[r] = rondasReales[r]
+        else { rondas[r] = []; for (let i = 0; i < count; i++) rondas[r].push((rondasReales[r] && rondasReales[r][i]) || null) }
+      }
+
+      const boxW = 152, boxH = 54, colGap = 30, vGap = 18, topPad = 26, champW = 124
+      const slot = boxH + vGap
+      const centros = []
+      centros[0] = rondas[0].map((_, i) => topPad + i * slot + boxH / 2)
+      for (let r = 1; r < Rfull; r++) centros[r] = rondas[r].map((_, i) => (centros[r - 1][2 * i] + centros[r - 1][2 * i + 1]) / 2)
+      const xDe = (r) => r * (boxW + colGap)
+      const champX = Rfull * (boxW + colGap)
+      const totalW = champX + champW + 8
+      const totalH = topPad + M * slot + 10
+      const winnerOf = (m) => { if (!m) return null; if (m.equipoB_id == null && m.equipoA_id) return 'A'; if (m.estado !== 'final') return null; return (m.puntosA || 0) >= (m.puntosB || 0) ? 'A' : 'B' }
+
+      const els = []
+      for (let r = 1; r < Rfull; r++) {
+        rondas[r].forEach((_, i) => {
+          const px = xDe(r), pcy = centros[r][i]
+          const c1 = centros[r - 1][2 * i], c2 = centros[r - 1][2 * i + 1]
+          const cxRight = xDe(r - 1) + boxW
+          const midX = (cxRight + px) / 2
+          els.push(<path key={`c${r}-${i}a`} d={`M${cxRight} ${c1} L${midX} ${c1} L${midX} ${pcy} L${px} ${pcy}`} fill="none" stroke={T.bordeSuave} strokeWidth="1" />)
+          els.push(<path key={`c${r}-${i}b`} d={`M${cxRight} ${c2} L${midX} ${c2} L${midX} ${pcy} L${px} ${pcy}`} fill="none" stroke={T.bordeSuave} strokeWidth="1" />)
+        })
+      }
+      const finalCy = centros[Rfull - 1][0]
+      els.push(<path key="cchamp" d={`M${xDe(Rfull - 1) + boxW} ${finalCy} L${champX} ${finalCy}`} fill="none" stroke={T.acento} strokeWidth="1.5" />)
+
+      const fila = (m, lado, bx, rowCy, esGanador) => {
+        const id = lado === 'A' ? (m && m.equipoA_id) : (m && m.equipoB_id)
+        const pts = lado === 'A' ? (m && m.puntosA) : (m && m.puntosB)
+        if (m && m.equipoB_id == null && lado === 'B') return [<text key="byet" x={bx + 32} y={rowCy} dominantBaseline="central" fontSize="11.5" fontStyle="italic" fill={T.muyTenue}>Pasa directo</text>]
+        if (!id) return [<text key="pd" x={bx + 18} y={rowCy} dominantBaseline="central" fontSize="12" fill={T.muyTenue}>Por definir</text>]
+        const mostrarPts = m && m.estado === 'final'
+        return [
+          <circle key="cr" cx={bx + 18} cy={rowCy} r="9" fill={colorSolido(id)} />,
+          <text key="cd" x={bx + 18} y={rowCy} textAnchor="middle" dominantBaseline="central" fontSize="9.5" fontWeight="700" fill="#fff">{codEqB(id)}</text>,
+          <text key="nm" x={bx + 32} y={rowCy} dominantBaseline="central" fontSize="12.5" fontWeight={esGanador ? 700 : 500} fill={esGanador ? T.acento : T.tenue}>{nombreEqB(id)}</text>,
+          mostrarPts ? <text key="sc" x={bx + boxW - 10} y={rowCy} textAnchor="end" dominantBaseline="central" fontSize="13" fontWeight={esGanador ? 700 : 500} fill={esGanador ? T.textoFuerte : T.tenue}>{pts}</text> : null,
+        ]
+      }
+      for (let r = 0; r < Rfull; r++) {
+        rondas[r].forEach((m, i) => {
+          const bx = xDe(r), by = centros[r][i] - boxH / 2
+          const w = winnerOf(m)
+          els.push(<rect key={`b${r}-${i}`} x={bx} y={by} width={boxW} height={boxH} rx="9" fill={T.tarjeta} stroke={T.bordeSuave} strokeWidth="1" />)
+          els.push(<g key={`ra${r}-${i}`}>{fila(m, 'A', bx, by + 17, w === 'A')}</g>)
+          els.push(<line key={`ln${r}-${i}`} x1={bx + 10} y1={by + boxH / 2} x2={bx + boxW - 10} y2={by + boxH / 2} stroke={T.bordeSuave} strokeWidth="0.5" />)
+          els.push(<g key={`rb${r}-${i}`}>{fila(m, 'B', bx, by + 37, w === 'B')}</g>)
+        })
+      }
+      for (let r = 0; r < Rfull; r++) {
+        const teams = (M >> r) * 2
+        els.push(<text key={`hl${r}`} x={xDe(r) + boxW / 2} y={12} textAnchor="middle" fontSize="11" fontWeight="700" fill={T.acento} letterSpacing="0.5">{rondaLabel(teams).toUpperCase()}</text>)
+      }
+      els.push(<text key="hchamp" x={champX + champW / 2} y={12} textAnchor="middle" fontSize="11" fontWeight="700" fill={T.acento} letterSpacing="0.5">CAMPEÓN</text>)
+
+      const finalM = rondas[Rfull - 1][0]
+      const fw = winnerOf(finalM)
+      const champId = fw ? (fw === 'A' ? finalM.equipoA_id : finalM.equipoB_id) : null
+      if (champId) {
+        els.push(<rect key="champ" x={champX} y={finalCy - 22} width={champW} height={44} rx="10" fill={T.acento} />)
+        els.push(<text key="champn" x={champX + champW / 2} y={finalCy - 4} textAnchor="middle" dominantBaseline="central" fontSize="14" fontWeight="700" fill={T.botonTexto}>{nombreEqB(champId)}</text>)
+        els.push(<text key="champl" x={champX + champW / 2} y={finalCy + 13} textAnchor="middle" dominantBaseline="central" fontSize="10" fontWeight="700" fill={T.botonTexto} letterSpacing="0.5">CAMPEÓN</text>)
+      } else {
+        els.push(<rect key="champ" x={champX} y={finalCy - 22} width={champW} height={44} rx="10" fill="none" stroke={T.bordeSuave} strokeWidth="1" strokeDasharray="4 4" />)
+        els.push(<text key="champn" x={champX + champW / 2} y={finalCy} textAnchor="middle" dominantBaseline="central" fontSize="12" fill={T.muyTenue}>Por definir</text>)
+      }
+
+      return (
+        <>
+          {tituloModulo('Llave del torneo', T.acento)}
+          <div style={{ color: T.muyTenue, fontSize: 11.5, marginBottom: 10, marginTop: -4 }}>Desliza de lado para ver toda la llave →</div>
+          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', margin: '0 -14px', padding: '0 14px 12px' }}>
+            <svg width={totalW} height={totalH} style={{ display: 'block' }} xmlns="http://www.w3.org/2000/svg">{els}</svg>
+          </div>
+          {esAdmin && <div style={{ color: T.tenue, fontSize: 12, lineHeight: 1.5, marginTop: 2 }}>Los ganadores pasan solos a la siguiente ronda. Para avanzarla, usa el botón en la pestaña Juegos.</div>}
+        </>
+      )
+    }
+
     if (pestana === 'calendario') {
       const juegos = datos?.juegos || []
       const equiposN = (datos?.equipos || []).length
@@ -1376,7 +1647,7 @@ export default function PantallaTorneos({ esAdmin = false, torneoId = null, onVo
                     {generando ? 'Generando…' : '⚡ Generar calendario'}
                   </button>
                   {errorGen && <div style={{ color: '#f09595', fontSize: 12.5, marginTop: 10 }}>{errorGen}</div>}
-                  {esCopa && <div style={{ color: T.muyTenue, fontSize: 11, marginTop: 12, lineHeight: 1.5 }}>Se genera la primera ronda de la llave. Las rondas siguientes se arman cuando terminen esos partidos.</div>}
+                  {esCopa && <div style={{ color: T.muyTenue, fontSize: 11, marginTop: 12, lineHeight: 1.5 }}>Se genera la primera ronda de la llave (con los pases directos ya aplicados). Las siguientes rondas las creas con el botón "Generar siguiente ronda" cuando terminen los partidos.</div>}
                 </>
               )}
             </div>
@@ -1385,6 +1656,18 @@ export default function PantallaTorneos({ esAdmin = false, torneoId = null, onVo
               <div style={{ color: T.muyTenue, fontSize: 11.5, marginBottom: 14, marginTop: -4 }}>
                 {juegos.length} partidos · {juegos.filter((j) => j.estado === 'final').length} jugados
               </div>
+              {esCopa && esAdmin && (
+                <div style={{ ...tarjeta, padding: 14, marginBottom: 16 }}>
+                  <div style={{ color: T.textoFuerte, fontSize: 13.5, fontWeight: 700, marginBottom: 4 }}>Avanzar la llave</div>
+                  <div style={{ color: T.tenue, fontSize: 12, lineHeight: 1.5, marginBottom: 12 }}>Cuando terminen los partidos de la ronda actual, genera la siguiente con los ganadores en su lugar. Los pases directos (bye) ya vienen aplicados.</div>
+                  <button onClick={alAvanzarRonda} disabled={avanzando} style={{ width: '100%', border: 'none', borderRadius: 13, padding: 13, background: T.boton, color: T.botonTexto, fontSize: 14, fontWeight: 800, cursor: avanzando ? 'default' : 'pointer', opacity: avanzando ? 0.6 : 1 }}>
+                    {avanzando ? 'Avanzando…' : '⏭ Generar siguiente ronda'}
+                  </button>
+                  {msgRonda && (
+                    <div style={{ marginTop: 10, fontSize: 12.5, lineHeight: 1.5, fontWeight: msgRonda.tipo === 'campeon' ? 800 : 600, color: msgRonda.tipo === 'error' ? '#f09595' : msgRonda.tipo === 'campeon' ? T.acento : msgRonda.tipo === 'ok' ? '#86e0a8' : T.tenue }}>{msgRonda.txt}</div>
+                  )}
+                </div>
+              )}
               {jornadas.map((jn) => (
                 <div key={jn} style={{ marginBottom: 16 }}>
                   <div style={{ color: T.acento, fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 8 }}>
@@ -1394,6 +1677,7 @@ export default function PantallaTorneos({ esAdmin = false, torneoId = null, onVo
                     {porJornada[jn].map((j, i) => {
                       const fin = j.estado === 'final'
                       const vivo = j.estado === 'vivo'
+                      const esBye = j.equipoB_id == null
                       const ganoA = fin && j.puntosA > j.puntosB
                       const ganoB = fin && j.puntosB > j.puntosA
                       const ultimo = i === porJornada[jn].length - 1
@@ -1406,7 +1690,9 @@ export default function PantallaTorneos({ esAdmin = false, torneoId = null, onVo
                               <span style={{ color: ganoA ? T.textoFuerte : T.textoBody, fontSize: 13, fontWeight: ganoA ? 800 : 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nombreEq(j.equipoA_id)}</span>
                             </div>
                             <div style={{ flexShrink: 0, textAlign: 'center', minWidth: 54 }}>
-                              {fin ? (
+                              {esBye ? (
+                                <span style={{ color: T.muyTenue, fontSize: 10, fontWeight: 800, letterSpacing: 0.5 }}>BYE</span>
+                              ) : fin ? (
                                 <span style={{ color: T.textoFuerte, fontSize: 15, fontWeight: 800 }}>{j.puntosA}-{j.puntosB}</span>
                               ) : vivo ? (
                                 <span style={{ color: '#f09595', fontSize: 10, fontWeight: 800 }}>● VIVO</span>
@@ -1415,8 +1701,14 @@ export default function PantallaTorneos({ esAdmin = false, torneoId = null, onVo
                               )}
                             </div>
                             <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
-                              <span style={{ color: ganoB ? T.textoFuerte : T.textoBody, fontSize: 13, fontWeight: ganoB ? 800 : 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textAlign: 'right' }}>{nombreEq(j.equipoB_id)}</span>
-                              {avatarEquipo(codEq(j.equipoB_id), colorEq(j.equipoB_id), '#fff', 26)}
+                              {esBye ? (
+                                <span style={{ color: T.muyTenue, fontSize: 12, fontStyle: 'italic', textAlign: 'right' }}>Pasa directo</span>
+                              ) : (
+                                <>
+                                  <span style={{ color: ganoB ? T.textoFuerte : T.textoBody, fontSize: 13, fontWeight: ganoB ? 800 : 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textAlign: 'right' }}>{nombreEq(j.equipoB_id)}</span>
+                                  {avatarEquipo(codEq(j.equipoB_id), colorEq(j.equipoB_id), '#fff', 26)}
+                                </>
+                              )}
                             </div>
                           </div>
                           {puedeAnotar && (
@@ -1443,6 +1735,91 @@ export default function PantallaTorneos({ esAdmin = false, torneoId = null, onVo
                   {errorGen && <div style={{ color: '#f09595', fontSize: 12.5, marginTop: 10 }}>{errorGen}</div>}
                 </div>
               )}
+            </>
+          )}
+        </>
+      )
+    }
+
+    if (pestana === 'arbitros') {
+      const fmtRD = (n) => 'RD$' + (Number(n) || 0).toLocaleString('es-DO')
+      return (
+        <>
+          {tituloModulo('Árbitros del torneo', T.acento)}
+          {esAdmin && (
+            <button onClick={() => setArbModal({ nombre: '', telefono: '', tarifa: '' })} style={{ width: '100%', border: 'none', borderRadius: 12, padding: 14, background: T.boton, color: T.botonTexto, fontSize: 14.5, fontWeight: 800, cursor: 'pointer', marginBottom: 16 }}>＋ Agregar árbitro</button>
+          )}
+          {cargandoArb ? (
+            <div style={{ color: T.tenue, fontSize: 13, padding: '6px 2px' }}>Cargando árbitros…</div>
+          ) : arbitros.length === 0 ? (
+            <div style={{ ...tarjeta, padding: 22, textAlign: 'center' }}>
+              <div style={{ fontSize: 34, marginBottom: 8 }}>🧑‍⚖️</div>
+              <div style={{ color: T.textoFuerte, fontSize: 14.5, fontWeight: 700, marginBottom: 4 }}>Todavía no hay árbitros</div>
+              <div style={{ color: T.tenue, fontSize: 12.5, lineHeight: 1.5 }}>Agrégalos para tener su contacto y su tarifa a la mano. El pago se registra en la pestaña Caja.</div>
+            </div>
+          ) : (
+            arbitros.map((a) => (
+              <div key={a.id} style={{ ...tarjeta, display: 'flex', alignItems: 'center', gap: 12, padding: 13, marginBottom: 9 }}>
+                <span style={{ width: 40, height: 40, borderRadius: '50%', flexShrink: 0, display: 'grid', placeItems: 'center', background: T.avatar, color: T.avatarTexto, fontWeight: 800, fontSize: 15 }}>{(a.nombre || '?')[0].toUpperCase()}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14.5, fontWeight: 700, color: T.textoFuerte, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.nombre}</div>
+                  <div style={{ fontSize: 11.5, color: T.tenue }}>{a.telefono ? `📞 ${a.telefono}` : 'Sin teléfono'}{a.tarifa ? ` · ${fmtRD(a.tarifa)} por juego` : ''}</div>
+                </div>
+                {esAdmin && <button onClick={() => borrarArbitro(a.id)} style={{ border: 'none', background: 'transparent', color: T.muyTenue, fontSize: 16, cursor: 'pointer', flexShrink: 0 }}>✕</button>}
+              </div>
+            ))
+          )}
+          {arbitros.length > 0 && <div style={{ color: T.muyTenue, fontSize: 11.5, lineHeight: 1.6, marginTop: 8 }}>💡 El pago de los árbitros se registra en la pestaña Caja, en la categoría Árbitros.</div>}
+        </>
+      )
+    }
+
+    if (pestana === 'reglas') {
+      const rg = torneoRow?.reglas || {}
+      const modoTxt = rg.modoAnotacion === 'simple' ? 'Marcador simple' : 'Jugada por jugada'
+      const items = [
+        ['Cuartos', rg.cuartos != null ? rg.cuartos : '—'],
+        ['Minutos por cuarto', rg.minutos != null ? rg.minutos : '—'],
+        ['Faltas para expulsión', rg.expulsionA != null ? rg.expulsionA : '—'],
+        ['Bonus desde la falta', rg.bonusCada != null ? rg.bonusCada : '—'],
+        ['Modo de anotar', modoTxt],
+      ]
+      const reglamento = rg.reglamento || ''
+      return (
+        <>
+          {tituloModulo('Reglas del torneo', T.acento)}
+          <div style={{ ...tarjeta, padding: 16, marginBottom: 18 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 800, color: T.textoFuerte, marginBottom: 10 }}>Reglas de juego</div>
+            {items.map(([k, v], i) => (
+              <div key={k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderTop: i > 0 ? `0.5px solid ${T.bordeSuave}` : 'none' }}>
+                <span style={{ fontSize: 13, color: T.tenue }}>{k}</span>
+                <span style={{ fontSize: 13.5, fontWeight: 700, color: T.textoFuerte }}>{v}</span>
+              </div>
+            ))}
+            {esAdmin && onConfigurar && (
+              <button onClick={() => onConfigurar(torneoRow.id)} style={{ width: '100%', marginTop: 12, border: `1px solid ${T.borde}`, borderRadius: 11, padding: 11, background: 'transparent', color: T.acento, fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>Editar reglas de juego ⚙️</button>
+            )}
+          </div>
+
+          <div style={{ fontSize: 13.5, fontWeight: 800, color: T.acento, textTransform: 'uppercase', letterSpacing: 0.5, margin: '0 2px 10px' }}>Reglamento y normas</div>
+          {reglamentoEdit === null ? (
+            <>
+              {reglamento ? (
+                <div style={{ ...tarjeta, padding: 16, whiteSpace: 'pre-wrap', color: T.textoBody, fontSize: 13.5, lineHeight: 1.6 }}>{reglamento}</div>
+              ) : (
+                <div style={{ ...tarjeta, padding: 18, textAlign: 'center', color: T.tenue, fontSize: 13, lineHeight: 1.5 }}>Sin reglamento todavía. Escribe las normas del torneo: uniforme, conducta, horarios de llegada, pagos, etc.</div>
+              )}
+              {esAdmin && (
+                <button onClick={() => setReglamentoEdit(reglamento)} style={{ width: '100%', marginTop: 12, border: 'none', borderRadius: 12, padding: 13, background: T.boton, color: T.botonTexto, fontSize: 14, fontWeight: 800, cursor: 'pointer' }}>{reglamento ? 'Editar reglamento' : '＋ Escribir reglamento'}</button>
+              )}
+            </>
+          ) : (
+            <>
+              <textarea value={reglamentoEdit} onChange={(e) => setReglamentoEdit(e.target.value)} placeholder={'Ej:\n• Uniforme obligatorio.\n• Llegar 15 minutos antes.\n• Tres faltas técnicas = expulsión del torneo.\n• La cuota se paga antes de cada jornada.'} rows={9} style={{ width: '100%', boxSizing: 'border-box', border: `1px solid ${T.borde}`, borderRadius: 12, padding: 14, background: T.esClaro ? '#fff' : 'rgba(255,255,255,.04)', color: T.textoFuerte, fontSize: 14, lineHeight: 1.6, outline: 'none', resize: 'vertical', fontFamily: 'inherit' }} />
+              <div style={{ display: 'flex', gap: 9, marginTop: 12 }}>
+                <button onClick={() => setReglamentoEdit(null)} style={{ flex: 1, border: `1px solid ${T.bordeSuave}`, borderRadius: 12, padding: 13, background: 'transparent', color: T.tenue, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>Cancelar</button>
+                <button onClick={guardarReglamento} disabled={guardandoRegl} style={{ flex: 1, border: 'none', borderRadius: 12, padding: 13, background: T.boton, color: T.botonTexto, fontSize: 14, fontWeight: 800, cursor: guardandoRegl ? 'default' : 'pointer', opacity: guardandoRegl ? 0.6 : 1 }}>{guardandoRegl ? 'Guardando…' : 'Guardar'}</button>
+              </div>
             </>
           )}
         </>
@@ -1519,6 +1896,7 @@ export default function PantallaTorneos({ esAdmin = false, torneoId = null, onVo
       {modalAgregarDir()}
       {modalCaja()}
       {modalEliminarCaja()}
+      {modalArbitro()}
       {toastInvitar && (
         <div style={{ position: 'fixed', left: '50%', bottom: 'calc(env(safe-area-inset-bottom) + 22px)', transform: 'translateX(-50%)', zIndex: 90, background: T.tarjeta, border: `1px solid ${T.borde}`, borderRadius: 14, padding: '12px 20px', color: T.textoFuerte, fontSize: 13.5, fontWeight: 600, boxShadow: '0 12px 30px rgba(0,0,0,.5)', maxWidth: '88%', textAlign: 'center' }}>{toastInvitar}</div>
       )}

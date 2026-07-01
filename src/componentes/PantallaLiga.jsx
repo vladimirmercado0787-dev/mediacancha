@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
-import { leerJuegosLiga, leerMiembrosLiga } from '../ligas'
+import { leerJuegosLiga, leerMiembrosLiga, leerCajaLiga, agregarMovimientoLiga, eliminarMovimientoLiga } from '../ligas'
+import { lideresLiga, destacadosLiga } from '../ligaEstadisticas'
+import { tieneGrupoActivo, activarGrupoLiga } from '../grupos'
 
 // ============================================================
 //  PANTALLA DE LIGA  (grupo menos formal que el torneo)
@@ -93,11 +95,10 @@ const PESTANAS = [
   { id: 'miembros', txt: 'Miembros', icono: '👥' },
   { id: 'juegos', txt: 'Juegos', icono: '🏀' },
   { id: 'lideres', txt: 'Líderes', icono: '🏅' },
-  { id: 'invitar', txt: 'Invitar', icono: '✉️' },
   { id: 'caja', txt: 'Caja', icono: '💰' },
 ]
 
-export default function PantallaLiga({ liga, onVolver, onAnotar, onInvitar }) {
+export default function PantallaLiga({ liga, onVolver, onAnotar, onInvitar, onAbrirGrupo }) {
   // Mezcla la liga real (si llega) sobre la de ejemplo, para que el encabezado
   // muestre los datos verdaderos y las pestañas conserven el demo por ahora.
   const DIA_LBL = { lun: 'Lun', mar: 'Mar', mie: 'Mié', jue: 'Jue', vie: 'Vie', sab: 'Sáb', dom: 'Dom' }
@@ -110,6 +111,24 @@ export default function PantallaLiga({ liga, onVolver, onAnotar, onInvitar }) {
   const [pestana, setPestana] = useState('resumen')
   const [modoPicker, setModoPicker] = useState(false)
 
+  // Grupo de chat de la liga: si ya está activo, y activarlo a mano.
+  const [grupoActivo, setGrupoActivo] = useState(false)
+  const [activandoGrupo, setActivandoGrupo] = useState(false)
+  const [pedirConfirmarGrupo, setPedirConfirmarGrupo] = useState(false)
+  useEffect(() => {
+    if (!esReal) return
+    tieneGrupoActivo('liga', L.id).then(setGrupoActivo).catch(() => {})
+  }, [esReal, L.id])
+  const botonGrupoTocado = () => { if (grupoActivo) { activarGrupo() } else { setPedirConfirmarGrupo(true) } }
+  const activarGrupo = async () => {
+    setPedirConfirmarGrupo(false)
+    setActivandoGrupo(true)
+    const grupoId = await activarGrupoLiga(L.id, L.nombre)
+    setActivandoGrupo(false)
+    setGrupoActivo(true)
+    onAbrirGrupo && grupoId && onAbrirGrupo({ id: grupoId, nombre: L.nombre, tipo: 'liga' })
+  }
+
   // Juegos reales de esta liga
   const [juegos, setJuegos] = useState([])
   const [cargandoJuegos, setCargandoJuegos] = useState(true)
@@ -117,6 +136,11 @@ export default function PantallaLiga({ liga, onVolver, onAnotar, onInvitar }) {
   // Miembros reales de esta liga
   const [miembros, setMiembros] = useState([])
   const [cargandoMiembros, setCargandoMiembros] = useState(true)
+
+  // Caja real de la liga
+  const [caja, setCaja] = useState([])
+  const [cargandoCaja, setCargandoCaja] = useState(true)
+  const [movModal, setMovModal] = useState(null) // null | { tipo, monto, concepto, categoria, miembro }
 
   useEffect(() => {
     if (!esReal) { setJuegos([]); setCargandoJuegos(false); return }
@@ -140,11 +164,46 @@ export default function PantallaLiga({ liga, onVolver, onAnotar, onInvitar }) {
     return () => { vivo = false }
   }, [liga && liga.id])
 
+  const cargarCaja = () => {
+    if (!esReal) { setCaja([]); setCargandoCaja(false); return }
+    setCargandoCaja(true)
+    leerCajaLiga(liga.id)
+      .then(({ caja }) => setCaja(caja || []))
+      .catch(() => setCaja([]))
+      .finally(() => setCargandoCaja(false))
+  }
+  useEffect(() => { let v = true; if (v) cargarCaja(); return () => { v = false } }, [liga && liga.id])
+
+  const saldoCaja = caja.reduce((s, m) => s + (m.tipo === 'egreso' ? -1 : 1) * (Number(m.monto) || 0), 0)
+  const guardarMovimiento = async () => {
+    const m = movModal
+    if (!m || !esReal) return
+    const monto = Number(m.monto) || 0
+    if (monto <= 0) { alert('Escribe un monto válido'); return }
+    const concepto = (m.concepto || '').trim() || (m.categoria === 'cuota' ? 'Cuota de miembro' : (m.tipo === 'egreso' ? 'Gasto' : 'Ingreso'))
+    const datos = {
+      tipo: m.tipo, categoria: m.categoria || null, concepto, monto,
+      miembro_id: m.miembro ? m.miembro.perfil_id : null,
+      miembro_nombre: m.miembro ? `${(m.miembro.perfil && m.miembro.perfil.nombre) || ''} ${(m.miembro.perfil && m.miembro.perfil.apellido) || ''}`.trim() : null,
+    }
+    const { error } = await agregarMovimientoLiga(liga.id, datos)
+    if (error) { alert('No se pudo guardar: ' + error); return }
+    setMovModal(null); cargarCaja()
+  }
+  const borrarMovimiento = async (id) => {
+    if (!window.confirm('¿Borrar este movimiento?')) return
+    const { error } = await eliminarMovimientoLiga(id)
+    if (!error) cargarCaja()
+  }
+
   // Convierte un juego real de la BD al formato que dibuja la tarjeta
   const fechaCorta = (iso) => { try { return new Date(iso).toLocaleDateString('es-DO', { weekday: 'short', day: 'numeric', month: 'short' }) } catch (e) { return '' } }
   const aCard = (g) => ({ id: g.id, modo: g.modo, a: g.nombre_a, b: g.nombre_b, ptsA: g.puntos_a, ptsB: g.puntos_b, fecha: fechaCorta(g.creado_en) })
   // Lista lista para mostrar: reales si la liga es real, demo si es ejemplo
   const juegosCard = esReal ? juegos.map(aCard) : JUEGOS_DEMO
+  // Líderes reales de la liga (se llenan según pasan los juegos)
+  const lidReal = lideresLiga(esReal ? juegos : [])
+  const destReal = destacadosLiga(esReal ? juegos : [])
 
   const pesoRD = (n) => 'RD$' + (n || 0).toLocaleString('es-DO')
 
@@ -212,6 +271,22 @@ export default function PantallaLiga({ liga, onVolver, onAnotar, onInvitar }) {
     contenido = (
       <>
         <button onClick={() => onInvitar && onInvitar()} style={{ width: '100%', border: 'none', borderRadius: 12, padding: '14px 0', background: TEAL_BTN, color: '#04161a', fontSize: 15, fontWeight: 800, cursor: 'pointer', marginBottom: 16 }}>＋ Invitar miembros</button>
+
+        <button onClick={botonGrupoTocado} disabled={activandoGrupo} style={{ width: '100%', border: `1px solid ${C.borde2}`, borderRadius: 12, padding: '13px 0', background: C.card, color: C.teal, fontSize: 14, fontWeight: 800, cursor: activandoGrupo ? 'default' : 'pointer', marginBottom: 16, opacity: activandoGrupo ? 0.6 : 1 }}>
+          {activandoGrupo ? 'Activando…' : grupoActivo ? '💬 Abrir grupo de chat' : '💬 Crear grupo de chat de la liga'}
+        </button>
+
+        {pedirConfirmarGrupo && (
+          <div onClick={() => setPedirConfirmarGrupo(false)} style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'flex-end' }}>
+            <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', background: C.fondo, borderTop: `1px solid ${C.borde}`, borderRadius: '20px 20px 0 0', padding: '20px 20px calc(env(safe-area-inset-bottom) + 20px)' }}>
+              <div style={{ width: 40, height: 4, borderRadius: 2, background: C.borde2, margin: '0 auto 16px' }} />
+              <div style={{ fontSize: 16, fontWeight: 800, color: C.txt, marginBottom: 6 }}>¿Crear el grupo de chat?</div>
+              <div style={{ fontSize: 13, color: C.tenue, lineHeight: 1.5, marginBottom: 18 }}>Se va a crear un chat de grupo con todos los miembros de "{L.nombre}". Cada vez que alguien entre o salga de la liga, el chat se actualiza solo.</div>
+              <button onClick={activarGrupo} style={{ width: '100%', border: 'none', borderRadius: 12, padding: 13, background: TEAL_BTN, color: '#04161a', fontWeight: 800, fontSize: 14.5, cursor: 'pointer', marginBottom: 10 }}>Sí, crear el grupo</button>
+              <button onClick={() => setPedirConfirmarGrupo(false)} style={{ width: '100%', border: `1px solid ${C.borde}`, borderRadius: 12, padding: 12, background: 'transparent', color: C.tenue, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>Cancelar</button>
+            </div>
+          </div>
+        )}
         {!esReal ? (
           <>
             <TituloSec>{MIEMBROS_DEMO.length} miembros</TituloSec>
@@ -262,53 +337,75 @@ export default function PantallaLiga({ liga, onVolver, onAnotar, onInvitar }) {
       </>
     )
   } else if (pestana === 'lideres') {
+    const fila = (rank, nombre, sub, valor, etiqueta, color) => (
+      <div key={nombre + rank} style={{ display: 'flex', alignItems: 'center', gap: 13, background: C.panel, border: `1px solid ${C.borde}`, borderRadius: 12, padding: 13, marginBottom: 9 }}>
+        <div style={{ fontFamily: DISP, fontSize: 20, fontWeight: 900, width: 22, textAlign: 'center', color: rank === 1 ? C.ambar : C.tenue2 }}>{rank}</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 14.5, fontWeight: 700, color: C.txt, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nombre}</div>
+          {sub && <div style={{ fontSize: 11, color: C.tenue }}>{sub}</div>}
+        </div>
+        <div style={{ fontFamily: DISP, fontSize: 24, fontWeight: 900, color: color || C.teal }}>{valor}<span style={{ fontSize: 10.5, color: C.tenue2, marginLeft: 3 }}>{etiqueta}</span></div>
+      </div>
+    )
+    let cuerpo
+    if (!esReal) {
+      cuerpo = <div style={{ color: C.tenue, fontSize: 13, padding: '8px 2px' }}>Datos de ejemplo.</div>
+    } else if (lidReal.hayDatos && lidReal.puntos.length) {
+      cuerpo = lidReal.puntos.slice(0, 8).map((p, i) => fila(i + 1, p.nombre, `${p.juegos} juego${p.juegos === 1 ? '' : 's'}`, Math.round(p.prom * 10) / 10, 'PPJ', i === 0 ? C.teal : C.txt))
+    } else if (destReal.length) {
+      cuerpo = destReal.slice(0, 8).map((d, i) => fila(i + 1, d.nombre, 'Jugador del partido', d.veces, '×', i === 0 ? C.teal : C.txt))
+    } else {
+      cuerpo = (
+        <div style={{ ...{ background: C.card, border: `1px solid ${C.borde}`, borderRadius: 14, padding: 22 }, textAlign: 'center' }}>
+          <div style={{ fontSize: 32, marginBottom: 8 }}>🏅</div>
+          <div style={{ color: C.txt, fontSize: 14.5, fontWeight: 700, marginBottom: 4 }}>Los líderes se llenan solos</div>
+          <div style={{ color: C.tenue, fontSize: 12.5, lineHeight: 1.5 }}>Apenas anotes juegos con estadísticas, aquí aparecen los mejores de la liga.</div>
+        </div>
+      )
+    }
     contenido = (
       <>
         <TituloSec>Líderes de la liga</TituloSec>
-        {LIDERES_DEMO.map((l, i) => (
-          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 13, background: C.panel, border: `1px solid ${C.borde}`, borderRadius: 12, padding: 13, marginBottom: 9 }}>
-            <div style={{ fontSize: 22 }}>{l.emoji}</div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 11, color: C.tenue, textTransform: 'uppercase', letterSpacing: 0.5 }}>{l.stat}</div>
-              <div style={{ fontSize: 14.5, fontWeight: 700, color: C.txt }}>{l.jugador}</div>
-            </div>
-            <div style={{ fontFamily: DISP, fontSize: 26, fontWeight: 900, color: l.color }}>{l.valor}</div>
-          </div>
-        ))}
-      </>
-    )
-  } else if (pestana === 'invitar') {
-    contenido = (
-      <>
-        <Tarjeta>
-          <div style={{ fontSize: 13.5, color: C.txt, fontWeight: 700, marginBottom: 4 }}>Invitar en nombre de la liga</div>
-          <div style={{ fontSize: 12, color: C.tenue, lineHeight: 1.5, marginBottom: 14 }}>Agrega a cualquiera que tenga cuenta en Media Cancha, o comparte la invitación para que se registren los que aún no están.</div>
-          <button onClick={() => onInvitar && onInvitar()} style={{ width: '100%', border: 'none', borderRadius: 12, padding: '14px 0', background: TEAL_BTN, color: '#04161a', fontSize: 15, fontWeight: 800, cursor: 'pointer' }}>＋ Invitar miembros</button>
-        </Tarjeta>
-        <div style={{ fontSize: 12, color: C.tenue, lineHeight: 1.6, padding: '4px 2px' }}>
-          💡 Recuerda: para anotar un juego no hace falta que todos estén en la app. A los visitantes los escribes por su nombre y ya. Los miembros son las cuentas que forman parte de la liga.
-        </div>
+        {cuerpo}
       </>
     )
   } else if (pestana === 'caja') {
+    const CAT_LBL = { cuota: 'Cuota', inscripcion: 'Inscripción', arbitros: 'Árbitros', equipo: 'Equipo', otro: 'Otro' }
     contenido = (
       <>
         <Tarjeta pad={20}>
           <div style={{ fontSize: 12, color: C.tenue, textTransform: 'uppercase', letterSpacing: 1 }}>Saldo de la liga</div>
-          <div style={{ fontFamily: DISP, fontSize: 40, fontWeight: 900, color: C.teal, marginTop: 4 }}>{pesoRD(CAJA_DEMO.saldo)}</div>
+          <div style={{ fontFamily: DISP, fontSize: 40, fontWeight: 900, color: saldoCaja < 0 ? C.rojo : C.teal, marginTop: 4 }}>{pesoRD(saldoCaja)}</div>
         </Tarjeta>
-        <TituloSec>Movimientos</TituloSec>
-        {CAJA_DEMO.movs.map((m) => (
-          <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 12, background: C.panel, border: `1px solid ${C.borde}`, borderRadius: 12, padding: 13, marginBottom: 9 }}>
-            <div style={{ width: 34, height: 34, borderRadius: 10, flexShrink: 0, background: m.tipo === 'ingreso' ? 'rgba(63,191,127,.15)' : 'rgba(224,86,63,.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>{m.tipo === 'ingreso' ? '↘' : '↗'}</div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13.5, fontWeight: 600, color: C.txt }}>{m.concepto}</div>
-              <div style={{ fontSize: 11, color: C.tenue }}>{m.fecha}</div>
-            </div>
-            <div style={{ fontSize: 14, fontWeight: 800, color: m.tipo === 'ingreso' ? C.verde : C.rojo }}>{m.tipo === 'ingreso' ? '+' : '−'}{pesoRD(m.monto)}</div>
+
+        {esReal && (
+          <div style={{ display: 'flex', gap: 9, marginBottom: 16 }}>
+            <button onClick={() => setMovModal({ tipo: 'ingreso', categoria: 'cuota', monto: '', concepto: '', miembro: null })} style={{ flex: 1, border: 'none', borderRadius: 12, padding: '13px 0', background: TEAL_BTN, color: '#04161a', fontSize: 13.5, fontWeight: 800, cursor: 'pointer' }}>💵 Cobrar cuota</button>
+            <button onClick={() => setMovModal({ tipo: 'egreso', categoria: 'otro', monto: '', concepto: '', miembro: null })} style={{ flex: 1, border: `1px solid ${C.borde2}`, borderRadius: 12, padding: '13px 0', background: 'transparent', color: C.teal, fontSize: 13.5, fontWeight: 800, cursor: 'pointer' }}>+ Movimiento</button>
           </div>
-        ))}
-        <button style={{ width: '100%', border: `1px solid ${C.borde2}`, borderRadius: 12, padding: '13px 0', background: 'transparent', color: C.teal, fontSize: 14, fontWeight: 800, cursor: 'pointer', marginTop: 4 }}>+ Registrar movimiento</button>
+        )}
+
+        <TituloSec>Movimientos</TituloSec>
+        {!esReal ? (
+          <div style={{ color: C.tenue, fontSize: 13, padding: '8px 2px' }}>Datos de ejemplo.</div>
+        ) : cargandoCaja ? (
+          <div style={{ color: C.tenue, fontSize: 13, padding: '8px 2px' }}>Cargando la caja…</div>
+        ) : caja.length === 0 ? (
+          <div style={{ color: C.tenue, fontSize: 13, padding: '8px 2px', lineHeight: 1.5 }}>Todavía no hay movimientos. Registra una cuota o un gasto con los botones de arriba.</div>
+        ) : caja.map((m) => {
+          const ing = m.tipo !== 'egreso'
+          return (
+            <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 12, background: C.panel, border: `1px solid ${C.borde}`, borderRadius: 12, padding: 13, marginBottom: 9 }}>
+              <div style={{ width: 34, height: 34, borderRadius: 10, flexShrink: 0, background: ing ? 'rgba(63,191,127,.15)' : 'rgba(224,86,63,.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>{ing ? '↘' : '↗'}</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 600, color: C.txt, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.concepto}{m.miembro_nombre ? ` · ${m.miembro_nombre}` : ''}</div>
+                <div style={{ fontSize: 11, color: C.tenue }}>{m.categoria ? (CAT_LBL[m.categoria] || m.categoria) + ' · ' : ''}{fechaCorta(m.creado_en)}</div>
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: ing ? C.verde : C.rojo, whiteSpace: 'nowrap' }}>{ing ? '+' : '−'}{pesoRD(m.monto)}</div>
+              <button onClick={() => borrarMovimiento(m.id)} style={{ border: 'none', background: 'transparent', color: C.tenue2, fontSize: 16, cursor: 'pointer', padding: '0 2px', flexShrink: 0 }}>✕</button>
+            </div>
+          )
+        })}
       </>
     )
   }
@@ -347,12 +444,53 @@ export default function PantallaLiga({ liga, onVolver, onAnotar, onInvitar }) {
       {/* CONTENIDO */}
       <div style={{ position: 'relative', zIndex: 1, flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}>
         <div style={{ maxWidth: 760, margin: '0 auto', padding: '16px 14px 40px' }}>
-          <div style={{ fontSize: 10.5, color: C.tenue2, textAlign: 'center', marginBottom: 14, fontStyle: 'italic' }}>
-            {esReal ? 'Los juegos son reales. Miembros, líderes y caja se conectan pronto.' : 'Datos de ejemplo · el diseño de la liga (el guardado real se conecta después)'}
-          </div>
+          {!esReal && (
+            <div style={{ fontSize: 10.5, color: C.tenue2, textAlign: 'center', marginBottom: 14, fontStyle: 'italic' }}>
+              Datos de ejemplo · el diseño de la liga (el guardado real se conecta después)
+            </div>
+          )}
           {contenido}
         </div>
       </div>
+
+      {/* MODAL: registrar movimiento / cobrar cuota */}
+      {movModal && (
+        <div onClick={() => setMovModal(null)} style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(0,0,0,0.66)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 460, background: C.fondo, borderTopLeftRadius: 24, borderTopRightRadius: 24, border: `1px solid ${C.borde}`, padding: '0 0 calc(env(safe-area-inset-bottom) + 20px)', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ height: 4, background: 'linear-gradient(90deg, #0e9c90, #36e3d2, #0e9c90)' }} />
+            <div style={{ padding: '18px 18px 0' }}>
+              <div style={{ fontSize: 18, fontWeight: 900, color: C.txt, marginBottom: 14 }}>{movModal.categoria === 'cuota' ? 'Cobrar cuota' : 'Registrar movimiento'}</div>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+                {[['ingreso', 'Ingreso'], ['egreso', 'Gasto']].map(([id, txt]) => {
+                  const on = movModal.tipo === id
+                  return <button key={id} onClick={() => setMovModal((s) => ({ ...s, tipo: id }))} style={{ flex: 1, border: on ? 'none' : `1px solid ${C.borde}`, background: on ? (id === 'ingreso' ? 'rgba(63,191,127,.2)' : 'rgba(224,86,63,.2)') : 'transparent', color: on ? (id === 'ingreso' ? C.verde : C.rojo) : C.tenue, borderRadius: 12, padding: '11px 0', fontSize: 14, fontWeight: 800, cursor: 'pointer' }}>{txt}</button>
+                })}
+              </div>
+              <input value={movModal.monto} onChange={(e) => setMovModal((s) => ({ ...s, monto: e.target.value.replace(/[^0-9.]/g, '') }))} inputMode="decimal" placeholder="Monto (RD$)" style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(255,255,255,.05)', border: `1px solid ${C.borde}`, borderRadius: 12, padding: '12px 14px', color: C.txt, fontSize: 16, outline: 'none', marginBottom: 10 }} />
+              <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 10 }}>
+                {[['cuota', 'Cuota'], ['inscripcion', 'Inscripción'], ['arbitros', 'Árbitros'], ['equipo', 'Equipo'], ['otro', 'Otro']].map(([id, txt]) => {
+                  const on = movModal.categoria === id
+                  return <button key={id} onClick={() => setMovModal((s) => ({ ...s, categoria: id, miembro: id === 'cuota' ? s.miembro : null }))} style={{ border: on ? 'none' : `1px solid ${C.borde}`, background: on ? TEAL_BTN : 'transparent', color: on ? '#04161a' : C.tenue, borderRadius: 18, padding: '7px 13px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>{txt}</button>
+                })}
+              </div>
+              {movModal.categoria === 'cuota' && esReal && (
+                miembros.length === 0
+                  ? <div style={{ fontSize: 12, color: C.tenue, marginBottom: 10 }}>Aún no hay miembros para asignar la cuota. Igual puedes registrarla sin miembro.</div>
+                  : <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 10, maxHeight: 130, overflowY: 'auto' }}>
+                      {miembros.map((mm) => {
+                        const nom = `${(mm.perfil && mm.perfil.nombre) || ''} ${(mm.perfil && mm.perfil.apellido) || ''}`.trim() || 'Miembro'
+                        const on = movModal.miembro && movModal.miembro.perfil_id === mm.perfil_id
+                        return <button key={mm.id} onClick={() => setMovModal((s) => ({ ...s, miembro: on ? null : mm }))} style={{ border: on ? 'none' : `1px solid ${C.borde}`, background: on ? TEAL_BTN : 'transparent', color: on ? '#04161a' : C.tenue, borderRadius: 16, padding: '7px 12px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>{nom}</button>
+                      })}
+                    </div>
+              )}
+              <input value={movModal.concepto} onChange={(e) => setMovModal((s) => ({ ...s, concepto: e.target.value }))} placeholder={movModal.categoria === 'cuota' ? 'Concepto (ej: Cuota de junio)' : 'Concepto (opcional)'} style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(255,255,255,.05)', border: `1px solid ${C.borde}`, borderRadius: 12, padding: '12px 14px', color: C.txt, fontSize: 15, outline: 'none', marginBottom: 16 }} />
+              <button onClick={guardarMovimiento} style={{ width: '100%', border: 'none', borderRadius: 14, padding: 14, background: TEAL_BTN, color: '#04161a', fontSize: 15, fontWeight: 800, cursor: 'pointer' }}>Guardar</button>
+              <button onClick={() => setMovModal(null)} style={{ width: '100%', marginTop: 10, padding: 13, borderRadius: 14, border: 'none', background: 'rgba(255,255,255,.06)', color: C.tenue, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL: elegir modo para anotar */}
       {modoPicker && (

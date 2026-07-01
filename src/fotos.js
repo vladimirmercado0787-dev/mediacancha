@@ -77,6 +77,11 @@ export async function subirFotoPerfil(archivo) {
   return subirArchivo(archivo, 'perfiles', { maxLado: 800, calidad: 0.85 })
 }
 
+// Foto de jugador tipo pasaporte (carnet). Llega ya recortada 35/45 del RecortadorFoto.
+export async function subirFotoJugador(archivo) {
+  return subirArchivo(archivo, 'jugadores', { maxLado: 800, calidad: 0.88 })
+}
+
 export async function subirFotoPublicacion(archivo) {
   return subirArchivo(archivo, 'publicaciones', { maxLado: 1440, calidad: 0.82 })
 }

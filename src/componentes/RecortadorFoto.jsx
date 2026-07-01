@@ -23,6 +23,7 @@ const TEMAS = {
 const RELACION = {
   cuadrado: 1,
   circulo: 1,
+  pasaporte: 35 / 45,  // foto de jugador tipo carnet (vertical, proporción cédula)
   vertical: 3 / 4,     // más alta que ancha (tipo retrato)
   ancho: 16 / 9,       // horizontal
   horizontal: 4 / 3,   // horizontal suave
@@ -44,8 +45,9 @@ export default function RecortadorFoto({ archivo, forma = 'cuadrado', elegirForm
 
   const esCirculo = formaSel === 'circulo'
   const esOriginal = formaSel === 'original'
+  const esPasaporte = formaSel === 'pasaporte'
   // El círculo se trata como cuadrado para el marco; "original" usa la proporción real de la foto
-  const mostrarSelector = elegirForma !== undefined ? elegirForma : !esCirculo
+  const mostrarSelector = esPasaporte ? false : (elegirForma !== undefined ? elegirForma : !esCirculo)
 
   // Lado base del marco
   const ladoMarco = 280
@@ -165,8 +167,8 @@ export default function RecortadorFoto({ archivo, forma = 'cuadrado', elegirForm
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(4,5,7,.94)', backdropFilter: 'blur(8px)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <div style={{ color: T.texto, fontSize: 16, fontWeight: 800, marginBottom: 4 }}>Ajusta tu foto</div>
-      <div style={{ color: T.tenue, fontSize: 12.5, marginBottom: 16, textAlign: 'center' }}>Arrastra para mover · pellizca o usa la barra para acercar</div>
+      <div style={{ color: T.texto, fontSize: 16, fontWeight: 800, marginBottom: 4 }}>{esPasaporte ? 'Foto de jugador' : 'Ajusta tu foto'}</div>
+      <div style={{ color: T.tenue, fontSize: 12.5, marginBottom: 16, textAlign: 'center' }}>{esPasaporte ? 'Centra tu cara en el óvalo · como una foto de carnet' : 'Arrastra para mover · pellizca o usa la barra para acercar'}</div>
 
       {/* Selector de FORMA */}
       {mostrarSelector && (
@@ -204,6 +206,11 @@ export default function RecortadorFoto({ archivo, forma = 'cuadrado', elegirForm
               maxWidth: 'none', userSelect: 'none', pointerEvents: 'none', display: 'block',
             }}
           />
+        )}
+        {esPasaporte && (
+          <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ width: '60%', height: '76%', marginTop: '-3%', borderRadius: '50%', border: '2px dashed rgba(255,255,255,.78)', boxShadow: '0 0 0 9999px rgba(2,3,5,.28)' }} />
+          </div>
         )}
       </div>
 

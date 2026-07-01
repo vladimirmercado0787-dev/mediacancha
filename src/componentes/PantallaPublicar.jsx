@@ -41,7 +41,9 @@ export default function PantallaPublicar({ miPerfil, onVolver, onPublicado, onRe
   const [perfilCargado, setPerfilCargado] = useState(miPerfil || null)
   const areaRef = useRef(null)
   const inputFotosRef = useRef(null)
+  const inputVideoRef = useRef(null)
   const [fotos, setFotos] = useState([])              // [{ blob, previa }]
+  const [video, setVideo] = useState(null)            // { file, url, dur } o null
   const [fotoARecortar, setFotoARecortar] = useState(null)
   const [editandoIdx, setEditandoIdx] = useState(-1)
   const maxFotos = 2                                   // usuario: 2 (torneo 5, liga 4 cuando se construyan)
@@ -117,7 +119,7 @@ export default function PantallaPublicar({ miPerfil, onVolver, onPublicado, onRe
 
   const iniciales = `${(p.nombre || '?')[0] || ''}${(p.apellido || '')[0] || ''}`.toUpperCase()
   const hayTexto = texto.trim().length > 0
-  const puedePublicar = hayTexto || fotos.length > 0 || !!sentimiento || !!ubicacion
+  const puedePublicar = hayTexto || fotos.length > 0 || !!video || !!sentimiento || !!ubicacion
   const nombreCompleto = `${p.nombre || 'Usuario'}${p.apellido ? ' ' + p.apellido : ''}`
 
   // Sentimientos con sabor de cancha (puro client-side, se guardan en el texto)
@@ -156,7 +158,7 @@ export default function PantallaPublicar({ miPerfil, onVolver, onPublicado, onRe
   ]
   const ACCIONES = [
     { id: 'foto', emoji: '📷', txt: 'Foto', fn: () => { if (fotos.length >= maxFotos) { alert(`Puedes subir hasta ${maxFotos} fotos por publicación.`) } else { inputFotosRef.current && inputFotosRef.current.click() } } },
-    { id: 'video', emoji: '🎥', txt: 'Video', fn: () => avisarPronto('Subir video') },
+    { id: 'video', emoji: '🎥', txt: 'Video', fn: () => { if (fotos.length > 0) { alert('Una publicación lleva fotos o un video, no ambos. Quita las fotos primero.'); return } inputVideoRef.current && inputVideoRef.current.click() } },
     { id: 'resultado', emoji: '📊', txt: 'Resultado', fn: () => { onResultado && onResultado() } },
     { id: 'encuesta', emoji: '🗳️', txt: 'Encuesta', fn: () => avisarPronto('Crear encuesta') },
     { id: 'gif', emoji: '🎬', txt: 'GIF', fn: () => avisarPronto('GIF') },
@@ -193,6 +195,27 @@ export default function PantallaPublicar({ miPerfil, onVolver, onPublicado, onRe
   const editarFoto = (idx) => { const f = fotos[idx]; if (!f) return; setEditandoIdx(idx); setFotoARecortar(f.blob) }
   const quitarFoto = (idx) => setFotos((prev) => { const f = prev[idx]; if (f) { try { URL.revokeObjectURL(f.previa) } catch (e) {} } return prev.filter((_, i) => i !== idx) })
 
+  const MAX_VIDEO_TECHADO = 60   // un minuto
+  const duracionDeVideo = (file) => new Promise((res) => {
+    try {
+      const v = document.createElement('video')
+      v.preload = 'metadata'
+      v.onloadedmetadata = () => { const d = v.duration || 0; URL.revokeObjectURL(v.src); res(d) }
+      v.onerror = () => res(0)
+      v.src = URL.createObjectURL(file)
+    } catch (e) { res(0) }
+  })
+  const alElegirVideo = async (e) => {
+    const file = e.target.files && e.target.files[0]; if (e.target) e.target.value = ''
+    if (!file) return
+    if (fotos.length > 0) { alert('Una publicación lleva fotos o un video, no ambos. Quita las fotos primero.'); return }
+    const dur = await duracionDeVideo(file)
+    if (dur && dur > MAX_VIDEO_TECHADO + 0.6) { alert('El video del Techado debe ser de un minuto o menos.'); return }
+    if (video && video.url) { try { URL.revokeObjectURL(video.url) } catch (x) {} }
+    setVideo({ file, url: URL.createObjectURL(file), dur })
+  }
+  const quitarVideo = () => { if (video && video.url) { try { URL.revokeObjectURL(video.url) } catch (x) {} } setVideo(null) }
+
   const publicar = async () => {
     const base = texto.trim()
     const extras = []
@@ -201,9 +224,10 @@ export default function PantallaPublicar({ miPerfil, onVolver, onPublicado, onRe
     const meta = extras.join('  ·  ')
     const textoFinal = meta ? (base ? `${base}\n\n${meta}` : meta) : base
     const hayFotos = fotos.length > 0
+    const hayVideo = !!video
     if (publicando) return
-    if (!textoFinal && !hayFotos) {
-      alert('Escribe algo, elige un sentimiento o ubicación, o agrega una foto para publicar 🏀')
+    if (!textoFinal && !hayFotos && !hayVideo) {
+      alert('Escribe algo, elige un sentimiento o ubicación, o agrega una foto o video para publicar 🏀')
       return
     }
     setPublicando(true)
@@ -218,13 +242,21 @@ export default function PantallaPublicar({ miPerfil, onVolver, onPublicado, onRe
           if (r && r.url) urls.push(r.url)
         }
       }
-      const res = await publicarTexto({ texto: textoFinal, imagenes: urls.length ? urls : null, fondo: urls.length ? null : fondoElegido })
+      let videoUrl = null
+      if (hayVideo) {
+        const { subirVideoTechado } = await import('../historias')
+        const rv = await subirVideoTechado(video.file)
+        if (rv && rv.url) videoUrl = rv.url
+        else { alert('No se pudo subir el video.'); setPublicando(false); return }
+      }
+      const res = await publicarTexto({ texto: textoFinal, imagenes: urls.length ? urls : null, video: videoUrl, fondo: (urls.length || videoUrl) ? null : fondoElegido })
       if (res && res.error) {
         alert('No se pudo publicar: ' + res.error)
       } else {
         setTexto(''); setFondoSel(0); setSentimiento(null); setUbicacion(null); setUbicacionTmp('')
         fotos.forEach((f) => { try { URL.revokeObjectURL(f.previa) } catch (e) {} })
         setFotos([])
+        quitarVideo()
         onPublicado && onPublicado()
         onVolver && onVolver()
       }
@@ -354,6 +386,16 @@ export default function PantallaPublicar({ miPerfil, onVolver, onPublicado, onRe
           </div>
         )}
 
+        {/* Video elegido para la publicación */}
+        {video && (
+          <div style={{ flexShrink: 0, padding: '0 16px 14px' }}>
+            <div style={{ position: 'relative', borderRadius: 14, overflow: 'hidden', border: `1.5px solid ${T.acento}55`, background: '#000' }}>
+              <video src={video.url} controls playsInline style={{ width: '100%', maxHeight: 300, display: 'block', background: '#000' }} />
+              <button onClick={quitarVideo} style={{ position: 'absolute', top: 8, right: 8, width: 28, height: 28, borderRadius: '50%', border: 'none', background: 'rgba(0,0,0,.6)', color: '#fff', fontSize: 15, cursor: 'pointer', display: 'grid', placeItems: 'center', lineHeight: 1 }}>✕</button>
+            </div>
+          </div>
+        )}
+
         {/* Selector de plantillas */}
         <div style={{ flexShrink: 0, padding: '0 0 12px' }}>
           <div style={{ fontSize: 11, fontWeight: 900, color: T.tenue, textTransform: 'uppercase', letterSpacing: 1, padding: '0 16px 9px' }}>Elige tu cancha</div>
@@ -397,6 +439,8 @@ export default function PantallaPublicar({ miPerfil, onVolver, onPublicado, onRe
 
       {/* Input oculto para elegir fotos */}
       <input ref={inputFotosRef} type="file" accept="image/*" multiple={maxFotos > 1} onChange={alElegirFotos} style={{ display: 'none' }} />
+      {/* Input oculto para elegir video (Techado, hasta un minuto) */}
+      <input ref={inputVideoRef} type="file" accept="video/*" onChange={alElegirVideo} style={{ display: 'none' }} />
 
       {/* Recortador (1 foto o al editar) */}
       {fotoARecortar && (

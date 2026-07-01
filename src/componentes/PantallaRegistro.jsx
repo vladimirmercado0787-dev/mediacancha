@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
+import { subirFotoPerfil } from '../fotos'
+import RecortadorFoto from './RecortadorFoto'
 import fondoCancha from '../assets/fondo-cancha.png'
 import { MUNICIPIOS_RD } from '../data/municipiosRD'
 import { ESTADOS_USA } from '../data/estadosUSA'
@@ -116,6 +118,9 @@ export default function PantallaRegistro({ onListo, onIrLogin, onVolver }) {
   const [error, setError] = useState('')
   const [ok, setOk] = useState(false)
   const [verClave, setVerClave] = useState(false)
+  const [fotoUrl, setFotoUrl] = useState(null)
+  const [subiendoFoto, setSubiendoFoto] = useState(false)
+  const [fotoARecortar, setFotoARecortar] = useState(null)
 
   // ===== CANDADO OFICIAL: congela el fondo para que no se mueva con el teclado =====
   useEffect(() => {
@@ -152,6 +157,16 @@ export default function PantallaRegistro({ onListo, onIrLogin, onVolver }) {
     return { ...p, posiciones: [...p.posiciones, v] }
   })
 
+  const alElegirFotoReg = (e) => { const arch = e.target.files && e.target.files[0]; if (arch) setFotoARecortar(arch); e.target.value = '' }
+  const alRecortarFotoReg = async (blob) => {
+    setFotoARecortar(null)
+    setSubiendoFoto(true)
+    const { url, error: errFoto } = await subirFotoPerfil(blob)
+    setSubiendoFoto(false)
+    if (errFoto) setError('No se pudo subir la foto: ' + errFoto)
+    else if (url) setFotoUrl(url)
+  }
+
   const registrar = async () => {
     setError('')
     if (!f.nombre.trim()) return setError('Escribe tu nombre.')
@@ -177,6 +192,7 @@ export default function PantallaRegistro({ onListo, onIrLogin, onVolver }) {
         pais: paisActual.nombre, modo,
         sexo: f.sexo, fecha_nacimiento: f.fechaNac,
         provincia: nombreProvincia, municipio: f.municipio || null,
+        foto_url: fotoUrl || null,
         estatura_pies: modo === 'jugador' && f.pies ? parseInt(f.pies) : null,
         estatura_pulgadas: modo === 'jugador' && f.pulgadas ? parseInt(f.pulgadas) : null,
         posiciones: modo === 'jugador' && f.posiciones.length ? f.posiciones : null,
@@ -293,10 +309,26 @@ export default function PantallaRegistro({ onListo, onIrLogin, onVolver }) {
             </div>
           </div>
 
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 18 }}>
+            <label style={{ position: 'relative', cursor: subiendoFoto ? 'default' : 'pointer', display: 'inline-block' }}>
+              <div style={{ width: 88, height: 88, borderRadius: '50%', background: fotoUrl ? `url(${fotoUrl}) center/cover` : T.inputBg, border: `1px solid ${T.inputBorde}`, boxShadow: `0 0 0 3px ${T.acento}`, display: 'grid', placeItems: 'center', color: T.tenue, fontSize: 30, fontWeight: 800, overflow: 'hidden', opacity: subiendoFoto ? 0.5 : 1 }}>
+                {!fotoUrl && (((f.nombre || '')[0] || '') + ((f.apellido || '')[0] || '')).toUpperCase()}
+                {!fotoUrl && !f.nombre && '📷'}
+              </div>
+              <span style={{ position: 'absolute', bottom: 0, right: 0, width: 28, height: 28, borderRadius: '50%', background: T.boton, display: 'grid', placeItems: 'center', fontSize: 13, border: `2px solid ${T.fondo}` }}>📷</span>
+              <input type="file" accept="image/*" onChange={alElegirFotoReg} disabled={subiendoFoto} style={{ display: 'none' }} />
+            </label>
+            <div style={{ marginTop: 8, fontSize: 12.5, color: T.tenue }}>{subiendoFoto ? 'Subiendo…' : fotoUrl ? 'Toca para cambiar' : 'Foto (opcional)'}</div>
+          </div>
+
           <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
             <div style={{ flex: 1 }}><label style={label}>Nombre *</label><input style={inputStyle} value={f.nombre} onChange={(e) => set('nombre', e.target.value)} placeholder="Ej: Brayan" /></div>
             <div style={{ flex: 1 }}><label style={label}>Apellido</label><input style={inputStyle} value={f.apellido} onChange={(e) => set('apellido', e.target.value)} placeholder="Ej: Tavárez" /></div>
           </div>
+
+          {fotoARecortar && (
+            <RecortadorFoto archivo={fotoARecortar} forma="circulo" tema={{ acento: T.acento, boton: T.boton, botonTexto: '#1a1205', panel: 'rgba(12,14,18,.98)', texto: '#f4f7f9', tenue: '#9aa7b2' }} onListo={alRecortarFotoReg} onCancelar={() => setFotoARecortar(null)} />
+          )}
 
           <div style={{ marginBottom: 14 }}>
             <label style={label}>Apodo</label>

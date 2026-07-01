@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from './supabaseClient'
 import IntroMediaCancha from './componentes/IntroMediaCancha'
 import PantallaPublica from './componentes/PantallaPublica'
 import PantallaRegistro from './componentes/PantallaRegistro'
 import PantallaLogin from './componentes/PantallaLogin'
 import PantallaPerfil from './componentes/PantallaPerfil'
+import PantallaComando from './componentes/PantallaComando'
 import PantallaSiguiendo from './componentes/PantallaSiguiendo'
 import PantallaConfiguracion from './componentes/PantallaConfiguracion'
 import PantallaJuegoConfig from './componentes/PantallaJuegoConfig'
@@ -15,6 +16,8 @@ import PantallaResultados from './componentes/PantallaResultados'
 import PantallaBuscar from './componentes/PantallaBuscar'
 import PantallaPerfilAjeno from './componentes/PantallaPerfilAjeno'
 import PantallaChat from './componentes/PantallaChat'
+import PantallaGrupo from './componentes/PantallaGrupo'
+import PantallaCrearGrupo from './componentes/PantallaCrearGrupo'
 import PantallaPublicar from './componentes/PantallaPublicar'
 import PantallaTorneos from './componentes/PantallaTorneos'
 import PantallaTorneoPublico from './componentes/PantallaTorneoPublico'
@@ -25,12 +28,15 @@ import PantallaMisTorneos from './componentes/PantallaMisTorneos'
 import PantallaNoticiasCrudas from './componentes/PantallaNoticiasCrudas'
 import PantallaCrearTorneo from './componentes/PantallaCrearTorneo'
 import { guardarJuegoDelDia } from './historialDia'
+import { registrarCartero, intentarOEncolar, iniciarCartero, alCambiarCola } from './offline'
 import { leerRosterTorneo, guardarAnotacionTorneo, marcarJuegoVivo } from './torneoData'
 import PantallaLigas from './componentes/PantallaLigas'
 import PantallaLiga from './componentes/PantallaLiga'
+import PantallaLigaPublica from './componentes/PantallaLigaPublica'
 import PantallaInvitarLiga from './componentes/PantallaInvitarLiga'
 import PantallaCrearLiga from './componentes/PantallaCrearLiga'
 import { leerLiga, guardarJuegoLiga } from './ligas'
+import { registrarStatsJugadores } from './estadisticas'
 import { publicarJuegoLiga } from './techado'
 import PantallaLNB from './componentes/PantallaLNB'
 import PantallaNBA from './componentes/PantallaNBA'
@@ -65,10 +71,63 @@ function jugadoresDesdeRoster(roster, equipoA_id, equipoB_id) {
 function App() {
   const [mostrarIntro, setMostrarIntro] = useState(true)
   const [vista, setVista] = useState('publica')
+  const [pendientesOffline, setPendientesOffline] = useState(0)
+
+  // --- Modo offline: registra CÓMO se manda cada tipo de juego, una sola vez ---
+  useEffect(() => {
+    registrarCartero('juego_liga', async (p) => {
+      await guardarJuegoLiga(p.ligaId, p.modo, p.res)
+      try { await registrarStatsJugadores({ formato: p.res.formato, jugadores: p.res.jugadores, statsActivas: p.res.statsActivas, origen: 'liga', ligaId: p.ligaId }) } catch (e) {}
+      try { await publicarJuegoLiga(p.res, { ligaId: p.ligaId, ligaNombre: p.ligaNombre, modo: p.modo }) } catch (e) {}
+    })
+    registrarCartero('juego_torneo', async (p) => {
+      await guardarAnotacionTorneo(p.juegoTorneo, p.res)
+      try { await registrarStatsJugadores({ formato: p.res.formato, jugadores: p.res.jugadores, statsActivas: p.res.statsActivas, origen: 'torneo', torneoId: p.juegoTorneo.torneoId }) } catch (e) {}
+    })
+    registrarCartero('stats_rapido', async (p) => { await registrarStatsJugadores(p) })
+    iniciarCartero()
+    return alCambiarCola((cola) => setPendientesOffline(cola.length))
+  }, [])
+
+  // Avisito flotante: "Modo offline · X juegos por enviar" — se pinta encima
+  // de cualquier pantalla mientras haya algo esperando en el buzón.
+  const AvisoOffline = pendientesOffline > 0 ? (
+    <div style={{ position: 'fixed', left: 0, right: 0, bottom: 'calc(env(safe-area-inset-bottom) + 12px)', zIndex: 999, display: 'flex', justifyContent: 'center', pointerEvents: 'none' }}>
+      <div style={{ pointerEvents: 'auto', display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(20,16,6,.95)', border: '1px solid rgba(232,182,90,.4)', borderRadius: 20, padding: '9px 16px', boxShadow: '0 8px 24px rgba(0,0,0,.4)' }}>
+        <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#e8b65a' }} />
+        <span style={{ color: '#f4e6c8', fontSize: 12.5, fontWeight: 700 }}>Modo offline · {pendientesOffline} {pendientesOffline === 1 ? 'juego' : 'juegos'} por enviar</span>
+      </div>
+    </div>
+  ) : null
+
+  // --- Historial de navegación: "Volver" regresa al lugar real de donde viniste ---
+  const historialNav = useRef([])
+  const volviendoNav = useRef(false)
+  const vistaPrevNav = useRef('publica')
+  // Pantallas que nunca son un buen destino de "Volver" (configuración, formularios,
+  // pasos de anotar un juego, login). El historial las salta al regresar.
+  const TRANSIENTES_NAV = ['login', 'registro', 'juegoConfig', 'juegoJugadores', 'juegoVivo', 'juegoResultado', 'crearTorneo', 'crearLiga', 'crearGrupo', 'configTorneo', 'configuracion', 'ligaInvitar', 'publicar']
+  useEffect(() => {
+    if (volviendoNav.current) { volviendoNav.current = false }
+    else if (vistaPrevNav.current !== vista) {
+      historialNav.current.push(vistaPrevNav.current)
+      if (historialNav.current.length > 50) historialNav.current.shift()
+    }
+    vistaPrevNav.current = vista
+  }, [vista])
+  const volver = (fallback = 'publica') => {
+    const h = historialNav.current
+    let dest = null
+    while (h.length) { const d = h.pop(); if (!TRANSIENTES_NAV.includes(d) && d !== vista) { dest = d; break } }
+    volviendoNav.current = true
+    setVista(dest || fallback)
+  }
+
   const [sesion, setSesion] = useState(null)
   const [configJuego, setConfigJuego] = useState(null)
   const [resultadoJuego, setResultadoJuego] = useState(null)
   const [destinoTrasLogin, setDestinoTrasLogin] = useState('perfil')
+  const [configOrigen, setConfigOrigen] = useState('perfil')
   const [perfilViendo, setPerfilViendo] = useState(null)
   const [torneoEnJuego, setTorneoEnJuego] = useState(null)
   const [torneoConfigId, setTorneoConfigId] = useState(null)
@@ -86,6 +145,7 @@ function App() {
   }, [ligaActivaId])
   const [juegoTorneoCtx, setJuegoTorneoCtx] = useState(null)
   const [chatCon, setChatCon] = useState(null)
+  const [grupoActivo, setGrupoActivo] = useState(null)
   const [esEscritorio, setEsEscritorio] = useState(typeof window !== 'undefined' ? window.innerWidth >= 900 : false)
 
   useEffect(() => {
@@ -147,6 +207,7 @@ function App() {
     else if (id === 'buscar') setVista(sesion ? 'buscar' : 'login')
     else if (id === 'mensajes') { setChatCon(null); setVista(sesion ? 'chat' : 'login') }
     else if (id === 'perfil') { setDestinoTrasLogin('perfil'); setVista(sesion ? 'perfil' : 'login') }
+    else if (id === 'panelAdmin') setVista(sesion ? 'panelAdmin' : 'login')
     else if (id === 'entrar') { setDestinoTrasLogin('perfil'); setVista('login') }
   }
 
@@ -161,35 +222,39 @@ function App() {
   }
 
   if (vista === 'registro') {
-    return <PantallaRegistro onListo={() => setVista(destinoTrasLogin)} onIrLogin={() => setVista('login')} onVolver={() => setVista('publica')} />
+    return <PantallaRegistro onListo={() => setVista(destinoTrasLogin)} onIrLogin={() => setVista('login')} onVolver={() => volver()} />
   }
 
   if (vista === 'login') {
-    return <PantallaLogin onListo={() => setVista(destinoTrasLogin)} onIrRegistro={() => setVista('registro')} onVolver={() => setVista('publica')} />
+    return <PantallaLogin onListo={() => setVista(destinoTrasLogin)} onIrRegistro={() => setVista('registro')} onVolver={() => volver()} />
   }
 
   if (vista === 'perfil') {
-    return <PantallaPerfil onVolver={() => setVista('publica')} onSalir={() => setVista('publica')} onSiguiendo={() => setVista('siguiendo')} onConfig={() => setVista('configuracion')} />
+    return <PantallaPerfil onVolver={() => volver()} onSalir={() => setVista('publica')} onSiguiendo={() => setVista('siguiendo')} onConfig={() => { setConfigOrigen('perfil'); setVista('configuracion') }} onAccion={(id) => { if (id === 'panelAdmin') setVista('panelAdmin') }} />
   }
 
   if (vista === 'configuracion') {
-    return <PantallaConfiguracion onVolver={() => setVista('perfil')} onSalir={() => setVista('publica')} />
+    return <PantallaConfiguracion onVolver={() => setVista(configOrigen)} onSalir={() => setVista('publica')} />
   }
 
   if (vista === 'siguiendo') {
     return (
       <PantallaSiguiendo
-        onVolver={() => setVista('perfil')}
+        onVolver={() => volver()}
         onVerPerfil={(id) => { if (id && sesion?.user?.id === id) { setVista('perfil') } else { setPerfilViendo(id); setVista('perfilAjeno') } }}
         onVerTorneo={(id) => { setTorneoPublicoId(id); setVista('torneoPublico') }}
       />
     )
   }
 
+  if (vista === 'panelAdmin') {
+    return <PantallaComando onVolver={() => volver()} />
+  }
+
   if (vista === 'buscar') {
     return conBarra(
       <PantallaBuscar
-        onVolver={() => setVista('publica')}
+        onVolver={() => volver()}
         onVerPerfil={(id) => { if (id && sesion?.user?.id === id) { setVista('perfil') } else { setPerfilViendo(id); setVista('perfilAjeno') } }}
       />
     )
@@ -199,8 +264,31 @@ function App() {
     return (
       <PantallaChat
         abrirCon={chatCon}
-        onVolver={() => { setChatCon(null); setVista('publica') }}
+        onVolver={() => { setChatCon(null); volver() }}
         onVerPerfil={(id) => { if (id && sesion?.user?.id === id) { setVista('perfil') } else { setPerfilViendo(id); setVista('perfilAjeno') } }}
+        onAbrirGrupo={(g) => { setGrupoActivo(g); setVista('grupo') }}
+        onCrearGrupo={() => setVista('crearGrupo')}
+      />
+    )
+  }
+
+  if (vista === 'grupo') {
+    return (
+      <PantallaGrupo
+        grupoId={grupoActivo?.id}
+        grupoNombre={grupoActivo?.nombre}
+        grupoTipo={grupoActivo?.tipo}
+        onVolver={() => { setGrupoActivo(null); volver() }}
+        onVerPerfil={(id) => { if (id && sesion?.user?.id === id) { setVista('perfil') } else { setPerfilViendo(id); setVista('perfilAjeno') } }}
+      />
+    )
+  }
+
+  if (vista === 'crearGrupo') {
+    return (
+      <PantallaCrearGrupo
+        onVolver={() => setVista('chat')}
+        onCreado={(grupoId) => { setGrupoActivo({ id: grupoId, nombre: 'Grupo', tipo: 'manual' }); setVista('grupo') }}
       />
     )
   }
@@ -208,7 +296,7 @@ function App() {
   if (vista === 'publicar') {
     return (
       <PantallaPublicar
-        onVolver={() => setVista('publica')}
+        onVolver={() => volver()}
         onPublicado={() => setVista('publica')}
         onResultado={() => { setDestinoTrasLogin('juegoConfig'); setVista(sesion ? 'juegoConfig' : 'login') }}
       />
@@ -219,7 +307,7 @@ function App() {
     return (
       <PantallaTorneos
         esAdmin={false}
-        onVolver={() => setVista('publica')}
+        onVolver={() => volver()}
         onAccion={(id) => { if (id === 'admin') setVista('torneosAdmin') }}
       />
     )
@@ -227,7 +315,7 @@ function App() {
 
   if (vista === 'invitaciones') {
     return (
-      <PantallaInvitaciones onVolver={() => setVista('publica')} />
+      <PantallaInvitaciones onVolver={() => volver()} />
     )
   }
 
@@ -235,8 +323,9 @@ function App() {
     return (
       <PantallaTorneoPublico
         torneoId={torneoPublicoId}
-        onVolver={() => setVista('publica')}
+        onVolver={() => volver()}
         onVerPerfil={(id) => { if (id && sesion?.user?.id === id) { setVista('perfil') } else { setPerfilViendo(id); setVista('perfilAjeno') } }}
+        onGestionar={(id) => { setTorneoAdminId(id); setVista('torneosAdmin') }}
       />
     )
   }
@@ -266,22 +355,26 @@ function App() {
       <PantallaMisTorneos
         onElegir={(id) => { setTorneoAdminId(id); setVista('torneosAdmin') }}
         onCrear={() => setVista(sesion ? 'crearTorneo' : 'login')}
-        onVolver={() => setVista('publica')}
+        onVolver={() => volver()}
       />
     )
   }
 
   if (vista === 'torneosAdmin') {
     return (
+      <>
       <PantallaTorneos
         esAdmin={true}
         torneoId={torneoAdminId}
-        onVolver={() => setVista('misTorneos')}
+        onVolver={() => volver()}
         onAccion={(id) => { if (typeof id === 'string' && id.startsWith('verPublico:')) { setTorneoPublicoId(id.slice('verPublico:'.length)); setVista('torneoPublico') } }}
         onVerPerfil={(id) => { if (id && sesion?.user?.id === id) { setVista('perfil') } else { setPerfilViendo(id); setVista('perfilAjeno') } }}
         onAnotarJuego={(juego) => { setJuegoTorneoCtx(juego); setTorneoEnJuego(juego.torneoId); setVista('torneoConfig') }}
         onConfigurar={(id) => { setTorneoConfigId(id); setVista('configTorneo') }}
+        onAbrirGrupo={(g) => { setGrupoActivo(g); setVista('grupo') }}
       />
+      {AvisoOffline}
+      </>
     )
   }
 
@@ -289,7 +382,7 @@ function App() {
     return (
       <PantallaConfigTorneo
         torneoId={torneoConfigId}
-        onVolver={() => setVista('torneosAdmin')}
+        onVolver={() => volver()}
       />
     )
   }
@@ -297,7 +390,7 @@ function App() {
   if (vista === 'crearTorneo') {
     return (
       <PantallaCrearTorneo
-        onVolver={() => setVista('misTorneos')}
+        onVolver={() => volver()}
         onCreado={(torneo) => { if (torneo?.id) setTorneoAdminId(torneo.id); setVista('torneosAdmin') }}
       />
     )
@@ -307,7 +400,7 @@ function App() {
     return conBarra(
       <PantallaPerfilAjeno
         usuarioId={perfilViendo}
-        onVolver={() => setVista('publica')}
+        onVolver={() => volver()}
         onMensaje={(id) => { setChatCon(id); setVista('chat') }}
       />
     )
@@ -316,7 +409,7 @@ function App() {
   if (vista === 'resultados') {
     return (
       <PantallaResultados
-        onVolver={() => setVista('publica')}
+        onVolver={() => volver()}
         onNuevoJuego={() => { setDestinoTrasLogin('juegoConfig'); setVista(sesion ? 'juegoConfig' : 'login') }}
         onAccion={(id) => {
           if (id === 'perfil') { setDestinoTrasLogin('perfil'); setVista(sesion ? 'perfil' : 'login') }
@@ -330,7 +423,7 @@ function App() {
     return (
       <PantallaJuegoConfig
         onListo={(config) => { setConfigJuego(config); setVista('juegoJugadores') }}
-        onVolver={() => setVista('publica')}
+        onVolver={() => volver()}
       />
     )
   }
@@ -340,7 +433,7 @@ function App() {
       <PantallaJuegoJugadores
         config={configJuego}
         onListo={(configCompleta) => { setConfigJuego(configCompleta); setVista('juegoVivo') }}
-        onVolver={() => setVista('juegoConfig')}
+        onVolver={() => volver()}
       />
     )
   }
@@ -351,16 +444,18 @@ function App() {
         config={configJuego}
         onTerminar={async (res) => {
           if (juegoLigaCtx) {
-            await guardarJuegoLiga(juegoLigaCtx.ligaId, juegoLigaCtx.modo, res)
-            try { await publicarJuegoLiga(res, { ligaId: juegoLigaCtx.ligaId, ligaNombre: ligaActiva?.nombre || null, modo: juegoLigaCtx.modo }) } catch (e) { /* el juego ya quedó guardado aunque falle el Techado */ }
+            await intentarOEncolar('juego_liga', { ligaId: juegoLigaCtx.ligaId, modo: juegoLigaCtx.modo, ligaNombre: ligaActiva?.nombre || null, res }, `Juego de liga · ${res.nombreA} vs ${res.nombreB}`)
             setJuegoLigaCtx(null)
             setConfigJuego(null)
             setVista('liga')
           } else if (res?.juegoTorneo) {
-            await guardarAnotacionTorneo(res.juegoTorneo, res)
+            await intentarOEncolar('juego_torneo', { juegoTorneo: res.juegoTorneo, res }, `Juego de torneo · ${res.nombreA} vs ${res.nombreB}`)
             setConfigJuego(null)
             setVista('torneosAdmin')
           } else {
+            // Juego suelto / rápido / fogueo: el resultado ya se guarda LOCAL (guardarJuegoDelDia);
+            // solo la estadística necesita internet, así que esa sí pasa por la cola.
+            intentarOEncolar('stats_rapido', { formato: res.formato, jugadores: res.jugadores, statsActivas: res.statsActivas, origen: 'rapido' })
             guardarJuegoDelDia(res); setResultadoJuego(res); setVista('juegoResultado')
           }
         }}
@@ -372,6 +467,7 @@ function App() {
 
   if (vista === 'juegoResultado') {
     return (
+      <>
       <PantallaJuegoResultado
         resultado={resultadoJuego}
         onNuevo={() => { setConfigJuego(null); setResultadoJuego(null); setVista('juegoConfig') }}
@@ -397,21 +493,38 @@ function App() {
           setVista('juegoJugadores')
         }}
       />
+      {AvisoOffline}
+      </>
+    )
+  }
+
+  if (vista === 'ligaPublica') {
+    return (
+      <PantallaLigaPublica
+        liga={ligaActiva}
+        onVolver={() => volver()}
+        onGestionar={() => setVista('liga')}
+        onVerPerfil={(id) => { if (id && sesion?.user?.id === id) { setVista('perfil') } else { setPerfilViendo(id); setVista('perfilAjeno') } }}
+      />
     )
   }
 
   if (vista === 'liga') {
     return (
+      <>
       <PantallaLiga
         liga={ligaActiva}
-        onVolver={() => setVista('ligas')}
+        onVolver={() => volver()}
         onInvitar={() => { setDestinoTrasLogin('ligaInvitar'); setVista(sesion ? 'ligaInvitar' : 'login') }}
         onAnotar={(modo) => {
           setJuegoLigaCtx({ ligaId: ligaActivaId, modo: modo || 'normal' })
           setDestinoTrasLogin('juegoConfig')
           setVista(sesion ? 'juegoConfig' : 'login')
         }}
+        onAbrirGrupo={(g) => { setGrupoActivo(g); setVista('grupo') }}
       />
+      {AvisoOffline}
+      </>
     )
   }
 
@@ -419,7 +532,7 @@ function App() {
     return (
       <PantallaInvitarLiga
         liga={ligaActiva}
-        onVolver={() => setVista('liga')}
+        onVolver={() => volver()}
       />
     )
   }
@@ -427,8 +540,8 @@ function App() {
   if (vista === 'crearLiga') {
     return (
       <PantallaCrearLiga
-        onVolver={() => setVista('ligas')}
-        onCreada={(liga) => { setLigaActivaId(liga?.id || null); setLigaActiva(liga || null); setVista('liga') }}
+        onVolver={() => volver()}
+        onCreada={(liga) => { setLigaActivaId(liga?.id || null); setLigaActiva(liga || null); setVista('ligaPublica') }}
       />
     )
   }
@@ -436,8 +549,8 @@ function App() {
   if (vista === 'ligas') {
     return (
       <PantallaLigas
-        onVolver={() => setVista('publica')}
-        onAccion={(id) => { if (id === 'lnb') setVista('lnb'); else if (id === 'nba') setVista('nba'); else if (id === 'noticias') setVista('noticias'); else if (id === 'rosters') setVista('rosters'); else if (id === 'comando') setVista('comando'); else if (id === 'crearLiga') setVista(sesion ? 'crearLiga' : 'login'); else if (id && id.indexOf('abrirLiga:') === 0) { setLigaActivaId(id.slice('abrirLiga:'.length)); setVista('liga') } }}
+        onVolver={() => volver()}
+        onAccion={(id) => { if (id === 'lnb') setVista('lnb'); else if (id === 'nba') setVista('nba'); else if (id === 'noticias') setVista('noticias'); else if (id === 'rosters') setVista('rosters'); else if (id === 'comando') setVista('comando'); else if (id === 'crearLiga') setVista(sesion ? 'crearLiga' : 'login'); else if (id && id.indexOf('abrirLiga:') === 0) { setLigaActivaId(id.slice('abrirLiga:'.length)); setVista('ligaPublica') } }}
       />
     )
   }
@@ -445,7 +558,7 @@ function App() {
   if (vista === 'lnb') {
     return (
       <PantallaLNB
-        onVolver={() => setVista('ligas')}
+        onVolver={() => volver()}
         onAccion={(id) => {
           if (id === 'buscar') setVista(sesion ? 'buscar' : 'login')
           else if (id === 'perfil') { setDestinoTrasLogin('perfil'); setVista(sesion ? 'perfil' : 'login') }
@@ -456,41 +569,42 @@ function App() {
 
   if (vista === 'nba') {
     return (
-      <PantallaNBA onVolver={() => setVista('ligas')} />
+      <PantallaNBA onVolver={() => volver()} />
     )
   }
 
   if (vista === 'noticias') {
     return (
-      <PantallaNoticias onVolver={() => setVista('ligas')} />
+      <PantallaNoticias onVolver={() => volver()} />
     )
   }
 
   if (vista === 'rosters') {
     return (
-      <PantallaRosters onVolver={() => setVista('ligas')} />
+      <PantallaRosters onVolver={() => volver()} />
     )
   }
 
   if (vista === 'comando') {
     return (
-      <PantallaCentroComando onVolver={() => setVista('ligas')} onAbrirDraft={() => setVista('draft')} onAbrirNoticias={() => setVista('noticiasCrudas')} />
+      <PantallaCentroComando onVolver={() => volver()} onAbrirDraft={() => setVista('draft')} onAbrirNoticias={() => setVista('noticiasCrudas')} />
     )
   }
 
   if (vista === 'noticiasCrudas') {
     return (
-      <PantallaNoticiasCrudas onVolver={() => setVista('comando')} />
+      <PantallaNoticiasCrudas onVolver={() => volver()} />
     )
   }
 
   if (vista === 'draft') {
     return (
-      <PantallaSalaDraft onVolver={() => setVista('comando')} />
+      <PantallaSalaDraft onVolver={() => volver()} />
     )
   }
 
   return (
+    <>
     <PantallaPublica
       haySesion={!!sesion}
       onAccion={(id) => {
@@ -549,11 +663,18 @@ function App() {
             setPerfilViendo(idPerfil)
             setVista('perfilAjeno')
           }
+        } else if (id === 'configuracion') {
+          setConfigOrigen('publica')
+          setDestinoTrasLogin('configuracion')
+          setVista(sesion ? 'configuracion' : 'login')
         } else {
-          alert('Módulo "' + id + '" — aquí irá su pantalla (próximamente)')
+          // Destino sin pantalla todavía: no hacemos nada (sin alert, que contamina el WebView).
+          if (typeof console !== 'undefined') console.warn('Acción sin destino:', id)
         }
       }}
     />
+    {AvisoOffline}
+    </>
   )
 }
 

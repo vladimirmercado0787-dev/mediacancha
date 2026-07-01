@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient'
+import { sincronizarGrupoLigaSiExiste } from './grupos'
 
 // ============================================================================
 //  HELPER DE LIGAS — Media Cancha
@@ -183,6 +184,7 @@ export async function agregarMiembroLiga(ligaId, perfilId, rol = 'miembro') {
   const { error } = await supabase
     .from('liga_miembros')
     .upsert({ liga_id: ligaId, perfil_id: perfilId, rol, agregado_por: uid }, { onConflict: 'liga_id,perfil_id', ignoreDuplicates: true })
+  if (!error) { try { await sincronizarGrupoLigaSiExiste(ligaId) } catch (e) {} }
   return { error: error?.message || null }
 }
 
@@ -194,6 +196,7 @@ export async function quitarMiembroLiga(ligaId, perfilId) {
     .delete()
     .eq('liga_id', ligaId)
     .eq('perfil_id', perfilId)
+  if (!error) { try { await sincronizarGrupoLigaSiExiste(ligaId) } catch (e) {} }
   return { error: error?.message || null }
 }
 
@@ -270,4 +273,46 @@ export async function confirmarMiembroLigaConCodigo(ligaId, perfilId, pin) {
   if (error) return { ok: false, error: error.message }
   if (data !== true) return { ok: false, error: 'Código incorrecto' }
   return { ok: true, error: null }
+}
+// ============================================================================
+//  CAJA DE LA LIGA — saldo, movimientos y cuotas de los miembros
+//  Tabla: liga_caja  ·  tipo: 'ingreso' | 'egreso'  ·  categoria: cuota,
+//  inscripcion, arbitros, equipo, otro. Para cobrar la cuota de un miembro
+//  se guarda miembro_id + miembro_nombre.
+// ============================================================================
+
+export async function leerCajaLiga(ligaId) {
+  if (!ligaId) return { caja: [], error: null }
+  const { data, error } = await supabase
+    .from('liga_caja')
+    .select('*')
+    .eq('liga_id', ligaId)
+    .order('creado_en', { ascending: false })
+  return { caja: data || [], error: error?.message || null }
+}
+
+export async function agregarMovimientoLiga(ligaId, datos) {
+  const uid = await miUsuarioId()
+  if (!ligaId) return { movimiento: null, error: 'Falta la liga' }
+  const { data, error } = await supabase
+    .from('liga_caja')
+    .insert({
+      liga_id: ligaId,
+      tipo: datos.tipo === 'egreso' ? 'egreso' : 'ingreso',
+      categoria: datos.categoria || null,
+      concepto: datos.concepto || null,
+      monto: Number(datos.monto) || 0,
+      miembro_id: datos.miembro_id || null,
+      miembro_nombre: datos.miembro_nombre || null,
+      registrado_por: uid || null,
+    })
+    .select()
+    .single()
+  return { movimiento: data || null, error: error?.message || null }
+}
+
+export async function eliminarMovimientoLiga(id) {
+  if (!id) return { error: 'Falta el id' }
+  const { error } = await supabase.from('liga_caja').delete().eq('id', id)
+  return { error: error?.message || null }
 }

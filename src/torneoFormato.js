@@ -211,7 +211,68 @@ function fixturesCopaRonda1(ids) {
 export function generarFixtures(idsEquipos = [], formato = 'liga', opciones = {}) {
   const ids = (idsEquipos || []).filter(Boolean)
   if (ids.length < 2) return []
-  if (formato === 'copa') return fixturesCopaRonda1(ids)
+  if (formato === 'copa') return generarLlaveCopaCompleta(ids)
   const vueltas = opciones.vueltas || (opciones.idaYVuelta ? 2 : 1) // compat con el toggle viejo
   return fixturesRoundRobin(ids, vueltas) // liga (y mixto por ahora)
+}
+
+// ============================================================================
+//  MOTOR DE LLAVE DE COPA (eliminación directa, bien hecho)
+//  - Bracket de potencia de dos con siembra estándar (1vN, 2v(N-1)...).
+//  - Los mejor sembrados reciben BYE si los equipos no son potencia de dos.
+//  - Cada juego lleva su "llave_pos" para que los ganadores siempre pasen al
+//    lugar correcto del árbol, ronda tras ronda.
+// ============================================================================
+
+// Orden de siembra estándar para un bracket de tamaño B (potencia de dos).
+// Devuelve los números de siembra 1..B en el orden de los espacios del árbol.
+function ordenSiembra(B) {
+  let seeds = [1, 2]
+  while (seeds.length < B) {
+    const n = seeds.length * 2
+    const next = []
+    for (const s of seeds) { next.push(s); next.push(n + 1 - s) }
+    seeds = next
+  }
+  return seeds
+}
+
+// Primera ronda COMPLETA de la llave (con byes incluidos como pase directo).
+// ids = equipos en orden de siembra (el primero es el sembrado #1).
+// Devuelve: [{ jornada:1, llave_pos, equipoA_id, equipoB_id|null, bye:bool }]
+export function generarLlaveCopaCompleta(ids) {
+  const N = ids.length
+  if (N < 2) return []
+  let B = 1; while (B < N) B *= 2
+  const seeds = ordenSiembra(B)
+  const equipoDeSeed = (s) => (s <= N ? ids[s - 1] : null) // seed > N = BYE
+  const fixtures = []
+  for (let k = 0; k < B / 2; k++) {
+    const a = equipoDeSeed(seeds[2 * k])
+    const b = equipoDeSeed(seeds[2 * k + 1])
+    if (a && b) fixtures.push({ jornada: 1, llave_pos: k, equipoA_id: a, equipoB_id: b, bye: false })
+    else if (a || b) fixtures.push({ jornada: 1, llave_pos: k, equipoA_id: a || b, equipoB_id: null, bye: true })
+  }
+  return fixtures
+}
+
+// Dado los juegos de la ronda actual (ya terminados), calcula la SIGUIENTE ronda.
+// Cada juego: { llave_pos, equipo_a, equipo_b, puntos_a, puntos_b }.
+// equipo_b null = bye (gana equipo_a). Empate = sin ganador (no se puede avanzar).
+// Devuelve { fixtures:[{jornada, llave_pos, equipoA_id, equipoB_id}], campeonId, faltan:bool }
+export function siguienteRondaCopa(juegosRonda, jornadaActual) {
+  const orden = [...(juegosRonda || [])].sort((x, y) => (x.llave_pos ?? 0) - (y.llave_pos ?? 0))
+  const ganadores = []
+  for (const j of orden) {
+    if (j.equipo_b == null) { ganadores.push(j.equipo_a); continue } // bye
+    const pa = Number(j.puntos_a) || 0, pb = Number(j.puntos_b) || 0
+    if (pa === pb) return { fixtures: [], campeonId: null, faltan: true } // empate sin resolver
+    ganadores.push(pa > pb ? j.equipo_a : j.equipo_b)
+  }
+  if (ganadores.length <= 1) return { fixtures: [], campeonId: ganadores[0] || null, faltan: false }
+  const fixtures = []
+  for (let k = 0; k < Math.floor(ganadores.length / 2); k++) {
+    fixtures.push({ jornada: (jornadaActual || 1) + 1, llave_pos: k, equipoA_id: ganadores[2 * k], equipoB_id: ganadores[2 * k + 1] })
+  }
+  return { fixtures, campeonId: null, faltan: false }
 }

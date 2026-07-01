@@ -59,9 +59,11 @@ import TarjetaResultado from './TarjetaResultado'
 import RecortadorFoto from './RecortadorFoto'
 import CompartirAlChat from './CompartirAlChat'
 import { supabase } from '../supabaseClient'
-import { alternarSeguir, idsQueSigo, statsSociales } from '../social'
+import { alternarSeguir, idsQueSigo, statsSociales, quienesMeSiguen } from '../social'
 import { contarNoLeidos, listaConversaciones, perfilesDe } from '../mensajes'
 import { leerTorneos } from '../torneos'
+import { leerHistorias, subirVideoHistoria, crearHistoria } from '../historias'
+import { cacheGet, cacheSet } from '../cache'
 import BottomSheet from './BottomSheet'
 
 const TEMAS = {
@@ -323,6 +325,47 @@ function ModalJugadorMC({ jug, onClose, T, escritorio }) {
   ), document.body)
 }
 
+// Video del Techado estilo Instagram: arranca solo (mudo) cuando entra en
+// foco, se pausa al salir, llena el marco sin bordes negros, y tiene altavoz.
+function VideoTechado({ src, aspecto = '4 / 5' }) {
+  const ref = useRef(null)
+  const [muted, setMuted] = useState(true)
+  const tPlay = useRef(null)
+  useEffect(() => {
+    const v = ref.current
+    if (!v) return
+    try { v.muted = true } catch (x) {}
+    const io = new IntersectionObserver((entradas) => {
+      entradas.forEach((e) => {
+        if (e.isIntersecting && e.intersectionRatio >= 0.6) {
+          // pequeño retardo: solo prende si se queda en foco (no al rozarlo en scroll rápido)
+          if (tPlay.current) clearTimeout(tPlay.current)
+          tPlay.current = setTimeout(() => { const pr = v.play && v.play(); if (pr && pr.catch) pr.catch(() => {}) }, 130)
+        } else {
+          if (tPlay.current) { clearTimeout(tPlay.current); tPlay.current = null }
+          try { v.pause() } catch (x) {}
+        }
+      })
+    }, { threshold: [0, 0.6, 1] })
+    io.observe(v)
+    return () => { if (tPlay.current) clearTimeout(tPlay.current); try { io.disconnect() } catch (x) {} }
+  }, [src])
+  const alternarSonido = (e) => {
+    e.stopPropagation()
+    const v = ref.current; if (!v) return
+    const nuevo = !v.muted
+    v.muted = nuevo
+    setMuted(nuevo)
+    if (!nuevo) { const pr = v.play && v.play(); if (pr && pr.catch) pr.catch(() => {}) }
+  }
+  return (
+    <div style={{ position: 'relative', width: '100%', aspectRatio: aspecto, background: '#000', overflow: 'hidden' }}>
+      <video ref={ref} src={src} loop playsInline preload="metadata" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', background: '#000', transform: 'translateZ(0)', willChange: 'transform' }} />
+      <button onClick={alternarSonido} style={{ position: 'absolute', bottom: 10, right: 10, zIndex: 2, width: 36, height: 36, borderRadius: '50%', border: 'none', background: 'rgba(0,0,0,.55)', color: '#fff', fontSize: 16, cursor: 'pointer', display: 'grid', placeItems: 'center' }}>{muted ? '🔇' : '🔊'}</button>
+    </div>
+  )
+}
+
 export default function PantallaPublica({ onAccion, haySesion }) {
   const [esEscritorio, setEsEscritorio] = useState(typeof window !== 'undefined' ? window.innerWidth >= 768 : false)
   const [esTablet, setEsTablet] = useState(typeof window !== 'undefined' ? window.innerWidth >= 768 && window.innerWidth < 1100 : false)
@@ -396,12 +439,21 @@ export default function PantallaPublica({ onAccion, haySesion }) {
     return 'noche'
   })
   const [juegosDia, setJuegosDia] = useState([])
-  const [torneosReales, setTorneosReales] = useState([])
+  const [torneosReales, setTorneosReales] = useState(() => cacheGet('torneos', []))
+  const [historias, setHistorias] = useState(() => cacheGet('historias', []))
+  const [subiendoHistoria, setSubiendoHistoria] = useState(false)
+  const [historiaVer, setHistoriaVer] = useState(null)   // { lista: [...], idx } visor simple
+  const [composerHistoria, setComposerHistoria] = useState(null)  // { file, url, dur, texto, pos, color }
+  const [msgHistoria, setMsgHistoria] = useState('')
+  const [seguidoresNuevos, setSeguidoresNuevos] = useState([])
+  const [panelSeguidores, setPanelSeguidores] = useState(false)
+  const refVideoHistoria = useRef(null)
+  const refComposerVideo = useRef(null)
   const [seccion, setSeccion] = useState('feed')   // 'feed' | 'rankings'
   const [tabRank, setTabRank] = useState('nba')     // 'nba' | 'lnb' | 'general'
-  const [publicaciones, setPublicaciones] = useState([])
+  const [publicaciones, setPublicaciones] = useState(() => cacheGet('pubs', []))
   const [misReacc, setMisReacc] = useState({})
-  const [cargandoTechado, setCargandoTechado] = useState(true)
+  const [cargandoTechado, setCargandoTechado] = useState(() => !cacheGet('pubs'))
   const [comentariosAbiertos, setComentariosAbiertos] = useState(null)
   const [verHistorialDia, setVerHistorialDia] = useState(false)
   const [miId, setMiId] = useState(null)
@@ -422,7 +474,69 @@ export default function PantallaPublica({ onAccion, haySesion }) {
   // Destacados de la semana para el carrusel de arriba. Hoy se nutre de la LNB
   // (jugador de la semana, líderes y portada de noticias). Mañana se le enchufan
   // más ligas y torneos: solo es agregar fuentes a esta misma lista.
-  const [destacados, setDestacados] = useState([])
+  const [destacados, setDestacados] = useState(() => cacheGet('destacados', []))
+  // Noticias "ya vistas" (no se repiten): se recuerdan en el teléfono.
+  const [noticiaAbierta, setNoticiaAbierta] = useState(null)
+  const [noticiasVistas, setNoticiasVistas] = useState(() => { try { return new Set(JSON.parse(localStorage.getItem('mc_noticias_vistas') || '[]')) } catch (e) { return new Set() } })
+  const idNoticia = (c) => (c && (c.enlace || c.titulo)) || ''
+  const marcarNoticiaVista = (c) => {
+    const id = idNoticia(c); if (!id) return
+    setNoticiasVistas((prev) => { if (prev.has(id)) return prev; const next = new Set(prev); next.add(id); try { localStorage.setItem('mc_noticias_vistas', JSON.stringify([...next])) } catch (e) {} return next })
+  }
+  const abrirNoticia = (lista, idx) => { const c = lista[idx]; if (c) marcarNoticiaVista(c); setNoticiaAbierta({ lista, idx }) }
+  // En el carrete, las noticias avanzan solas a los 7s (las historias avanzan al terminar el video)
+  useEffect(() => {
+    if (!historiaVer) return
+    const it = (historiaVer.lista || [])[historiaVer.idx]
+    if (!it || it.tipo !== 'noticia') return
+    marcarNoticiaVista(it)
+    const t = setTimeout(() => {
+      setHistoriaVer((hv) => { if (!hv) return null; const n = (hv.idx || 0) + 1; return n < (hv.lista || []).length ? { ...hv, idx: n } : null })
+    }, 7000)
+    return () => clearTimeout(t)
+  }, [historiaVer])
+  const visorNoticia = () => {
+    if (!noticiaAbierta) return null
+    const { lista, idx } = noticiaAbierta
+    const cur = lista[idx]
+    if (!cur) return null
+    const hayPrev = idx > 0
+    const hayNext = idx < lista.length - 1
+    const irA = (n) => { const c = lista[n]; if (c) marcarNoticiaVista(c); setNoticiaAbierta({ lista, idx: n }) }
+    const siguiente = () => { if (hayNext) irA(idx + 1); else setNoticiaAbierta(null) }
+    const anterior = () => { if (hayPrev) irA(idx - 1) }
+    const colLiga = cur.liga === 'NBA' ? '#98002E' : '#ce1126'
+    return createPortal((
+      <div onClick={() => setNoticiaAbierta(null)} style={{ position: 'fixed', inset: 0, zIndex: 600, background: 'rgba(4,5,7,.95)', display: 'flex', alignItems: esEscritorio ? 'center' : 'flex-end', justifyContent: 'center', padding: esEscritorio ? 20 : 0 }}>
+        <div onClick={(e) => e.stopPropagation()} style={{ position: 'relative', width: '100%', maxWidth: 460, background: T.fondo, borderRadius: esEscritorio ? 18 : '18px 18px 0 0', overflow: 'hidden', maxHeight: '90vh', overflowY: 'auto' }}>
+          {/* barritas de progreso, una por noticia */}
+          <div style={{ position: 'absolute', top: 8, left: 10, right: 10, display: 'flex', gap: 4, zIndex: 5 }}>
+            {lista.map((_, k) => <div key={k} style={{ flex: 1, height: 3, borderRadius: 3, background: k <= idx ? '#fff' : 'rgba(255,255,255,.35)' }} />)}
+          </div>
+          {cur.foto && (
+            <div onClick={siguiente} style={{ width: '100%', height: 190, background: `#000 url(${cur.foto}) center/cover`, cursor: 'pointer' }} />
+          )}
+          <div style={{ padding: 18, paddingBottom: 'calc(env(safe-area-inset-bottom) + 14px)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <span style={{ fontFamily: '"Arial Narrow", Impact, sans-serif', fontStyle: 'italic', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, fontSize: 10, color: '#fff', background: colLiga, padding: '4px 10px', borderRadius: 30 }}>{cur.liga ? cur.liga : 'Noticia'}</span>
+              <span style={{ fontSize: 11, color: T.tenue, fontWeight: 600 }}>{idx + 1} / {lista.length}</span>
+              <span onClick={() => setNoticiaAbierta(null)} style={{ fontSize: 24, color: T.tenue, cursor: 'pointer', lineHeight: 1 }}>×</span>
+            </div>
+            <div style={{ fontFamily: '"Arial Narrow", Impact, sans-serif', fontStyle: 'italic', fontWeight: 700, fontSize: 26, lineHeight: 1.05, textTransform: 'uppercase', color: T.textoFuerte }}>{cur.titulo}</div>
+            {cur.resumen && <div style={{ fontSize: 14, color: T.subTexto, marginTop: 10, fontWeight: 500, lineHeight: 1.6 }}>{cur.resumen}</div>}
+            {cur.enlace && (
+              <a href={cur.enlace} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} style={{ display: 'inline-block', marginTop: 16, fontFamily: '"Arial Narrow", Impact, sans-serif', fontStyle: 'italic', fontWeight: 700, fontSize: 14, letterSpacing: 0.5, textTransform: 'uppercase', color: '#fff', background: cur.liga === 'NBA' ? 'linear-gradient(135deg, #98002E, #D31B3C)' : '#ce1126', padding: '11px 20px', borderRadius: 12, textDecoration: 'none' }}>Leer la noticia ›</a>
+            )}
+            {/* navegación: anterior / siguiente */}
+            <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
+              <button onClick={anterior} disabled={!hayPrev} style={{ flex: 1, border: `1px solid ${T.navActivoBorde}`, borderRadius: 12, padding: 12, background: 'transparent', color: hayPrev ? T.textoFuerte : T.tenue, fontSize: 14, fontWeight: 700, cursor: hayPrev ? 'pointer' : 'default', opacity: hayPrev ? 1 : 0.4 }}>‹ Anterior</button>
+              <button onClick={siguiente} style={{ flex: 1, border: 'none', borderRadius: 12, padding: 12, background: T.acento, color: '#1a1205', fontSize: 14, fontWeight: 800, cursor: 'pointer' }}>{hayNext ? 'Siguiente ›' : 'Terminar'}</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    ), document.body)
+  }
   useEffect(() => {
     let vivo = true
     const lnbImg = (u) => (u ? (String(u).startsWith('http') ? u : 'https://lnb-media.sfo3.cdn.digitaloceanspaces.com/' + u) : null)
@@ -493,7 +607,7 @@ export default function PantallaPublica({ onAccion, haySesion }) {
         // barajar para que salga aleatorio cada vez
         for (let i = cards.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = cards[i]; cards[i] = cards[j]; cards[j] = t }
 
-        if (vivo) setDestacados(cards)
+        if (vivo) { setDestacados(cards); cacheSet('destacados', cards) }
       } catch (e) { /* si la LNB aún no tiene datos, el carrusel simplemente no sale */ }
     })()
     return () => { vivo = false }
@@ -503,6 +617,7 @@ export default function PantallaPublica({ onAccion, haySesion }) {
     const res = await leerTechado()
     const pubs = res.data || []
     setPublicaciones(pubs)
+    cacheSet('pubs', pubs)
     if (haySesion && pubs.length) {
       const mapa = await misReacciones(pubs.map((p) => p.id))
       setMisReacc(mapa)
@@ -549,12 +664,75 @@ export default function PantallaPublica({ onAccion, haySesion }) {
     }
   }, [esEscritorio])
 
+  const cargarHistorias = () => {
+    leerHistorias().then(({ historias }) => { setHistorias(historias || []); cacheSet('historias', historias || []) }).catch(() => {})
+  }
+  const cargarSeguidores = () => {
+    if (!haySesion) { setSeguidoresNuevos([]); return }
+    quienesMeSiguen(15).then(({ personas }) => setSeguidoresNuevos(personas || [])).catch(() => {})
+  }
+  const seguirDeVuelta = async (id) => {
+    // optimista: marca como seguido al instante
+    setSeguidoresNuevos((lista) => lista.map((p) => p.id === id ? { ...p, loSigo: true } : p))
+    try {
+      const r = await alternarSeguir(id)
+      if (r && r.error) setSeguidoresNuevos((lista) => lista.map((p) => p.id === id ? { ...p, loSigo: false } : p))
+    } catch (e) {
+      setSeguidoresNuevos((lista) => lista.map((p) => p.id === id ? { ...p, loSigo: false } : p))
+    }
+  }
+  const avisarHistoria = (t) => { setMsgHistoria(t); setTimeout(() => setMsgHistoria(''), 2800) }
+  // Lee la duración del video elegido (para validar el máximo de la historia).
+  const duracionDeVideo = (file) => new Promise((res) => {
+    try {
+      const v = document.createElement('video')
+      v.preload = 'metadata'
+      v.onloadedmetadata = () => { const d = v.duration || 0; URL.revokeObjectURL(v.src); res(d) }
+      v.onerror = () => res(0)
+      v.src = URL.createObjectURL(file)
+    } catch (e) { res(0) }
+  })
+  const MAX_HISTORIA_SEG = 20
+  const MAX_FUENTE_SEG = 120   // máximo del video original que aceptamos para recortar
+  const alElegirVideoHistoria = async (e) => {
+    const file = e.target.files && e.target.files[0]; if (e.target) e.target.value = ''
+    if (!file) return
+    const dur = await duracionDeVideo(file)
+    if (dur && dur > MAX_FUENTE_SEG) {
+      avisarHistoria('Elige un video de máximo dos minutos para recortar')
+      return
+    }
+    setComposerHistoria({ file, url: URL.createObjectURL(file), dur, inicio: 0, texto: '', pos: 'centro', color: '#ffffff' })
+  }
+  const cerrarComposer = () => {
+    setComposerHistoria((c) => { if (c && c.url) { try { URL.revokeObjectURL(c.url) } catch (e) {} } return null })
+  }
+  const publicarHistoria = async () => {
+    const c = composerHistoria
+    if (!c || subiendoHistoria) return
+    setSubiendoHistoria(true)
+    try {
+      const { url, ruta, error } = await subirVideoHistoria(c.file)
+      if (error || !url) { avisarHistoria('No se pudo subir el video'); setSubiendoHistoria(false); return }
+      const texto = (c.texto || '').trim()
+      const recorta = (c.dur || 0) > MAX_HISTORIA_SEG + 0.3
+      const inicio = recorta ? (c.inicio || 0) : 0
+      const duracion = Math.min(MAX_HISTORIA_SEG, c.dur || MAX_HISTORIA_SEG)
+      const { error: errC } = await crearHistoria({ video_url: url, ruta, duracion, inicio, texto: texto || null, texto_pos: texto ? c.pos : null, texto_color: texto ? c.color : null })
+      if (errC) avisarHistoria('No se pudo publicar la historia')
+      else { avisarHistoria('✓ Tu historia está arriba'); cargarHistorias(); cerrarComposer() }
+    } catch (err) { avisarHistoria('Error con el video') }
+    setSubiendoHistoria(false)
+  }
+
   useEffect(() => {
     setJuegosDia(leerHistorialDia())
     recargarTechado()
+    cargarHistorias()
+    cargarSeguidores()
     miUsuarioId().then((id) => setMiId(id))
     if (haySesion) miPerfilCompleto().then((p) => setMiPerfil(p))
-    leerTorneos().then(({ torneos }) => setTorneosReales(torneos || [])).catch(() => {})
+    leerTorneos().then(({ torneos }) => { setTorneosReales(torneos || []); cacheSet('torneos', torneos || []) }).catch(() => {})
   }, [])
 
   // Cerrar los menús desplegables (de escritorio) al hacer clic fuera.
@@ -1123,6 +1301,11 @@ export default function PantallaPublica({ onAccion, haySesion }) {
                 </div>
               )}
 
+              {/* VIDEO de la publicación (si hay) — autoplay en foco, estilo Instagram */}
+              {datos.video && (
+                <VideoTechado src={datos.video} />
+              )}
+
               {/* FOTO(S) de la publicación (si hay) */}
               {fotosPub.length > 0 && (
                 <CarruselFotos fotos={fotosPub} onAbrir={(i) => setVisorFotos({ fotos: fotosPub, inicio: i || 0 })} />
@@ -1224,7 +1407,7 @@ export default function PantallaPublica({ onAccion, haySesion }) {
       <div style={{ fontFamily: '"Arial Narrow", Impact, system-ui, sans-serif', fontSize: 27, fontWeight: 900, textTransform: 'uppercase', color: T.textoFuerte, lineHeight: 1 }}>Hazte <span style={{ ...ORO_TEXTO }}>leyenda</span></div>
       <div style={{ fontSize: 13.5, color: C.tenue, marginTop: 8, lineHeight: 1.5, maxWidth: 420, marginLeft: 'auto', marginRight: 'auto' }}>Crea tu perfil, sigue a tus jugadores y anota tus juegos. Gratis, para siempre.</div>
       <button onClick={() => click('registro')} style={{ width: '100%', maxWidth: 360, border: 'none', borderRadius: 14, padding: 16, marginTop: 16, background: T.boton, color: '#1a1205', fontWeight: 900, fontSize: 15.5, cursor: 'pointer', boxShadow: T.esClaro ? '0 8px 22px rgba(176,122,38,.3)' : '0 8px 22px rgba(232,182,79,.3)' }}>Únete gratis · Tu cancha te espera</button>
-      <div style={{ fontSize: 12, color: C.tenue, marginTop: 12 }}>¿Quieres más beneficios? <span onClick={() => click('planes')} style={{ color: T.acento, fontWeight: 700, cursor: 'pointer' }}>Mira los planes</span></div>
+      
     </div>
   )
 
@@ -1466,26 +1649,37 @@ export default function PantallaPublica({ onAccion, haySesion }) {
     </div>
   )
 
-  const SOLICITUDES = [
-    { ini: 'EM', col: 'linear-gradient(150deg,#3a9e6e,#235f43)', nombre: 'El Mello Tavárez', meta: 'Alero · Mao' },
-    { ini: 'YP', col: 'linear-gradient(150deg,#8a5cc4,#4f3275)', nombre: 'Yariel Peña', meta: 'Center · Esperanza' },
-  ]
+  const haceCuantoSeg = (iso) => {
+    try {
+      const s = Math.floor((Date.now() - new Date(iso)) / 1000)
+      if (s < 60) return 'ahora'
+      const m = Math.floor(s / 60); if (m < 60) return `hace ${m} min`
+      const h = Math.floor(m / 60); if (h < 24) return `hace ${h} h`
+      const d = Math.floor(h / 24); return `hace ${d} d`
+    } catch (e) { return '' }
+  }
+  const filaSeguidor = (p) => {
+    const ini = `${(p.nombre || '?')[0] || ''}${(p.apellido || '')[0] || ''}`.toUpperCase()
+    const nombre = `${p.nombre || ''} ${p.apellido || ''}`.trim() || 'Jugador'
+    return (
+      <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 8px' }}>
+        <div onClick={() => onAccion && onAccion('verPerfil:' + p.id)} style={{ width: 38, height: 38, borderRadius: '50%', flexShrink: 0, cursor: 'pointer', background: p.foto_url ? `url(${p.foto_url}) center/cover` : T.avatar, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.avatarTexto, fontWeight: 700, fontSize: 14 }}>{!p.foto_url && ini}</div>
+        <div onClick={() => onAccion && onAccion('verPerfil:' + p.id)} style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}>
+          <b style={{ fontSize: 13, fontWeight: 700, color: T.textoFuerte, display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nombre}</b>
+          <small style={{ fontSize: 11, color: T.tenue }}>te empezó a seguir{p.creado_en ? ` · ${haceCuantoSeg(p.creado_en)}` : ''}</small>
+        </div>
+        {p.loSigo
+          ? <span style={{ fontSize: 11.5, fontWeight: 700, color: T.tenue, padding: '7px 10px' }}>Siguiendo</span>
+          : <button onClick={() => seguirDeVuelta(p.id)} style={{ border: 'none', cursor: 'pointer', borderRadius: 9, padding: '7px 14px', background: T.boton, color: T.avatarTexto, fontSize: 12.5, fontWeight: 800 }}>Seguir</button>}
+      </div>
+    )
+  }
   const SolicitudesCard = () => (
-    <Tarjeta titulo="Solicitudes">
+    <Tarjeta titulo="Te siguen">
       <div style={{ padding: '6px 8px 10px' }}>
-        {SOLICITUDES.map((s) => (
-          <div key={s.ini} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 8px' }}>
-            <div style={{ width: 38, height: 38, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: s.col, color: '#fff', fontWeight: 700, fontSize: 14 }}>{s.ini}</div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <b style={{ fontSize: 13, fontWeight: 700, color: T.textoFuerte, display: 'block' }}>{s.nombre}</b>
-              <small style={{ fontSize: 11, color: T.tenue }}>{s.meta}</small>
-            </div>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <button style={{ border: 'none', cursor: 'pointer', borderRadius: 8, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', background: T.boton, color: T.avatarTexto, fontSize: 14, fontWeight: 800 }}>✓</button>
-              <button style={{ cursor: 'pointer', borderRadius: 8, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', background: T.esClaro ? '#f5f6f8' : 'rgba(255,255,255,.06)', color: T.tenue, border: `1px solid ${T.esClaro ? '#e0e3e8' : 'rgba(255,255,255,.1)'}`, fontSize: 13 }}>✕</button>
-            </div>
-          </div>
-        ))}
+        {seguidoresNuevos.length === 0
+          ? <div style={{ padding: '10px 8px 6px', color: T.tenue, fontSize: 12.5, lineHeight: 1.5 }}>Cuando alguien te siga, va a aparecer aquí para que lo sigas de vuelta.</div>
+          : seguidoresNuevos.slice(0, 8).map(filaSeguidor)}
       </div>
     </Tarjeta>
   )
@@ -1564,38 +1758,188 @@ export default function PantallaPublica({ onAccion, haySesion }) {
     )
   }
 
-  // Fila de historias "En la cancha" (estilo del mockup; datos de muestra por ahora)
+  // Fila de historias "En la cancha" — videos reales de 24 horas
   const Historias = () => {
-    const items = [
-      { tipo: 'add', nm: 'Tu jugada' },
-      { tipo: 'live', sig: 'JÍC', nm: 'En vivo', g: 'linear-gradient(135deg,#d23048,#8a1020)' },
-      { sig: 'MET', nm: 'Metros', g: 'linear-gradient(135deg,#2a4fa8,#16224a)' },
-      { sig: 'LEO', nm: 'Leones', g: 'linear-gradient(135deg,#1f9d63,#127041)' },
-      { sig: 'VAL', nm: 'Copa Val.', g: 'linear-gradient(135deg,#caa24a,#8a6a22)' },
-      { sig: 'TIT', nm: 'Titanes', g: 'linear-gradient(135deg,#d23048,#8a1020)' },
-    ]
+    // Una burbuja por autor (su historia más reciente abre primero), con su lista.
+    const porAutor = []
+    const vistos = {}
+    historias.forEach((h) => {
+      const a = h.autor_id
+      if (!vistos[a]) { vistos[a] = { autor_id: a, autor: h.autor || {}, lista: [h] }; porAutor.push(vistos[a]) }
+      else vistos[a].lista.push(h)
+    })
+    // ===== Carrete unificado: historias de todos + noticias, todo en un solo reproductor =====
+    const noticiasOrden = [...destacados.filter((d) => d && d.tipo === 'noticia' && (d.titulo || d.foto))].sort((a, b) => (noticiasVistas.has(idNoticia(a)) ? 1 : 0) - (noticiasVistas.has(idNoticia(b)) ? 1 : 0))
+    const slidesHist = []
+    const offsetAutor = []
+    porAutor.forEach((g) => { offsetAutor.push(slidesHist.length); g.lista.forEach((h) => slidesHist.push({ tipo: 'historia', ...h })) })
+    const carrete = [...slidesHist, ...noticiasOrden.map((c) => ({ tipo: 'noticia', ...c }))]
+    const abrirReel = (i) => setHistoriaVer({ lista: carrete, idx: Math.max(0, Math.min(Math.max(0, carrete.length - 1), i)) })
     return (
       <div style={{ marginTop: 16 }}>
         <style>{`@keyframes mcPulseHl{0%{transform:scale(1);opacity:.7}100%{transform:scale(1.32);opacity:0}} .mc-hl-scroll::-webkit-scrollbar{display:none}`}</style>
-        <SecHead titulo="En la cancha" accion={{ txt: 'Ver todo →', fn: () => click('techado') }} />
+        <SecHead titulo="En la cancha" />
+        <input ref={refVideoHistoria} type="file" accept="video/*" onChange={alElegirVideoHistoria} style={{ display: 'none' }} />
         <div className="mc-hl-scroll" style={{ display: 'flex', gap: 13, overflowX: 'auto', padding: '2px 2px 4px', scrollbarWidth: 'none' }}>
-          {items.map((it, i) => (
-            <div key={i} style={{ flexShrink: 0, width: 60, textAlign: 'center' }}>
-              <div style={{ width: 60, height: 60, borderRadius: '50%', padding: 2.5, display: 'grid', placeItems: 'center', position: 'relative', background: it.tipo === 'add' ? T.vidrio : it.tipo === 'live' ? 'linear-gradient(135deg,#e4263c,#ce1126)' : `conic-gradient(from 220deg, #e4263c, ${T.acento}, ${T.acento}, #e4263c)`, border: it.tipo === 'add' ? `1px dashed ${T.navActivoBorde}` : 'none' }}>
-                {it.tipo === 'live' && <span style={{ position: 'absolute', inset: -3, borderRadius: '50%', border: '2px solid #e4263c', animation: 'mcPulseHl 1.8s ease-out infinite' }} />}
-                <div style={{ width: '100%', height: '100%', borderRadius: '50%', display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: it.tipo === 'add' ? 24 : 15, color: it.tipo === 'add' ? T.tenue : '#fff', border: it.tipo === 'add' ? 'none' : `2.5px solid ${T.fondo}`, background: it.tipo === 'add' ? 'transparent' : (it.g || T.avatar), fontStyle: it.tipo === 'add' ? 'normal' : 'italic' }}>
-                  {it.tipo === 'add' ? '+' : it.sig}
-                </div>
-              </div>
-              {it.tipo === 'live'
-                ? <div style={{ marginTop: 4, display: 'inline-block', fontSize: 8.5, fontWeight: 800, letterSpacing: 0.5, color: '#fff', background: '#e4263c', padding: '1px 6px', borderRadius: 20, textTransform: 'uppercase' }}>{it.nm}</div>
-                : <div style={{ marginTop: 5, fontSize: 10, color: T.subTexto, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.nm}</div>}
+          {/* + Tu jugada: sube tu historia (video de hasta 20s) */}
+          <div style={{ flexShrink: 0, width: 60, textAlign: 'center' }}>
+            <div onClick={() => { if (subiendoHistoria) return; if (!haySesion) { click('entrar'); return } refVideoHistoria.current && refVideoHistoria.current.click() }} style={{ width: 60, height: 60, borderRadius: '50%', padding: 2.5, display: 'grid', placeItems: 'center', background: T.vidrio, border: `1px dashed ${T.navActivoBorde}`, cursor: 'pointer' }}>
+              <div style={{ width: '100%', height: '100%', borderRadius: '50%', display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: 24, color: T.tenue }}>{subiendoHistoria ? '…' : '+'}</div>
             </div>
-          ))}
+            <div style={{ marginTop: 5, fontSize: 10, color: T.subTexto, fontWeight: 600, whiteSpace: 'nowrap' }}>{subiendoHistoria ? 'Subiendo…' : 'Tu jugada'}</div>
+          </div>
+          {/* Historias reales, una burbuja por jugador */}
+          {porAutor.map((g, i) => {
+            const a = g.autor || {}
+            const nombre = (a.nombre || 'Jugador').split(' ')[0]
+            const ini = `${(a.nombre || '?')[0] || ''}${(a.apellido || '')[0] || ''}`.toUpperCase()
+            return (
+              <div key={g.autor_id || i} style={{ flexShrink: 0, width: 60, textAlign: 'center' }}>
+                <div onClick={() => abrirReel(offsetAutor[i])} style={{ width: 60, height: 60, borderRadius: '50%', padding: 2.5, display: 'grid', placeItems: 'center', background: `conic-gradient(from 220deg, #e4263c, ${T.acento}, ${T.acento}, #e4263c)`, cursor: 'pointer' }}>
+                  <div style={{ width: '100%', height: '100%', borderRadius: '50%', display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: 15, color: '#fff', border: `2.5px solid ${T.fondo}`, background: a.foto_url ? `url(${a.foto_url}) center/cover` : T.avatar, fontStyle: 'italic' }}>{!a.foto_url && ini}</div>
+                </div>
+                <div style={{ marginTop: 5, fontSize: 10, color: T.subTexto, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nombre}</div>
+              </div>
+            )
+          })}
+          {/* Noticias tejidas como círculos: abren el mismo carrete, después de las historias */}
+          {noticiasOrden.map((c, i) => {
+            const visto = noticiasVistas.has(idNoticia(c))
+            const colLiga = c.liga === 'NBA' ? '#98002E' : '#ce1126'
+            return (
+              <div key={'noti' + i} style={{ flexShrink: 0, width: 60, textAlign: 'center' }}>
+                <div onClick={() => abrirReel(slidesHist.length + i)} style={{ width: 60, height: 60, borderRadius: '50%', padding: 2.5, display: 'grid', placeItems: 'center', background: visto ? T.navActivoBorde : `conic-gradient(from 220deg, ${colLiga}, ${T.acento}, ${colLiga})`, cursor: 'pointer', opacity: visto ? 0.5 : 1 }}>
+                  <div style={{ width: '100%', height: '100%', borderRadius: '50%', display: 'grid', placeItems: 'center', border: `2.5px solid ${T.fondo}`, background: c.foto ? `url(${c.foto}) center/cover` : T.avatar, fontSize: 20 }}>{!c.foto && '📰'}</div>
+                </div>
+                <div style={{ marginTop: 5, fontSize: 10, color: T.subTexto, fontWeight: 700, whiteSpace: 'nowrap' }}>{c.liga || 'Noticia'}</div>
+              </div>
+            )
+          })}
         </div>
       </div>
     )
   }
+  const overlayTexto = (texto, pos, color) => {
+    if (!texto) return null
+    const justify = pos === 'arriba' ? 'flex-start' : pos === 'abajo' ? 'flex-end' : 'center'
+    return (
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', justifyContent: justify, alignItems: 'center', padding: '70px 22px', pointerEvents: 'none' }}>
+        <div style={{ color: color || '#fff', fontSize: 25, fontWeight: 800, textAlign: 'center', lineHeight: 1.2, maxWidth: '92%', wordBreak: 'break-word', textShadow: '0 2px 14px rgba(0,0,0,.85), 0 0 3px rgba(0,0,0,.9)', whiteSpace: 'pre-wrap' }}>{texto}</div>
+      </div>
+    )
+  }
+  const COLORES_TXT = ['#ffffff', '#ffd54a', '#ff5640', '#4cc38a', '#54a0ff', '#1a1205']
+
+  // Capa de historias: visor a pantalla completa, mini-editor de texto y avisito.
+  // Se dibuja igual en teléfono y en computadora.
+  const capaHistorias = () => (
+    <>
+      {historiaVer && (() => {
+        const lista = historiaVer.lista || []
+        const idx = Math.max(0, Math.min(lista.length - 1, historiaVer.idx || 0))
+        const h = lista[idx]
+        if (!h) return null
+        const ini = Number(h.inicio || 0)
+        const finVentana = ini + Number(h.duracion || 20)
+        const irAdelante = () => { if (idx < lista.length - 1) setHistoriaVer({ lista, idx: idx + 1 }); else setHistoriaVer(null) }
+        const irAtras = () => setHistoriaVer({ lista, idx: Math.max(0, idx - 1) })
+        return (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 700, background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ position: 'relative', width: '100%', maxWidth: 460, height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {h.tipo === 'noticia' ? (
+                <div style={{ position: 'absolute', inset: 0, background: '#0a0c12' }}>
+                  {h.foto && <div style={{ position: 'absolute', inset: 0, background: `#000 url(${h.foto}) center/cover` }} />}
+                  <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,.94) 8%, rgba(0,0,0,.25) 45%, rgba(0,0,0,.55) 100%)' }} />
+                  <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '0 22px calc(env(safe-area-inset-bottom) + 46px)', zIndex: 3, pointerEvents: 'none' }}>
+                    <span style={{ display: 'inline-block', fontFamily: '"Arial Narrow", Impact, sans-serif', fontStyle: 'italic', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, fontSize: 11, color: '#fff', background: h.liga === 'NBA' ? '#98002E' : '#ce1126', padding: '4px 11px', borderRadius: 30, marginBottom: 12 }}>{h.liga || 'Noticia'}</span>
+                    <div style={{ fontFamily: '"Arial Narrow", Impact, sans-serif', fontStyle: 'italic', fontWeight: 700, fontSize: 30, lineHeight: 1.05, textTransform: 'uppercase', color: '#fff', textShadow: '0 2px 12px rgba(0,0,0,.8)' }}>{h.titulo}</div>
+                    {h.resumen && <div style={{ fontSize: 14.5, color: 'rgba(255,255,255,.92)', marginTop: 12, fontWeight: 500, lineHeight: 1.55, maxHeight: 168, overflow: 'hidden' }}>{h.resumen}</div>}
+                    {h.enlace && <a href={h.enlace} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} style={{ display: 'inline-block', marginTop: 16, fontFamily: '"Arial Narrow", Impact, sans-serif', fontStyle: 'italic', fontWeight: 700, fontSize: 14, letterSpacing: 0.5, textTransform: 'uppercase', color: '#fff', background: h.liga === 'NBA' ? 'linear-gradient(135deg, #98002E, #D31B3C)' : '#ce1126', padding: '11px 20px', borderRadius: 12, textDecoration: 'none', pointerEvents: 'auto' }}>Leer la noticia ›</a>}
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <video
+                    key={h.id}
+                    src={h.video_url}
+                    autoPlay playsInline
+                    onLoadedMetadata={(e) => { try { if (ini > 0) e.currentTarget.currentTime = ini } catch (x) {} }}
+                    onTimeUpdate={(e) => { const t = e.currentTarget.currentTime; if (t >= finVentana - 0.05) irAdelante(); else if (t < ini - 0.3) { try { e.currentTarget.currentTime = ini } catch (x) {} } }}
+                    onEnded={irAdelante}
+                    style={{ width: '100%', maxHeight: '100%', background: '#000' }}
+                  />
+                  {overlayTexto(h.texto, h.texto_pos, h.texto_color)}
+                </>
+              )}
+              {/* Tocar la izquierda = atrás · tocar la derecha = siguiente */}
+              <div onClick={irAtras} style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '30%', zIndex: 2, cursor: 'pointer' }} />
+              <div onClick={irAdelante} style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: '70%', zIndex: 2, cursor: 'pointer' }} />
+              {lista.length > 1 && (
+                <div style={{ position: 'absolute', top: 'calc(env(safe-area-inset-top) + 8px)', left: 12, right: 58, zIndex: 3, display: 'flex', gap: 4 }}>
+                  {lista.map((_, i) => (
+                    <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: i <= idx ? '#fff' : 'rgba(255,255,255,.3)' }} />
+                  ))}
+                </div>
+              )}
+              <button onClick={() => setHistoriaVer(null)} style={{ position: 'absolute', top: 'calc(env(safe-area-inset-top) + 10px)', right: 14, zIndex: 4, width: 38, height: 38, borderRadius: '50%', border: 'none', background: 'rgba(0,0,0,.5)', color: '#fff', fontSize: 22, cursor: 'pointer' }}>×</button>
+            </div>
+          </div>
+        )
+      })()}
+
+      {composerHistoria && (() => {
+        const c = composerHistoria
+        const recorta = (c.dur || 0) > MAX_HISTORIA_SEG + 0.3
+        const maxInicio = Math.max(0, (c.dur || 0) - MAX_HISTORIA_SEG)
+        const finVentana = (c.inicio || 0) + MAX_HISTORIA_SEG
+        const fmt = (s) => { const m = Math.floor(s / 60); const ss = Math.floor(s % 60); return `${m}:${String(ss).padStart(2, '0')}` }
+        return (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 710, background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ position: 'relative', width: '100%', maxWidth: 460, height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+              <video
+                ref={refComposerVideo}
+                src={c.url}
+                autoPlay playsInline muted
+                onLoadedMetadata={(e) => { try { e.currentTarget.currentTime = c.inicio || 0 } catch (x) {} }}
+                onTimeUpdate={(e) => { const t = e.currentTarget.currentTime; if (recorta && (t >= finVentana - 0.05 || t < (c.inicio || 0) - 0.3)) { try { e.currentTarget.currentTime = c.inicio || 0; e.currentTarget.play() } catch (x) {} } }}
+                onEnded={(e) => { try { e.currentTarget.currentTime = c.inicio || 0; e.currentTarget.play() } catch (x) {} }}
+                style={{ width: '100%', maxHeight: '100%', background: '#000' }}
+              />
+              {overlayTexto(c.texto, c.pos, c.color)}
+              <button onClick={cerrarComposer} style={{ position: 'absolute', top: 'calc(env(safe-area-inset-top) + 10px)', left: 14, zIndex: 3, width: 38, height: 38, borderRadius: '50%', border: 'none', background: 'rgba(0,0,0,.5)', color: '#fff', fontSize: 22, cursor: 'pointer' }}>×</button>
+              <div style={{ position: 'absolute', left: 0, right: 0, bottom: 'calc(env(safe-area-inset-bottom) + 14px)', zIndex: 3, padding: '0 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {recorta && (
+                  <div style={{ background: 'rgba(0,0,0,.5)', borderRadius: 12, padding: '10px 12px' }}>
+                    <div style={{ color: '#fff', fontSize: 12, fontWeight: 700, marginBottom: 6 }}>Recorta veinte segundos · desde {fmt(c.inicio || 0)}</div>
+                    <input type="range" min={0} max={maxInicio} step={0.1} value={c.inicio || 0} onChange={(e) => { const v = parseFloat(e.target.value); setComposerHistoria((p) => ({ ...p, inicio: v })); try { if (refComposerVideo.current) refComposerVideo.current.currentTime = v } catch (x) {} }} style={{ width: '100%', accentColor: T.acento, height: 28 }} />
+                  </div>
+                )}
+                <input value={c.texto} onChange={(e) => setComposerHistoria((p) => ({ ...p, texto: e.target.value.slice(0, 120) }))} placeholder="Escribe algo… (opcional)" style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(0,0,0,.55)', border: '1px solid rgba(255,255,255,.25)', borderRadius: 12, padding: '12px 14px', color: '#fff', fontSize: 15, outline: 'none' }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  {[{ id: 'arriba', t: 'Arriba' }, { id: 'centro', t: 'Centro' }, { id: 'abajo', t: 'Abajo' }].map((p) => {
+                    const on = c.pos === p.id
+                    return <button key={p.id} onClick={() => setComposerHistoria((q) => ({ ...q, pos: p.id }))} style={{ border: on ? '1.5px solid #fff' : '1px solid rgba(255,255,255,.3)', background: on ? 'rgba(255,255,255,.2)' : 'rgba(0,0,0,.4)', color: '#fff', borderRadius: 18, padding: '7px 13px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>{p.t}</button>
+                  })}
+                  <div style={{ display: 'flex', gap: 6, marginLeft: 4 }}>
+                    {COLORES_TXT.map((col) => (
+                      <button key={col} onClick={() => setComposerHistoria((q) => ({ ...q, color: col }))} style={{ width: 26, height: 26, borderRadius: '50%', background: col, border: c.color === col ? '2.5px solid #fff' : '1.5px solid rgba(255,255,255,.4)', cursor: 'pointer', padding: 0 }} />
+                    ))}
+                  </div>
+                </div>
+                <button onClick={publicarHistoria} disabled={subiendoHistoria} style={{ width: '100%', border: 'none', borderRadius: 13, padding: 14, background: T.boton, color: '#1a1205', fontSize: 15, fontWeight: 800, cursor: 'pointer', opacity: subiendoHistoria ? 0.6 : 1 }}>{subiendoHistoria ? 'Publicando…' : 'Publicar historia'}</button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {msgHistoria && (
+        <div style={{ position: 'fixed', left: 0, right: 0, bottom: 'calc(env(safe-area-inset-bottom) + 92px)', zIndex: 720, display: 'flex', justifyContent: 'center', pointerEvents: 'none' }}>
+          <div style={{ background: 'rgba(20,18,16,.96)', color: '#fff', border: `1px solid ${T.navActivoBorde}`, borderRadius: 22, padding: '10px 18px', fontSize: 13, fontWeight: 700, boxShadow: '0 8px 24px rgba(0,0,0,.5)' }}>{msgHistoria}</div>
+        </div>
+      )}
+    </>
+  )
 
   // Tarjeta "Jugador de la semana" (estilo del mockup; datos de muestra hasta tener el rating)
   const CarruselDestacados = () => {
@@ -1657,7 +2001,7 @@ export default function PantallaPublica({ onAccion, haySesion }) {
         <div style={{ fontFamily: '"Arial Narrow", Impact, sans-serif', fontStyle: 'italic', fontWeight: 700, fontSize: 24, lineHeight: 1, textTransform: 'uppercase', color: T.textoFuerte }}>{c.titulo || 'Noticia'}</div>
         {c.resumen && <div style={{ fontSize: 12, color: T.subTexto, marginTop: 6, fontWeight: 600, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{c.resumen}</div>}
       </div>
-    </>, () => setNotSel(c))
+    </>, () => { marcarNoticiaVista(c); setNotSel(c) })
     return (
       <>
       <div style={{ marginTop: 18 }}>
@@ -1962,6 +2306,7 @@ export default function PantallaPublica({ onAccion, haySesion }) {
                 </svg>
                 {noLeidos > 0 && <span style={{ position: 'absolute', top: -3, right: -3, background: '#ff5640', color: '#fff', fontSize: 9, fontWeight: 800, minWidth: 15, height: 15, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `2px solid ${T.fondo}` }}>{noLeidos > 9 ? '9+' : noLeidos}</span>}
               </div>
+              <button onClick={() => click('configuracion')} title="Configuración" style={{ width: 40, height: 40, borderRadius: '50%', background: 'transparent', border: `1px solid ${T.navActivoBorde}`, color: T.acento, fontSize: 17, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>⚙️</button>
               <div onClick={() => click('perfil')} title="Mi perfil" style={{ width: 40, height: 40, borderRadius: '50%', background: miPerfil.foto_url ? `url(${miPerfil.foto_url}) center/cover` : T.avatar, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.avatarTexto, fontWeight: 800, fontSize: 14, cursor: 'pointer', border: `2px solid ${T.acento}`, flexShrink: 0 }}>{!miPerfil.foto_url && `${(miPerfil.nombre || '?')[0] || ''}${(miPerfil.apellido || '')[0] || ''}`.toUpperCase()}</div>
             </div>
           </header>
@@ -1985,6 +2330,7 @@ export default function PantallaPublica({ onAccion, haySesion }) {
           {/* COLUMNA CENTRO: EL TECHADO (protagonista) */}
           <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 14 }}>
             {!haySesion && <Bienvenida grande />}
+            <Historias />
             <CarruselDestacados />
             {Composer()}
             <div>
@@ -2008,10 +2354,12 @@ export default function PantallaPublica({ onAccion, haySesion }) {
             <Tarjeta titulo="Rankings LNB" accion={{ txt: 'Ver todo →', fn: () => click('lnb') }}>
               <div style={{ padding: '4px 8px 12px' }}><RankingsLNB /></div>
             </Tarjeta>
-            <TendenciasCard />
+            {/* <TendenciasCard /> oculta: usaba datos de ejemplo. Se activa con data real más adelante. */}
           </aside>
         </main>
         {Modales()}{HojaAnotar()}
+        {capaHistorias()}
+        {visorNoticia()}
       </div>
     )
   }
@@ -2020,6 +2368,7 @@ export default function PantallaPublica({ onAccion, haySesion }) {
   return (
     <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, width: '100vw', height: '100dvh', color: C.texto, fontFamily: C.font, background: T.fondo, overflow: 'hidden' }}>
       <Velo />
+      {capaHistorias()}
       {/* BARRA FIJA inmóvil: cubre desde el reloj/isla y no se mueve nunca */}
       <div ref={refBarraTop} style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 40, background: T.fondo, paddingTop: 'calc(env(safe-area-inset-top) - 4px)', transform: barraTopVisible ? 'translateY(0)' : `translateY(-${altoBarraTop}px)`, transition: 'transform .25s cubic-bezier(.4,0,.2,1)', willChange: 'transform' }}>
         <div style={{ maxWidth: 480, margin: '0 auto', padding: '6px 18px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -2048,7 +2397,13 @@ export default function PantallaPublica({ onAccion, haySesion }) {
                 Tema: {T.nombre}
               </button>
               <div style={{ height: 1, background: T.navActivoBorde, opacity: 0.55, margin: '4px 8px 6px' }} />
-              {[{ id: 'buscar', txt: '🔍 Buscar personas' }, { id: 'perfil', txt: '◉ Mi perfil' }, ...ACCIONES_CREAR, ...ACCIONES_MIAS, ...(haySesion ? [{ id: 'cerrarSesion', txt: '↩ Cerrar sesión' }] : [{ id: 'registro', txt: '✦ Crear mi cuenta gratis' }, { id: 'entrar', txt: '→ Iniciar sesión' }])].map((a) => (
+              {haySesion && (
+                <button onClick={() => { setMenuAbierto(false); setPanelSeguidores(true) }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', textAlign: 'left', background: 'transparent', border: 'none', color: C.texto, fontSize: 14, fontWeight: 600, padding: '12px', borderRadius: 9, cursor: 'pointer' }}>
+                  <span>🔔 Te siguen</span>
+                  {seguidoresNuevos.length > 0 && <span style={{ minWidth: 20, height: 20, padding: '0 6px', borderRadius: 10, background: T.boton, color: T.botonTexto || '#1a1205', fontSize: 11, fontWeight: 800, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{seguidoresNuevos.length}</span>}
+                </button>
+              )}
+              {[{ id: 'buscar', txt: '🔍 Buscar personas' }, { id: 'perfil', txt: '◉ Mi perfil' }, ...ACCIONES_CREAR, ...ACCIONES_MIAS, ...(haySesion ? [{ id: 'configuracion', txt: '⚙️ Configuración' }, { id: 'cerrarSesion', txt: '↩ Cerrar sesión' }] : [{ id: 'registro', txt: '✦ Crear mi cuenta gratis' }, { id: 'entrar', txt: '→ Iniciar sesión' }])].map((a) => (
                 <button key={a.id} onClick={() => click(a.id)} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'transparent', border: 'none', color: C.texto, fontSize: 14, fontWeight: 600, padding: '12px', borderRadius: 9, cursor: 'pointer' }}>{a.txt}</button>
               ))}
             </div>
@@ -2092,7 +2447,7 @@ export default function PantallaPublica({ onAccion, haySesion }) {
           {!haySesion && <div style={{ marginTop: 14 }}><Bienvenida /></div>}
           <Historias />
           <CarruselDestacados />
-          <div style={{ marginTop: 22 }}><SecHead titulo="El Techado" icono="techado" accion={{ txt: 'Ver todo →', fn: () => click('techado') }} /><span style={{ display: 'block', fontSize: 11.5, color: T.tenue, margin: '-6px 2px 10px' }}>Tu zona, primero</span><ListaTechado /></div>
+          <div style={{ marginTop: 22 }}><SecHead titulo="El Techado" icono="techado" /><span style={{ display: 'block', fontSize: 11.5, color: T.tenue, margin: '-6px 2px 10px' }}>Tu zona, primero</span><ListaTechado /></div>
           <div style={{ marginTop: 22 }}><SecHead titulo="Torneos populares" accion={{ txt: 'Ver todos →', fn: () => click('torneos') }} /><ListaTorneos /></div>
           {!haySesion && <CtaRegistro />}
           </>
@@ -2601,6 +2956,26 @@ function ComposerTechado({ T, escritorio, miPerfil, abierto, setAbierto, texto, 
         </div>
       </div>
 
+      {/* Panel "Te siguen" (notificaciones), abierto desde el menú ☰ */}
+      {panelSeguidores && (
+        <div onClick={() => setPanelSeguidores(false)} style={{ position: 'fixed', inset: 0, zIndex: 90, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 480, maxHeight: '80vh', overflowY: 'auto', background: T.fondo, borderTopLeftRadius: 22, borderTopRightRadius: 22, border: `1px solid ${T.navActivoBorde}`, padding: '0 0 calc(env(safe-area-inset-bottom) + 16px)' }}>
+            <div style={{ position: 'sticky', top: 0, background: T.fondo, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 16px 12px', borderBottom: `1px solid ${T.navActivoBorde}` }}>
+              <span style={{ fontSize: 16, fontWeight: 800, color: T.textoFuerte }}>🔔 Te siguen</span>
+              <button onClick={() => setPanelSeguidores(false)} style={{ width: 32, height: 32, borderRadius: 9, border: `0.5px solid ${T.navActivoBorde}`, background: 'transparent', color: T.textoFuerte, fontSize: 15, cursor: 'pointer' }}>✕</button>
+            </div>
+            <div style={{ padding: '8px 10px 4px' }}>
+              {seguidoresNuevos.length === 0
+                ? <div style={{ padding: '28px 16px', textAlign: 'center', color: T.tenue, fontSize: 13, lineHeight: 1.6 }}>Cuando alguien te siga, va a aparecer aquí para que lo sigas de vuelta.</div>
+                : seguidoresNuevos.map(filaSeguidor)}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Visor de noticia (se abre desde los círculos de las Historias) */}
+      {visorNoticia()}
+
       {/* Menú de menciones (@) */}
       {menciones.length > 0 && (
         <div style={{ flexShrink: 0, maxHeight: 200, overflowY: 'auto', borderTop: `1px solid ${T.esClaro ? '#eceef1' : 'rgba(255,255,255,.08)'}`, background: T.esClaro ? '#fff' : 'rgba(12,14,18,.98)' }}>
@@ -2976,6 +3351,10 @@ function DetallePublicacion({ pub, T, C, ORO_TEXTO, haySesion, esMia, onCerrar, 
               pub.texto && <div style={{ fontSize: 14.5, color: D.textoBody, lineHeight: 1.6, marginBottom: 16 }}>{resaltarTexto(pub.texto, acento, null)}</div>
             )}
           </>
+        )}
+
+        {datos.video && (
+          <video src={datos.video} controls autoPlay muted playsInline preload="metadata" style={{ width: '100%', maxHeight: 460, background: '#000', display: 'block', borderRadius: 12, marginBottom: 14 }} />
         )}
 
         {/* barra de reacciones + compartir */}

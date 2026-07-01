@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient'
+import { sincronizarGrupoTorneoSiExiste } from './grupos'
 
 // ============================================================================
 //  HELPER DE TORNEOS — Media Cancha
@@ -217,6 +218,7 @@ export async function responderInvitacion(invitacionId, aceptar) {
           .eq('torneo_id', inv.torneo_id)
           .eq('perfil_id', inv.invitado_id)
       }
+      await sincronizarGrupoTorneoSiExiste(inv.torneo_id)
     } catch (e) {}
   }
   return { invitacion: inv, error: null }
@@ -406,4 +408,68 @@ export async function torneosQueSigo() {
     .select('id, nombre, emoji, logo_url, lugar, estado')
     .in('id', ids)
   return { torneos: torneos || [], error: null }
+}
+// ============================================================================
+//  ÁRBITROS DEL TORNEO — roster de árbitros (nombre, teléfono, tarifa por juego)
+//  Tabla: torneo_arbitros. El pago se registra en la Caja (categoría árbitros).
+// ============================================================================
+export async function leerArbitros(torneoId) {
+  if (!torneoId) return { arbitros: [], error: null }
+  const { data, error } = await supabase
+    .from('torneo_arbitros')
+    .select('*')
+    .eq('torneo_id', torneoId)
+    .order('creado_en', { ascending: true })
+  return { arbitros: data || [], error: error?.message || null }
+}
+
+export async function agregarArbitro(torneoId, datos) {
+  if (!torneoId || !datos?.nombre) return { arbitro: null, error: 'Falta el nombre del árbitro' }
+  const { data, error } = await supabase
+    .from('torneo_arbitros')
+    .insert({
+      torneo_id: torneoId,
+      nombre: datos.nombre.trim(),
+      telefono: datos.telefono ? String(datos.telefono).trim() : null,
+      tarifa: Number(datos.tarifa) || 0,
+    })
+    .select()
+    .single()
+  return { arbitro: data || null, error: error?.message || null }
+}
+
+export async function eliminarArbitro(id) {
+  if (!id) return { error: 'Falta el id' }
+  const { error } = await supabase.from('torneo_arbitros').delete().eq('id', id)
+  return { error: error?.message || null }
+}
+
+// ============================================================================
+//  ÁLBUM DEL TORNEO — fotos y videos que sube la comunidad.
+//  Tabla: torneo_album. Archivos en Storage (bucket "fotos", carpeta albumes/).
+// ============================================================================
+export async function leerAlbumTorneo(torneoId) {
+  if (!torneoId) return { items: [], error: null }
+  const { data, error } = await supabase
+    .from('torneo_album')
+    .select('*, autor:perfiles(id, nombre, apellido, foto_url)')
+    .eq('torneo_id', torneoId)
+    .order('creado_en', { ascending: false })
+  return { items: data || [], error: error?.message || null }
+}
+
+export async function agregarItemAlbum(torneoId, autorId, item) {
+  if (!torneoId || !item?.url) return { item: null, error: 'Falta el archivo' }
+  const { data, error } = await supabase
+    .from('torneo_album')
+    .insert({ torneo_id: torneoId, autor_id: autorId || null, tipo: item.tipo || 'foto', url: item.url, ruta: item.ruta || null })
+    .select()
+    .single()
+  return { item: data || null, error: error?.message || null }
+}
+
+export async function eliminarItemAlbum(id) {
+  if (!id) return { error: 'Falta el id' }
+  const { error } = await supabase.from('torneo_album').delete().eq('id', id)
+  return { error: error?.message || null }
 }

@@ -2,8 +2,10 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../supabaseClient'
 import { subirFotoPerfil } from '../fotos'
 import { statsSociales, contarJuegosJugador } from '../social'
+import SeccionPromedios from './SeccionPromedios'
 import RecortadorFoto from './RecortadorFoto'
 import TarjetaResultado from './TarjetaResultado'
+import GaleriaPublicaciones from './GaleriaPublicaciones'
 import { haceCuanto } from '../techado'
 import fondoCancha from '../assets/fondo-cancha.png'
 import fondoTarjetaMiembro from '../assets/fondo-tarjeta-miembro.png'
@@ -453,10 +455,7 @@ export default function PantallaPerfil({ onSalir, onVolver, onAccion, onSiguiend
   )
 
   const bPromedios = esJugador && (
-    <Tarjeta titulo="Promedios de carrera">
-      <div style={{ display: 'flex' }}><Stat valor="0.0" etiqueta="PTS" /><Stat valor="0.0" etiqueta="REB" /><Stat valor="0.0" etiqueta="AST" /><Stat valor="0.0" etiqueta="ROB" /></div>
-      <div style={{ fontSize: 12, color: C.tenue, textAlign: 'center', marginTop: 12 }}>0 torneos · 0 partidos jugados</div>
-    </Tarjeta>
+    <SeccionPromedios perfilId={perfil.id} T={T} />
   )
 
   const bTrofeos = esJugador && (
@@ -493,6 +492,10 @@ export default function PantallaPerfil({ onSalir, onVolver, onAccion, onSiguiend
     </Tarjeta>
   )
 
+  const bComando = perfil.es_admin ? (
+    <button onClick={() => onAccion && onAccion('panelAdmin')} style={{ width: '100%', border: '1px solid rgba(232,182,90,.35)', borderRadius: 12, padding: 14, background: T.esClaro ? 'rgba(232,182,90,.1)' : 'rgba(232,182,90,.12)', color: T.acento, fontSize: 14, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>📊 Panel del Fundador</button>
+  ) : null
+
   // ===== ESCRITORIO: carnet arriba + 3 columnas =====
   const recortadorUI = fotoARecortar ? (
     <RecortadorFoto archivo={fotoARecortar} forma="circulo" tema={{ acento: T.acento, boton: T.boton, botonTexto: '#1a1205', panel: 'rgba(12,14,18,.98)', texto: '#f4f7f9', tenue: '#9aa7b2' }} onListo={alRecortarFoto} onCancelar={() => setFotoARecortar(null)} />
@@ -526,29 +529,8 @@ export default function PantallaPerfil({ onSalir, onVolver, onAccion, onSiguiend
   const contenidoPubs = (
     cargandoPubs ? (
       <div style={{ textAlign: 'center', padding: '30px', color: C.tenue, fontSize: 13 }}>Cargando publicaciones…</div>
-    ) : publicaciones.length === 0 ? (
-      <div style={{ textAlign: 'center', padding: '38px 20px', color: C.tenue, background: T.tarjetaBg, border: `1px solid ${T.tarjetaBorde}`, borderRadius: 16 }}>
-        <div style={{ fontSize: 34, marginBottom: 10 }}>🏀</div>
-        <div style={{ fontSize: 14, fontWeight: 700, color: T.textoFuerte, marginBottom: 5 }}>Todavía no has publicado nada</div>
-        <div style={{ fontSize: 13, lineHeight: 1.5 }}>Tus resultados y publicaciones van a aparecer aquí.</div>
-      </div>
     ) : (
-      publicaciones.map((p) => {
-        let datos = p.datos || {}
-        if (typeof datos === 'string') { try { datos = JSON.parse(datos) } catch (e) { datos = {} } }
-        const esJuego = datos && datos.nombreA && datos.nombreB && (datos.totalA != null || (datos.jugadores && datos.jugadores.length))
-        if (esJuego) {
-          const fuenteJuego = datos.fuente || (p.tipo === 'torneo' ? 'torneo' : p.tipo === 'liga' ? 'liga' : 'rapido')
-          return <TarjetaResultado key={p.id} datos={datos} fuente={fuenteJuego} tiempo={haceCuanto(p.creado_en)} comentario={p.texto && !p.texto.startsWith('Ganaron') && !p.texto.startsWith('Quedaron') ? p.texto.split('\n')[0] : null} temaForzado={tema} />
-        }
-        return (
-          <div key={p.id} style={{ background: T.tarjetaBg, border: `1px solid ${T.tarjetaBorde}`, borderRadius: 16, padding: 16 }}>
-            {p.titulo && <div style={{ fontSize: 16, fontWeight: 800, color: T.textoFuerte, marginBottom: 6 }}>{p.titulo}</div>}
-            {p.texto && <div style={{ fontSize: 14, color: T.textoBody, lineHeight: 1.55 }}>{p.texto}</div>}
-            <div style={{ fontSize: 11, color: T.tenue, marginTop: 8 }}>{haceCuanto(p.creado_en)}</div>
-          </div>
-        )
-      })
+      <GaleriaPublicaciones publicaciones={publicaciones} T={T} tema={tema} esMio={true} />
     )
   )
 
@@ -568,7 +550,7 @@ export default function PantallaPerfil({ onSalir, onVolver, onAccion, onSiguiend
             })}
           </div>
           {pestanaPerfil === 'datos'
-            ? <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>{bMcid}{bAtleta}{bRating}{bPromedios}{bTrofeos}{bTorneos}{bCuenta}</div>
+            ? <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>{bMcid}{bAtleta}{bRating}{bPromedios}{bTrofeos}{bTorneos}{bComando}{bCuenta}</div>
             : <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>{contenidoPubs}</div>}
         </div>
       </div>

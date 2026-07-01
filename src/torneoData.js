@@ -9,7 +9,7 @@
 import { supabase } from './supabaseClient'
 import { calcularTabla, agregarJugadores, rankingTorneo, top10, candidatosMVP, lideres } from './torneoEstadisticas'
 import { generarMomentos } from './torneoMomentos'
-import { generarFixtures } from './torneoFormato'
+import { generarFixtures, siguienteRondaCopa, nombreRonda } from './torneoFormato'
 
 // ---------- LECTURAS CRUDAS (ya mapeadas a las formas de los motores) ----------
 
@@ -39,6 +39,7 @@ export async function leerJuegosTorneo(torneoId) {
     jornada: j.jornada,
     fecha: j.fecha,
     estado: j.estado,
+    llave_pos: j.llave_pos,
     equipoA_id: j.equipo_a,
     equipoB_id: j.equipo_b,
     puntosA: j.puntos_a,
@@ -248,6 +249,61 @@ export async function generarCalendario(torneoId, equipos = [], formato = 'liga'
   const filas = fixtures.map((f) => ({
     torneo_id: torneoId,
     jornada: f.jornada ?? null,
+    llave_pos: f.llave_pos != null ? f.llave_pos : null,
+    fecha: null,
+    estado: f.bye ? 'final' : 'proximo',
+    equipo_a: f.equipoA_id,
+    equipo_b: f.equipoB_id != null ? f.equipoB_id : null,
+    puntos_a: f.bye ? 1 : 0,
+    puntos_b: 0,
+    parciales_a: [],
+    parciales_b: [],
+  }))
+  const { data, error } = await supabase.from('torneo_juegos').insert(filas).select()
+  return { fixtures: data || [], error: error?.message || null }
+}
+
+// ----------------------------------------------------------------------------
+//  AVANZAR LA LLAVE DE COPA
+//  Si la ronda actual está completa, crea la siguiente ronda con los ganadores
+//  en su posición correcta del árbol. Si solo queda un ganador, es el campeón.
+//  Devuelve { generada, ronda, campeonNombre, faltan, pendientes, error }
+// ----------------------------------------------------------------------------
+export async function avanzarRondaCopa(torneoId) {
+  if (!torneoId) return { error: 'Falta el torneo' }
+  const { data: juegos, error } = await supabase
+    .from('torneo_juegos')
+    .select('id, jornada, llave_pos, estado, equipo_a, equipo_b, puntos_a, puntos_b')
+    .eq('torneo_id', torneoId)
+  if (error) return { error: error.message }
+  if (!juegos || !juegos.length) return { error: 'Esta copa no tiene partidos generados todavía.' }
+
+  const maxJornada = juegos.reduce((m, j) => Math.max(m, Number(j.jornada) || 0), 0)
+  const ronda = juegos.filter((j) => (Number(j.jornada) || 0) === maxJornada)
+
+  const pendientes = ronda.filter((j) => j.estado !== 'final')
+  if (pendientes.length) return { faltan: true, pendientes: pendientes.length, error: null }
+
+  const { fixtures, campeonId } = siguienteRondaCopa(ronda, maxJornada)
+
+  const nombreEquipo = async (id) => {
+    if (!id) return null
+    const { data } = await supabase.from('torneo_equipos').select('nombre').eq('id', id).maybeSingle()
+    return data?.nombre || null
+  }
+
+  if (campeonId) {
+    const nombre = await nombreEquipo(campeonId)
+    try { await supabase.from('torneos').update({ estado: 'finalizado', fase: 'Campeón' }).eq('id', torneoId) } catch (e) {}
+    return { campeonId, campeonNombre: nombre, generada: false, error: null }
+  }
+
+  if (!fixtures.length) return { error: 'No se pudo calcular la siguiente ronda.' }
+
+  const filas = fixtures.map((f) => ({
+    torneo_id: torneoId,
+    jornada: f.jornada,
+    llave_pos: f.llave_pos,
     fecha: null,
     estado: 'proximo',
     equipo_a: f.equipoA_id,
@@ -257,6 +313,10 @@ export async function generarCalendario(torneoId, equipos = [], formato = 'liga'
     parciales_a: [],
     parciales_b: [],
   }))
-  const { data, error } = await supabase.from('torneo_juegos').insert(filas).select()
-  return { fixtures: data || [], error: error?.message || null }
+  const { error: errIns } = await supabase.from('torneo_juegos').insert(filas)
+  if (errIns) return { error: errIns.message }
+
+  const nuevaRonda = nombreRonda(fixtures.length * 2)
+  try { await supabase.from('torneos').update({ fase: nuevaRonda }).eq('id', torneoId) } catch (e) {}
+  return { generada: true, ronda: nuevaRonda, error: null }
 }

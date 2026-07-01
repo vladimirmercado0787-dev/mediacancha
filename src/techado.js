@@ -8,7 +8,7 @@ import { supabase } from './supabaseClient'
 
 // Publica un texto normal en el Techado (publicación de la persona, no expira)
 // Acepta una plantilla de fondo opcional (publicaciones tipo Facebook con imagen).
-export async function publicarTexto({ texto, imagenUrl = null, imagenes = null, fondo = null }) {
+export async function publicarTexto({ texto, imagenUrl = null, imagenes = null, fondo = null, video = null }) {
   const { data: userData } = await supabase.auth.getUser()
   const user = userData?.user
   if (!user) return { error: 'Debes iniciar sesión para publicar.' }
@@ -18,7 +18,7 @@ export async function publicarTexto({ texto, imagenUrl = null, imagenes = null, 
   let lista = Array.isArray(imagenes) ? imagenes.filter(Boolean) : []
   if (!lista.length && imagenUrl) lista = [imagenUrl]
 
-  if (!limpio && !lista.length) return { error: 'Escribe algo o agrega una foto.' }
+  if (!limpio && !lista.length && !video) return { error: 'Escribe algo o agrega una foto o un video.' }
 
   const { data, error } = await supabase.from('publicaciones').insert({
     autor_id: user.id,
@@ -31,6 +31,7 @@ export async function publicarTexto({ texto, imagenUrl = null, imagenes = null, 
       plantilla: 'estilo_tema',
       imagen: lista[0] || null,       // compatibilidad con lo viejo (1 foto)
       imagenes: lista.length ? lista : null,  // lista completa (varias fotos)
+      video: video || null,           // video de la publicación (Techado)
       fondo: fondo || null,
     },
     expira_en: null,

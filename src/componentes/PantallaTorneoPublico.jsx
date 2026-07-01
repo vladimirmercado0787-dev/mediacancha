@@ -1,7 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../supabaseClient'
 import { cargarTorneoPublico } from '../torneoData'
-import { sigoTorneo, contarSeguidoresTorneo, alternarSeguirTorneo } from '../torneos'
+import { cacheGet, cacheSet } from '../cache'
+import { sigoTorneo, contarSeguidoresTorneo, alternarSeguirTorneo, leerAlbumTorneo, agregarItemAlbum, eliminarItemAlbum } from '../torneos'
+import { subirFoto } from '../fotos'
+import { subirVideoAlbum } from '../historias'
 
 // ============================================================================
 //  PANTALLA PÚBLICA DEL TORNEO (vista de fanáticos) — Media Cancha · T-012
@@ -29,7 +32,7 @@ const COLOR_MOMENTO = { remontada: '#ef7a3a', racha: '#e8b65a', explosion: '#d45
 const ETIQUETA_MOMENTO = { remontada: 'Remontada', racha: 'Racha', explosion: 'Explosión' }
 const EMO_LIDER = { puntos: ['🏀', '#f5b82e'], rebotes: ['💪', '#2dd496'], asistencias: ['🤝', '#5b8def'], robos: ['✋', '#d4537e'], tapones: ['🚫', '#ef9f27'], triples: ['🎯', '#9b6ff0'], perdidas: ['🔁', '#c77d5a'], pct_tc: ['📈', '#2dd496'], pct_tp: ['🏹', '#9b6ff0'], pct_tl: ['💯', '#f5b82e'], eficiencia: ['⚡', '#f0c040'] }
 
-export default function PantallaTorneoPublico({ torneoId = null, onVolver, onVerPerfil, onAnotar }) {
+export default function PantallaTorneoPublico({ torneoId = null, onVolver, onVerPerfil, onAnotar, onGestionar }) {
   const [datos, setDatos] = useState(null)
   const [torneoRow, setTorneoRow] = useState(null)
   const [jugCount, setJugCount] = useState(0)
@@ -44,6 +47,13 @@ export default function PantallaTorneoPublico({ torneoId = null, onVolver, onVer
   const [procesandoSeguir, setProcesandoSeguir] = useState(false)
   const refMomentos = useRef(null)
   const [miId, setMiId] = useState(null)
+  const esDueno = !!(miId && torneoRow && torneoRow.creador_id === miId)
+  const [albumItems, setAlbumItems] = useState([])
+  const [cargandoAlbum, setCargandoAlbum] = useState(false)
+  const [subiendoAlbum, setSubiendoAlbum] = useState(false)
+  const [albumVer, setAlbumVer] = useState(null)
+  const refFotoAlbum = useRef(null)
+  const refVideoAlbum = useRef(null)
 
   const esAncho = ancho >= 820
   const esEscritorio = ancho >= 1180
@@ -66,6 +76,32 @@ export default function PantallaTorneoPublico({ torneoId = null, onVolver, onVer
   }, [])
 
   useEffect(() => { supabase.auth.getUser().then(({ data }) => setMiId(data?.user?.id || null)) }, [])
+
+  // ---- Álbum del torneo: cargar, subir foto/video, borrar ----
+  const cargarAlbum = () => {
+    if (!torneoId) return
+    setCargandoAlbum(true)
+    leerAlbumTorneo(torneoId)
+      .then(({ items }) => setAlbumItems(items || []))
+      .catch(() => {})
+      .finally(() => setCargandoAlbum(false))
+  }
+  useEffect(() => { cargarAlbum() }, [torneoId])
+
+  const subirAlAlbum = async (archivo, tipo) => {
+    if (!archivo || !torneoId) return
+    setSubiendoAlbum(true)
+    const res = tipo === 'video' ? await subirVideoAlbum(archivo) : await subirFoto(archivo, 'albumes')
+    if (res?.error || !res?.url) { setSubiendoAlbum(false); return }
+    await agregarItemAlbum(torneoId, miId, { tipo, url: res.url, ruta: res.ruta })
+    setSubiendoAlbum(false)
+    cargarAlbum()
+  }
+
+  const borrarItemAlbum = async (it) => {
+    const { error } = await eliminarItemAlbum(it.id)
+    if (!error) setAlbumItems((prev) => prev.filter((x) => x.id !== it.id))
+  }
 
   // Seguir / dejar de seguir el torneo (se guarda de verdad)
   const onSeguir = async () => {
@@ -99,6 +135,21 @@ export default function PantallaTorneoPublico({ torneoId = null, onVolver, onVer
 
   useEffect(() => {
     let vivo = true
+    // Cada torneo tiene su propia "gaveta" en la memoria (por su id).
+    const clave = 'torneo_' + (torneoId || 'ultimo')
+
+    // PASO 2: mostrar al instante lo último guardado de ESTE torneo (sin pantalla
+    // de carga). Si no hay nada guardado todavía, ahí sí mostramos "cargando".
+    const guardado = cacheGet(clave)
+    if (guardado) {
+      if (guardado.torneoRow) setTorneoRow(guardado.torneoRow)
+      if (guardado.datos) setDatos(guardado.datos)
+      if (typeof guardado.jugCount === 'number') setJugCount(guardado.jugCount)
+      setCargando(false)
+    } else {
+      setCargando(true)
+    }
+
     const cargar = async (primera) => {
       try {
         let t = null
@@ -120,6 +171,8 @@ export default function PantallaTorneoPublico({ torneoId = null, onVolver, onVer
         const { count } = await supabase.from('torneo_jugadores').select('id', { count: 'exact', head: true }).eq('torneo_id', t.id)
         if (!vivo) return
         setDatos(pub); setJugCount(count || 0); if (primera) setCargando(false)
+        // PASO 3: guardar lo nuevo para que la próxima vez aparezca al instante.
+        cacheSet(clave, { torneoRow: t, datos: pub, jugCount: count || 0 })
       } catch (e) { if (vivo && primera) setCargando(false) }
     }
     cargar(true)
@@ -551,18 +604,87 @@ export default function PantallaTorneoPublico({ torneoId = null, onVolver, onVer
       )
     }
 
-    if (pestana === 'votos' || pestana === 'albumes') {
-      const esVotos = pestana === 'votos'
+    if (pestana === 'votos') {
       return (
         <div style={{ ...tarjeta, padding: '34px 20px', textAlign: 'center', marginTop: 10, background: `linear-gradient(160deg, ${C.card}, ${C.card2})` }}>
-          <div style={{ fontSize: 44, marginBottom: 12 }}>{esVotos ? '🗳️' : '📸'}</div>
-          <div style={{ fontFamily: fCond, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, color: C.txt, fontSize: 18, marginBottom: 8 }}>{esVotos ? 'Votaciones' : 'Álbumes de fotos'}</div>
+          <div style={{ fontSize: 44, marginBottom: 12 }}>🗳️</div>
+          <div style={{ fontFamily: fCond, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, color: C.txt, fontSize: 18, marginBottom: 8 }}>Votaciones</div>
           <div style={{ color: C.tenue, fontSize: 13, lineHeight: 1.5, maxWidth: 340, margin: '0 auto' }}>
-            {esVotos
-              ? 'Pronto los fanáticos podrán votar por el MVP, el mejor juego de la jornada y más. Estamos construyéndolo.'
-              : 'Pronto cada equipo y cada jornada tendrá su álbum de fotos. Estamos construyéndolo.'}
+            Pronto los fanáticos podrán votar por el MVP, el mejor juego de la jornada y más. Estamos construyéndolo.
           </div>
           <div style={{ display: 'inline-block', marginTop: 16, padding: '6px 14px', borderRadius: 20, background: C.oroSuave, border: `1px solid ${C.borde}`, color: C.oro, fontSize: 12, fontWeight: 700 }}>Próximamente</div>
+        </div>
+      )
+    }
+
+    if (pestana === 'albumes') {
+      return (
+        <div style={{ marginTop: 10 }}>
+          <div style={{ color: C.tenue, fontSize: 12.5, lineHeight: 1.5, marginBottom: 14 }}>
+            Fotos y videos del torneo. 📸🎥
+          </div>
+
+          {esDueno ? (
+            <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+              <button onClick={() => refFotoAlbum.current && refFotoAlbum.current.click()} disabled={subiendoAlbum}
+                style={{ flex: 1, padding: '12px 0', borderRadius: 12, border: `1px solid ${C.borde}`, background: C.card2, color: C.txt, fontWeight: 700, fontSize: 13.5, cursor: subiendoAlbum ? 'default' : 'pointer', opacity: subiendoAlbum ? 0.6 : 1 }}>📷 Subir foto</button>
+              <button onClick={() => refVideoAlbum.current && refVideoAlbum.current.click()} disabled={subiendoAlbum}
+                style={{ flex: 1, padding: '12px 0', borderRadius: 12, border: `1px solid ${C.borde}`, background: C.card2, color: C.txt, fontWeight: 700, fontSize: 13.5, cursor: subiendoAlbum ? 'default' : 'pointer', opacity: subiendoAlbum ? 0.6 : 1 }}>🎥 Subir video</button>
+              <input ref={refFotoAlbum} type="file" accept="image/*" style={{ display: 'none' }}
+                onChange={(e) => { const f = e.target.files && e.target.files[0]; if (f) subirAlAlbum(f, 'foto'); e.target.value = '' }} />
+              <input ref={refVideoAlbum} type="file" accept="video/*" style={{ display: 'none' }}
+                onChange={(e) => { const f = e.target.files && e.target.files[0]; if (f) subirAlAlbum(f, 'video'); e.target.value = '' }} />
+            </div>
+          ) : null}
+
+          {subiendoAlbum && (
+            <div style={{ color: C.oro, fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Subiendo… con los videos puede tardar un poco.</div>
+          )}
+
+          {cargandoAlbum ? (
+            <div style={{ color: C.tenue, fontSize: 13, padding: 10 }}>Cargando álbum…</div>
+          ) : albumItems.length === 0 ? (
+            <div style={{ ...tarjeta, padding: '30px 20px', textAlign: 'center' }}>
+              <div style={{ fontSize: 40, marginBottom: 8 }}>📸</div>
+              <div style={{ color: C.txt, fontWeight: 700, marginBottom: 4 }}>El álbum está vacío</div>
+              <div style={{ color: C.tenue, fontSize: 13 }}>{esDueno ? 'Sube las primeras fotos y videos del torneo.' : 'El organizador aún no ha subido fotos.'}</div>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
+              {albumItems.map((it) => (
+                <div key={it.id} onClick={() => setAlbumVer(it)}
+                  style={{ position: 'relative', paddingTop: '100%', borderRadius: 10, overflow: 'hidden', background: '#000', cursor: 'pointer' }}>
+                  {it.tipo === 'video' ? (
+                    <>
+                      <video src={it.url} muted playsInline preload="metadata" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+                      <span style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', fontSize: 30, color: '#fff', textShadow: '0 2px 8px rgba(0,0,0,.7)' }}>▶</span>
+                    </>
+                  ) : (
+                    <div style={{ position: 'absolute', inset: 0, backgroundImage: `url(${it.url})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
+                  )}
+                  {it.autor_id === miId && (
+                    <span onClick={(e) => { e.stopPropagation(); borrarItemAlbum(it) }}
+                      style={{ position: 'absolute', top: 5, right: 5, width: 24, height: 24, borderRadius: '50%', background: 'rgba(0,0,0,.6)', color: '#fff', display: 'grid', placeItems: 'center', fontSize: 13, cursor: 'pointer' }}>✕</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {albumVer && (
+            <div onClick={() => setAlbumVer(null)}
+              style={{ position: 'fixed', inset: 0, zIndex: 900, background: 'rgba(0,0,0,.95)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+              <button onClick={() => setAlbumVer(null)}
+                style={{ position: 'absolute', top: 16, right: 16, width: 40, height: 40, borderRadius: '50%', border: 'none', background: 'rgba(255,255,255,.15)', color: '#fff', fontSize: 22, cursor: 'pointer' }}>×</button>
+              {albumVer.tipo === 'video' ? (
+                <video src={albumVer.url} controls autoPlay playsInline onClick={(e) => e.stopPropagation()}
+                  style={{ maxWidth: '100%', maxHeight: '90vh', borderRadius: 8 }} />
+              ) : (
+                <img src={albumVer.url} alt="" onClick={(e) => e.stopPropagation()}
+                  style={{ maxWidth: '100%', maxHeight: '90vh', borderRadius: 8, objectFit: 'contain' }} />
+              )}
+            </div>
+          )}
         </div>
       )
     }
@@ -807,8 +929,8 @@ export default function PantallaTorneoPublico({ torneoId = null, onVolver, onVer
     { id: 'juegos', t: 'Juegos' },
     { id: 'lideres', t: 'Líderes' },
     { id: 'equipos', t: 'Equipos' },
-    { id: 'votos', t: 'Votos' },
     { id: 'albumes', t: 'Álbumes' },
+    // { id: 'votos', t: 'Votos' },  -> llega con el bloque "Votaciones"
   ]
 
   const nombre = torneoRow?.nombre || 'Torneo'
@@ -829,7 +951,9 @@ export default function PantallaTorneoPublico({ torneoId = null, onVolver, onVer
         <div style={{ maxWidth: maxAncho, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px' }}>
           <button onClick={onVolver} style={{ display: 'flex', alignItems: 'center', gap: 6, border: 'none', background: 'transparent', color: C.tenue, fontSize: 14, fontWeight: 600, cursor: 'pointer', minWidth: 70 }}>‹ Volver</button>
           <span style={{ fontFamily: fCond, fontWeight: 700, fontSize: 12, letterSpacing: 2, textTransform: 'uppercase', color: C.oro }}>Media Cancha</span>
-          <span style={{ minWidth: 70 }} />
+          {esDueno
+            ? <button onClick={() => onGestionar && onGestionar(torneoRow?.id)} style={{ minWidth: 70, border: 'none', borderRadius: 9, padding: '6px 12px', background: C.oro, color: '#1a1205', fontSize: 12.5, fontWeight: 800, cursor: 'pointer' }}>Gestionar</button>
+            : <span style={{ minWidth: 70 }} />}
         </div>
       </div>
 
