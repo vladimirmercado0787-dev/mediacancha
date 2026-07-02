@@ -10,6 +10,7 @@
 // En web (la compu) se usa el fetch normal de siempre.
 
 import { Capacitor, CapacitorHttp } from '@capacitor/core'
+import { supabase } from '../supabaseClient'
 
 const BASE = 'https://site.api.espn.com/apis/site/v2/sports/basketball/nba'
 
@@ -384,7 +385,18 @@ export async function getNoticias(limite = 24) {
   const RSS = 'https://www.nbamaniacs.com/feed/'
   const patro = /patrocinad|colaboraci[oó]n|sponsored|in collaboration|publicidad/i
 
-  // TELÉFONO: pide el RSS directo por HTTP nativo (sin CORS, sin proxy flojo).
+  // 1) EL ROBOT (Edge Function en nuestra nube): la vía oficial.
+  //    Busca el RSS desde el servidor, con caché de 10 minutos y memoria
+  //    de la última copia buena. Sin CORS y sin proxies ajenos.
+  try {
+    const { data, error } = await supabase.functions.invoke('robot-noticias')
+    if (!error && data && data.xml) {
+      const out = parseRssNoticias(data.xml, limite, patro)
+      if (out.length) return out
+    }
+  } catch (e) { /* si el robot no responde, caen los respaldos de abajo */ }
+
+  // 2) RESPALDO EN TELÉFONO: pide el RSS directo por HTTP nativo.
   if (Capacitor.isNativePlatform()) {
     try {
       const resp = await CapacitorHttp.get({
@@ -404,7 +416,7 @@ export async function getNoticias(limite = 24) {
     } catch (e) { /* si el directo falla, cae a los convertidores de abajo */ }
   }
 
-  // WEB (o respaldo): el navegador no deja leer el RSS directo; pasa por proxy.
+  // 3) ÚLTIMO RESPALDO (web): proxies públicos. Solo si todo lo demás falló.
   const proxies = [
     (u) => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
     (u) => 'https://corsproxy.io/?url=' + encodeURIComponent(u),
