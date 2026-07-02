@@ -56,11 +56,11 @@ export default function CrearEncuesta({ onCerrar, onCrear }) {
   return (
     <div
       onClick={onCerrar}
-      style={{ position: 'fixed', inset: 0, zIndex: 9000, background: C.velo, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, backdropFilter: 'blur(3px)', WebkitBackdropFilter: 'blur(3px)' }}
+      style={{ position: 'fixed', inset: 0, zIndex: 9000, background: C.velo, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 'calc(env(safe-area-inset-top) + 18px) 20px 20px', overflowY: 'auto', backdropFilter: 'blur(3px)', WebkitBackdropFilter: 'blur(3px)' }}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        style={{ width: '100%', maxWidth: 380, maxHeight: '82vh', overflowY: 'auto', background: C.panel, border: `1.5px solid ${C.borde}`, borderRadius: 18, padding: '20px 18px 16px', boxShadow: '0 18px 50px rgba(0,0,0,.45)' }}
+        style={{ width: '100%', maxWidth: 380,  background: C.panel, border: `1.5px solid ${C.borde}`, borderRadius: 18, padding: '20px 18px 16px', boxShadow: '0 18px 50px rgba(0,0,0,.45)' }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
           <span style={{ fontSize: 10, fontWeight: 900, letterSpacing: 0.8, color: C.acentoTexto, background: C.acento, borderRadius: 6, padding: '3px 8px' }}>📊 NUEVA ENCUESTA</span>
