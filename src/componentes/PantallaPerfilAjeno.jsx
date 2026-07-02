@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { aviso } from './Avisos'
 import { supabase } from '../supabaseClient'
 import { cacheGet, cacheSet } from '../cache'
 import SeccionPromedios from './SeccionPromedios'
@@ -94,7 +95,7 @@ export default function PantallaPerfilAjeno({ usuarioId, onVolver, onMensaje }) 
   const onSeguir = async () => {
     setProcesando(true)
     const r = await alternarSeguir(usuarioId)
-    if (r.error) alert(r.error)
+    if (r.error) aviso(r.error)
     else setStats((s) => ({ ...s, sigo: r.siguiendo, seguidores: s.seguidores + (r.siguiendo ? 1 : -1) }))
     setProcesando(false)
   }

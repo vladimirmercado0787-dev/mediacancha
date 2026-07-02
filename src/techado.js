@@ -42,6 +42,24 @@ export async function publicarTexto({ texto, imagenUrl = null, imagenes = null, 
 }
 
 // Publica un juego rápido en el Techado (expira a las 24h)
+// Publica una ENCUESTA en el Techado. La encuesta ya debe existir (crearEncuesta).
+export async function publicarEncuesta({ encuestaId, pregunta, opciones }) {
+  const { data: userData } = await supabase.auth.getUser()
+  const user = userData?.user
+  if (!user) return { error: 'Debes iniciar sesión para publicar.' }
+  if (!encuestaId || !pregunta) return { error: 'Falta la encuesta.' }
+  const { data, error } = await supabase.from('publicaciones').insert({
+    autor_id: user.id,
+    tipo: 'encuesta',
+    tag: null, tag_color: null, titulo: null,
+    texto: '\ud83d\udcca ' + pregunta,
+    datos: { encuesta_id: encuestaId, pregunta, opciones },
+    expira_en: null,
+  }).select().single()
+  if (error) return { error: error.message }
+  return { ok: true, publicacion: data }
+}
+
 export async function publicarJuego(resultado) {
   const { data: userData } = await supabase.auth.getUser()
   const user = userData?.user

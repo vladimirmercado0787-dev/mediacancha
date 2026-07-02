@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { aviso } from './Avisos'
 import { supabase } from '../supabaseClient'
 import { subirFotoPerfil } from '../fotos'
 import { statsSociales, contarJuegosJugador } from '../social'
@@ -150,7 +151,7 @@ export default function PantallaPerfil({ onSalir, onVolver, onAccion, onSiguiend
       const blob = await resp.blob()
       setFotoARecortar(blob)
     } catch (e) {
-      alert('No se pudo cargar la foto para editar.')
+      aviso('No se pudo cargar la foto para editar.')
     }
   }
 
@@ -160,19 +161,19 @@ export default function PantallaPerfil({ onSalir, onVolver, onAccion, onSiguiend
     try {
       const { url, error: errFoto } = await subirFotoPerfil(blob)
       if (errFoto || !url) {
-        alert('No se pudo subir la foto: ' + (errFoto || 'intenta de nuevo'))
+        aviso('No se pudo subir la foto: ' + (errFoto || 'intenta de nuevo'))
       } else {
         const { data: sesion } = await supabase.auth.getUser()
         const uid = sesion?.user?.id
         const { error: errGuardar } = await supabase.from('perfiles').update({ foto_url: url }).eq('id', uid)
         if (errGuardar) {
-          alert('La foto subió pero no se pudo guardar: ' + errGuardar.message)
+          aviso('La foto subió pero no se pudo guardar: ' + errGuardar.message)
         } else {
           setPerfil((p) => ({ ...p, foto_url: url }))
         }
       }
     } catch (err) {
-      alert('Error: ' + (err.message || err))
+      aviso('Error: ' + (err.message || err))
     }
     setSubiendoFoto(false)
   }

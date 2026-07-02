@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { aviso } from './Avisos'
 
 // ============================================================================
 //  RECORTADOR DE FOTOS — Media Cancha (componente central reutilizable)
@@ -154,7 +155,7 @@ export default function RecortadorFoto({ archivo, forma = 'cuadrado', elegirForm
       }, 'image/jpeg', 0.92)
     } catch (e) {
       setProcesando(false)
-      alert('No se pudo recortar: ' + (e.message || e))
+      aviso('No se pudo recortar: ' + (e.message || e))
     }
   }
 

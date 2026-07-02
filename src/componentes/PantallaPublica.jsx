@@ -1,4 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useRef, Component } from 'react'
+import { aviso, confirmar } from './Avisos'
 import { Capacitor } from '@capacitor/core'
 import { getNoticias as getNoticiasNBA } from './nbaApi'
 import { createPortal } from 'react-dom'
@@ -56,6 +57,7 @@ import { leerHistorialDia, haceCuanto as haceCuantoLocal, publicarEnTechado, qui
 import { leerTechado, misReacciones, reaccionar, leerComentarios, comentar, borrarComentario, haceCuanto, borrarPublicacion, miUsuarioId, miPerfilCompleto } from '../techado'
 import { plantillaPorId, PLANTILLA_DEFAULT, PLANTILLAS, puedeUsar } from '../plantillas'
 import TarjetaResultado from './TarjetaResultado'
+import TarjetaEncuesta from './TarjetaEncuesta'
 import RecortadorFoto from './RecortadorFoto'
 import CompartirAlChat from './CompartirAlChat'
 import { supabase } from '../supabaseClient'
@@ -758,9 +760,9 @@ export default function PantallaPublica({ onAccion, haySesion }) {
   }, [pubAbierta, verHistorialDia, juegoAPublicar])
 
   const onBorrarPublicacion = async (pubId) => {
-    if (!window.confirm('¿Eliminar esta publicación del Techado?')) return
+    if (!(await confirmar('¿Eliminar esta publicación del Techado?'))) return
     const res = await borrarPublicacion(pubId)
-    if (res.error) alert(res.error)
+    if (res.error) aviso(res.error)
     else recargarTechado()
   }
 
@@ -796,7 +798,7 @@ export default function PantallaPublica({ onAccion, haySesion }) {
     if (res.error) {
       quitarDelTechado(juego.id)
       setJuegosDia(leerHistorialDia())
-      alert(res.error)
+      aviso(res.error)
     } else {
       await recargarTechado()
     }
@@ -826,7 +828,7 @@ export default function PantallaPublica({ onAccion, haySesion }) {
 
       const res = await publicarTexto({ texto: txt, imagenes: urls.length ? urls : null, fondo: urls.length ? null : fondoElegido })
       if (res.error) {
-        alert('No se pudo publicar: ' + res.error)
+        aviso('No se pudo publicar: ' + res.error)
       } else {
         setTextoComposer('')
         setFondoComposer(0)
@@ -837,7 +839,7 @@ export default function PantallaPublica({ onAccion, haySesion }) {
         await recargarTechado()
       }
     } catch (e) {
-      alert('Error al publicar: ' + (e.message || e))
+      aviso('Error al publicar: ' + (e.message || e))
     }
     setPublicandoTexto(false)
   }
@@ -1250,6 +1252,32 @@ export default function PantallaPublica({ onAccion, haySesion }) {
                 temaForzado={tema}
                 pie={barraReacciones}
               />
+            </div>
+          )
+        }
+        // ¿Es una ENCUESTA? → tarjeta de votación con barras en vivo
+        if (p.tipo === 'encuesta' && datos.encuesta_id) {
+          const esMio = miId && p.autor_id === miId
+          return (
+            <div key={p.id} style={{ marginBottom: 12 }}>
+              <div style={{ borderRadius: 16, overflow: 'hidden', background: T.esClaro ? '#ffffff' : 'rgba(20,22,26,.96)', border: `1.5px solid ${T.acento}55` }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px 6px' }}>
+                  <div onClick={() => onAccion && onAccion('verPerfil:' + p.autor_id)} style={{ width: 34, height: 34, borderRadius: '50%', cursor: 'pointer', flexShrink: 0, background: p.autor_foto ? `url(${p.autor_foto}) center/cover` : avatarColor(p.autor_nombre || p.autor_id || 'x'), display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: 13, color: '#1a1205' }}>{!p.autor_foto && (p.autor_nombre || 'U').slice(0, 1).toUpperCase()}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 800, fontSize: 13.5, color: T.esClaro ? '#16181c' : '#f4f7f9' }}>{`${p.autor_nombre || 'Usuario'}${p.autor_apellido ? ' ' + p.autor_apellido : ''}`}</div>
+                    <div style={{ fontSize: 11, color: T.esClaro ? '#949aa3' : '#7f8893' }}>{haceCuanto(p.creado_en)} · 📊 Encuesta</div>
+                  </div>
+                  {esMio && <button onClick={() => onBorrarPublicacion(p.id)} title="Eliminar" style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 15 }}>🗑️</button>}
+                </div>
+                <div style={{ padding: '4px 12px 12px' }}>
+                  <TarjetaEncuesta encuestaId={datos.encuesta_id} pregunta={datos.pregunta} opciones={datos.opciones} temaForzado={tema} />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '6px 8px', borderTop: `1px solid ${T.esClaro ? '#eceef1' : 'rgba(255,255,255,.07)'}` }}>
+                  <button onClick={() => onReaccionar(p.id, 'like')} style={accionBtn(misReacc[p.id] === 'like' ? T.acento : (T.esClaro ? '#565c66' : '#aeb6c0'))}><span style={{ fontSize: 16 }}>{misReacc[p.id] === 'like' ? '❤️' : '🤍'}</span> {p.likes || 0}</button>
+                  <button onClick={() => onReaccionar(p.id, 'dislike')} style={accionBtn(misReacc[p.id] === 'dislike' ? '#e0563f' : (T.esClaro ? '#565c66' : '#aeb6c0'))}><span style={{ fontSize: 15 }}>👎</span> {p.dislikes || 0}</button>
+                  <button onClick={() => setComentariosDe(p)} style={accionBtn(T.esClaro ? '#565c66' : '#aeb6c0')}><span style={{ fontSize: 15 }}>💬</span> {p.num_comentarios || 0}</button>
+                </div>
+              </div>
             </div>
           )
         }
@@ -2674,7 +2702,7 @@ function ComposerTechado({ T, escritorio, miPerfil, abierto, setAbierto, texto, 
     if (inputFotosRef.current) inputFotosRef.current.value = ''
     if (!archivos.length) return
     const espacio = maxFotos - fotos.length
-    if (espacio <= 0) { alert(`Puedes subir hasta ${maxFotos} fotos por publicación.`); return }
+    if (espacio <= 0) { aviso(`Puedes subir hasta ${maxFotos} fotos por publicación.`); return }
     const aUsar = archivos.slice(0, espacio)
 
     // Si es UNA sola foto en total → pasa por el recortador
@@ -3024,7 +3052,7 @@ function ComposerTechado({ T, escritorio, miPerfil, abierto, setAbierto, texto, 
         {adjuntos.map((a) => (
           <button key={a.id} onClick={
             a.id === 'resultado' && a.activo ? () => { cerrar(); onResultado && onResultado() }
-            : a.id === 'foto' && a.activo ? () => { if (fotos.length >= maxFotos) { alert(`Puedes subir hasta ${maxFotos} fotos por publicación.`) } else { inputFotosRef.current && inputFotosRef.current.click() } }
+            : a.id === 'foto' && a.activo ? () => { if (fotos.length >= maxFotos) { aviso(`Puedes subir hasta ${maxFotos} fotos por publicación.`) } else { inputFotosRef.current && inputFotosRef.current.click() } }
             : avisarPronto
           } style={{
             flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -3114,7 +3142,7 @@ function HojaComentarios({ pub, T, C, haySesion, onCerrar, onPedirLogin, onCambi
       await cargar()
       onCambio && onCambio()
     } else {
-      alert(res.error)
+      aviso(res.error)
     }
     setEnviando(false)
   }
@@ -3390,7 +3418,7 @@ function SelectorPlantilla({ T, C, ORO_TEXTO, esEscritorio, usuarioPago, onCance
 
   const elegir = (p) => {
     if (puedeUsar(p, usuarioPago)) setElegida(p.id)
-    else alert('Esta plantilla es premium. Desbloquéala con cualquier forma de pago para usar todas.')
+    else aviso('Esta plantilla es premium. Desbloquéala con cualquier forma de pago para usar todas.')
   }
 
   const fondoModal = T.esClaro ? 'rgba(30,26,18,0.55)' : 'rgba(4,5,7,0.85)'

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { aviso } from './Avisos'
 import fondoJuego from '../assets/fondo-juego.webp'
 import LogoEquipo from './LogoEquipo'
 import { publicarJuego } from '../techado'
@@ -84,14 +85,14 @@ export default function PantallaJuegoResultado({ resultado, onNuevo, onInicio, o
     setPublicando(true)
     const res = await publicarJuego(resultado)
     if (!res.error) setPublicado(true)
-    else alert(res.error)
+    else aviso(res.error)
     setPublicando(false)
   }
   const compartirPdf = async () => {
     if (pdfCargando) return
     setPdfCargando(true)
     try { await compartirPdfResultado(resultado) }
-    catch (e) { alert('No se pudo generar el PDF. Intenta de nuevo.') }
+    catch (e) { aviso('No se pudo generar el PDF. Intenta de nuevo.') }
     setPdfCargando(false)
   }
 

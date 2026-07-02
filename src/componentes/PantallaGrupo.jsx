@@ -2,6 +2,10 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../supabaseClient'
 import { miUsuarioId } from '../social'
 import { leerMensajesGrupo, enviarMensajeGrupo, leerMiembrosGrupo, salirDeGrupo } from '../grupos'
+import TarjetaEncuesta from './TarjetaEncuesta'
+import CrearEncuesta from './CrearEncuesta'
+import { crearEncuesta } from '../encuestas'
+import { aviso } from './Avisos'
 
 const C = {
   bg: '#0e0f12', card: '#16181d', card2: '#1c1f26',
@@ -21,6 +25,7 @@ function avatarColor(seed) {
 
 export default function PantallaGrupo({ grupoId, grupoNombre, grupoTipo, onVolver, onVerPerfil }) {
   const [yo, setYo] = useState(null)
+  const [crearEncAbierto, setCrearEncAbierto] = useState(false)
   const [mensajes, setMensajes] = useState([])
   const [miembros, setMiembros] = useState([])
   const [cargando, setCargando] = useState(true)
@@ -90,6 +95,9 @@ export default function PantallaGrupo({ grupoId, grupoNombre, grupoTipo, onVolve
         ) : (
           mensajes.map((m, i) => {
             const mio = m.de_id === yo
+            let adjE = m.adjunto_meta
+            if (typeof adjE === 'string') { try { adjE = JSON.parse(adjE) } catch (e) { adjE = null } }
+            const esEncuesta = adjE && adjE.tipo === 'encuesta'
             const prev = mensajes[i - 1]
             const mostrarNombre = !mio && (!prev || prev.de_id !== m.de_id)
             const autor = m.autor || miembroPorId[m.de_id]
@@ -103,10 +111,17 @@ export default function PantallaGrupo({ grupoId, grupoNombre, grupoTipo, onVolve
                   {!mio && (
                     <div onClick={() => onVerPerfil && autor?.id && onVerPerfil(autor.id)} style={{ width: 26, height: 26, borderRadius: '50%', flexShrink: 0, cursor: 'pointer', background: autor?.foto_url ? `url(${autor.foto_url}) center/cover` : avatarColor(m.de_id || ''), display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 800, color: '#1a1205' }}>{!autor?.foto_url && nom.slice(0, 1).toUpperCase()}</div>
                   )}
+                  {esEncuesta ? (
+                    <div style={{ width: '100%', minWidth: 240 }}>
+                      <TarjetaEncuesta encuestaId={adjE.encuesta_id} pregunta={adjE.pregunta} opciones={adjE.opciones} />
+                      <div style={{ fontSize: 9.5, opacity: 0.65, marginTop: 3, textAlign: 'right', color: C.tenue }}>{hora(m.creado_en)}</div>
+                    </div>
+                  ) : (
                   <div style={{ background: mio ? C.oro : C.card, color: mio ? '#1a1205' : C.txt, borderRadius: 16, padding: '9px 13px', fontSize: 14, lineHeight: 1.4, wordBreak: 'break-word' }}>
                     {m.texto}
                     <div style={{ fontSize: 9.5, opacity: 0.65, marginTop: 3, textAlign: 'right' }}>{hora(m.creado_en)}</div>
                   </div>
+                  )}
                 </div>
               </div>
             )
@@ -125,7 +140,22 @@ export default function PantallaGrupo({ grupoId, grupoNombre, grupoTipo, onVolve
           style={{ flex: 1, boxSizing: 'border-box', background: C.card, border: `1px solid ${C.borde}`, borderRadius: 20, padding: '11px 16px', color: C.txt, fontSize: 14.5, outline: 'none' }}
         />
         <button onClick={mandar} disabled={!texto.trim() || enviando} style={{ width: 40, height: 40, borderRadius: '50%', border: 'none', background: texto.trim() ? C.oro : C.card, color: texto.trim() ? '#1a1205' : C.tenue, fontSize: 17, cursor: texto.trim() ? 'pointer' : 'default', flexShrink: 0 }}>➤</button>
+        <button onClick={() => setCrearEncAbierto(true)} title="Encuesta" style={{ width: 40, height: 40, borderRadius: '50%', border: `1px solid ${C.borde}`, background: 'transparent', fontSize: 17, cursor: 'pointer', flexShrink: 0 }}>📊</button>
       </div>
+
+      {crearEncAbierto && (
+        <CrearEncuesta
+          onCerrar={() => setCrearEncAbierto(false)}
+          onCrear={async (pregunta, opciones) => {
+            const r = await crearEncuesta({ pregunta, opciones })
+            if (r.error) { aviso('No se pudo crear la encuesta: ' + r.error); return false }
+            const re = await enviarMensajeGrupo(grupoId, '\ud83d\udcca Encuesta \u00b7 ' + pregunta.slice(0, 60), { tipo: 'resultado', adjunto_meta: { tipo: 'encuesta', encuesta_id: r.encuesta.id, pregunta, opciones } })
+            if (re && re.error) { aviso('No se pudo enviar: ' + re.error); return false }
+            setCrearEncAbierto(false)
+            return true
+          }}
+        />
+      )}
 
       {/* MIEMBROS */}
       {verMiembros && (

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { aviso, confirmar } from './Avisos'
 import { leerJuegosLiga, leerMiembrosLiga, leerCajaLiga, agregarMovimientoLiga, eliminarMovimientoLiga } from '../ligas'
 import { lideresLiga, destacadosLiga } from '../ligaEstadisticas'
 import { tieneGrupoActivo, activarGrupoLiga } from '../grupos'
@@ -179,7 +180,7 @@ export default function PantallaLiga({ liga, onVolver, onAnotar, onInvitar, onAb
     const m = movModal
     if (!m || !esReal) return
     const monto = Number(m.monto) || 0
-    if (monto <= 0) { alert('Escribe un monto válido'); return }
+    if (monto <= 0) { aviso('Escribe un monto válido'); return }
     const concepto = (m.concepto || '').trim() || (m.categoria === 'cuota' ? 'Cuota de miembro' : (m.tipo === 'egreso' ? 'Gasto' : 'Ingreso'))
     const datos = {
       tipo: m.tipo, categoria: m.categoria || null, concepto, monto,
@@ -187,11 +188,11 @@ export default function PantallaLiga({ liga, onVolver, onAnotar, onInvitar, onAb
       miembro_nombre: m.miembro ? `${(m.miembro.perfil && m.miembro.perfil.nombre) || ''} ${(m.miembro.perfil && m.miembro.perfil.apellido) || ''}`.trim() : null,
     }
     const { error } = await agregarMovimientoLiga(liga.id, datos)
-    if (error) { alert('No se pudo guardar: ' + error); return }
+    if (error) { aviso('No se pudo guardar: ' + error); return }
     setMovModal(null); cargarCaja()
   }
   const borrarMovimiento = async (id) => {
-    if (!window.confirm('¿Borrar este movimiento?')) return
+    if (!(await confirmar('¿Borrar este movimiento?'))) return
     const { error } = await eliminarMovimientoLiga(id)
     if (!error) cargarCaja()
   }

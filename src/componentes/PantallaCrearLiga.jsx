@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { aviso } from './Avisos'
 import { crearLiga } from '../ligas'
 import { buscarPersonas } from '../torneos'
 import { subirFoto } from '../fotos'
@@ -173,10 +174,10 @@ export default function PantallaCrearLiga({ onVolver, onCreada }) {
     setSubiendoLogo(true)
     try {
       const { url, error } = await subirFoto(archivo, 'ligas', { maxLado: 800, calidad: 0.9 })
-      if (error || !url) alert('No se pudo subir el logo: ' + (error || 'intenta de nuevo'))
+      if (error || !url) aviso('No se pudo subir el logo: ' + (error || 'intenta de nuevo'))
       else setLogoUrl(url)
     } catch (err) {
-      alert('Error al subir el logo: ' + (err.message || err))
+      aviso('Error al subir el logo: ' + (err.message || err))
     }
     setSubiendoLogo(false)
   }
@@ -206,13 +207,13 @@ export default function PantallaCrearLiga({ onVolver, onCreada }) {
         },
       })
       if (error) {
-        alert('No se pudo crear la liga: ' + error)
+        aviso('No se pudo crear la liga: ' + error)
         setGuardando(false)
         return
       }
       onCreada && onCreada(liga)
     } catch (e) {
-      alert('Error: ' + (e.message || e))
+      aviso('Error: ' + (e.message || e))
       setGuardando(false)
     }
   }

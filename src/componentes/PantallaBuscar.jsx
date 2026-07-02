@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { aviso } from './Avisos'
 import { supabase } from '../supabaseClient'
 import { miUsuarioId, alternarSeguir, idsQueSigo } from '../social'
 import fondoCancha from '../assets/fondo-cancha.webp'
@@ -73,10 +74,10 @@ export default function PantallaBuscar({ onVolver, onVerPerfil }) {
   }
 
   const onSeguir = async (persona) => {
-    if (!yo) { alert('Inicia sesión para seguir'); return }
+    if (!yo) { aviso('Inicia sesión para seguir'); return }
     setProcesando(persona.id)
     const r = await alternarSeguir(persona.id)
-    if (r.error) { alert(r.error) }
+    if (r.error) { aviso(r.error) }
     else {
       setSiguiendoIds((prev) => r.siguiendo ? [...prev, persona.id] : prev.filter((x) => x !== persona.id))
     }

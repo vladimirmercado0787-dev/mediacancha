@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { aviso } from './Avisos'
 import { supabase } from '../supabaseClient'
 import { miUsuarioId } from '../social'
 import { leerConversacion, marcarLeido, listaConversaciones, perfilesDe } from '../mensajes'
@@ -6,6 +7,9 @@ import { misGrupos } from '../grupos'
 import ResultadoEnChat from './ResultadoEnChat'
 import FichaEnChat from './FichaEnChat'
 import NoticiaEnChat from './NoticiaEnChat'
+import TarjetaEncuesta from './TarjetaEncuesta'
+import CrearEncuesta from './CrearEncuesta'
+import { crearEncuesta } from '../encuestas'
 import fondoCancha from '../assets/fondo-cancha.webp'
 import { Capacitor } from '@capacitor/core'
 import { Keyboard, KeyboardResize } from '@capacitor/keyboard'
@@ -57,6 +61,7 @@ function resumenMsg(m) {
     if (typeof d === 'string') { try { d = JSON.parse(d) } catch (e) { d = null } }
     if (d && d.tipo === 'ficha') return `🏀 Ficha · ${d.nombre || 'jugador'}`
     if (d && d.tipo === 'noticia') return `🏀 Noticia · ${(d.titulo || '').slice(0, 40)}`
+    if (d && d.tipo === 'encuesta') return `📊 Encuesta · ${(d.pregunta || '').slice(0, 40)}`
     if (d && d.nombreA && d.nombreB) {
       return `🏀 ${d.nombreA} ${d.totalA != null ? d.totalA : ''}-${d.totalB != null ? d.totalB : ''} ${d.nombreB}`
     }
@@ -161,6 +166,7 @@ export default function PantallaChat({ abrirCon, onVolver, onVerPerfil, onAbrirG
   const [confirmarVaciar, setConfirmarVaciar] = useState(false)
   const [otroEscribiendo, setOtroEscribiendo] = useState(false)
   const [menuCompartir, setMenuCompartir] = useState(false)
+  const [crearEncuestaAbierto, setCrearEncuestaAbierto] = useState(false)
   const [grabando, setGrabando] = useState(false)
   const [segGrab, setSegGrab] = useState(0)
   const [subiendo, setSubiendo] = useState(false)
@@ -394,7 +400,7 @@ export default function PantallaChat({ abrirCon, onVolver, onVerPerfil, onAbrirG
       // Aseguramos tener el id del usuario (puede no haber cargado aún)
       let quien = yo
       if (!quien) { quien = await miUsuarioId(); if (quien) setYo(quien) }
-      if (!quien) { alert('CHIVATO: no hay sesión (yo = null). Cierra y abre sesión de nuevo.'); return null }
+      if (!quien) { aviso('CHIVATO: no hay sesión (yo = null). Cierra y abre sesión de nuevo.'); return null }
 
       const ruta = `${quien}/${Date.now()}.${ext}`
 
@@ -676,7 +682,9 @@ export default function PantallaChat({ abrirCon, onVolver, onVerPerfil, onAbrirG
               <div onClick={() => onVerPerfil && perfilOtro?.id && onVerPerfil(perfilOtro.id)} style={{ width: 28, height: 28, borderRadius: '50%', flexShrink: 0, cursor: 'pointer', background: perfilOtro?.foto_url ? `url(${perfilOtro.foto_url}) center/cover` : T.avatar, display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 800, color: T.avatarTexto, marginBottom: 2 }}>{!perfilOtro?.foto_url && nombreDe(perfilOtro).slice(0, 1).toUpperCase()}</div>
             ) : <div style={{ width: 28, flexShrink: 0 }} />)}
             <div id={`msg-${m.id}`} {...handlersSoloPresion(m)} style={{ maxWidth: '82%', WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none' }}>
-              {datosJuego && datosJuego.tipo === 'ficha'
+              {datosJuego && datosJuego.tipo === 'encuesta'
+                ? <div style={{ minWidth: 240 }}><TarjetaEncuesta encuestaId={datosJuego.encuesta_id} pregunta={datosJuego.pregunta} opciones={datosJuego.opciones} /></div>
+                : datosJuego && datosJuego.tipo === 'ficha'
                 ? <FichaEnChat datos={datosJuego} mio={mio} />
                 : datosJuego && datosJuego.tipo === 'noticia'
                   ? <NoticiaEnChat datos={datosJuego} mio={mio} />
@@ -969,6 +977,18 @@ export default function PantallaChat({ abrirCon, onVolver, onVerPerfil, onAbrirG
         )}
 
         {/* menú de compartir (+) */}
+        {crearEncuestaAbierto && (
+          <CrearEncuesta
+            onCerrar={() => setCrearEncuestaAbierto(false)}
+            onCrear={async (pregunta, opciones) => {
+              const r = await crearEncuesta({ pregunta, opciones })
+              if (r.error) { aviso('No se pudo crear la encuesta: ' + r.error); return false }
+              await mandar({ tipo: 'resultado', cuerpo: '\ud83d\udcca Encuesta \u00b7 ' + pregunta.slice(0, 60), adjunto_meta: { tipo: 'encuesta', encuesta_id: r.encuesta.id, pregunta, opciones } })
+              setCrearEncuestaAbierto(false)
+              return true
+            }}
+          />
+        )}
         {menuCompartir && (
           <div onClick={() => setMenuCompartir(false)} style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(4,5,7,.55)', display: 'flex', alignItems: 'flex-end' }}>
             <div onClick={(e) => e.stopPropagation()} style={{ animation: 'mcSheetUp .25s ease both', width: '100%', background: T.sheetBg, borderRadius: '22px 22px 0 0', padding: '12px 18px calc(24px + env(safe-area-inset-bottom))', boxShadow: '0 -10px 30px rgba(0,0,0,.4)' }}>
@@ -983,7 +1003,7 @@ export default function PantallaChat({ abrirCon, onVolver, onVerPerfil, onAbrirG
                   { ic: '🏀', t: 'Resultado', on: () => avisar('Pronto'), listo: false },
                   { ic: '👤', t: 'Perfil', on: () => avisar('Pronto'), listo: false },
                   { ic: '🏆', t: 'Torneo', on: () => avisar('Pronto'), listo: false },
-                  { ic: '📊', t: 'Encuesta', on: () => avisar('Pronto'), listo: false },
+                  { ic: '📊', t: 'Encuesta', on: () => { setMenuCompartir(false); setCrearEncuestaAbierto(true) }, listo: true },
                 ].map((o) => (
                   <button key={o.t} onClick={o.on} style={{ background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, opacity: o.listo ? 1 : 0.55 }}>
                     <span style={{ width: 56, height: 56, borderRadius: 16, background: o.listo ? T.boton : T.tarjetaBg, border: o.listo ? 'none' : `1px solid ${T.tarjetaBorde}`, display: 'grid', placeItems: 'center', fontSize: 24 }}>{o.ic}</span>

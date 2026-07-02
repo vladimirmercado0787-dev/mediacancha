@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { aviso, confirmar } from './Avisos'
 import { supabase } from '../supabaseClient'
 import { cargarTorneoPublico, generarCalendario, avanzarRondaCopa } from '../torneoData'
 import { invitar, buscarPersonas, agregarJugador, agregarDirectiva, leerDirectiva, cambiarPermiso, registrarBitacora, leerBitacora, leerCaja, agregarMovimiento, eliminarMovimiento, leerArbitros, agregarArbitro, eliminarArbitro, guardarReglasTorneo } from '../torneos'
@@ -757,13 +758,13 @@ export default function PantallaTorneos({ esAdmin = false, torneoId = null, onVo
   const guardarArbitro = async () => {
     const a = arbModal
     if (!a || !torneoRow?.id) return
-    if (!(a.nombre || '').trim()) { alert('Escribe el nombre del árbitro'); return }
+    if (!(a.nombre || '').trim()) { aviso('Escribe el nombre del árbitro'); return }
     const { error } = await agregarArbitro(torneoRow.id, a)
-    if (error) { alert('No se pudo guardar: ' + error); return }
+    if (error) { aviso('No se pudo guardar: ' + error); return }
     setArbModal(null); cargarArbitros()
   }
   const borrarArbitro = async (id) => {
-    if (!window.confirm('¿Quitar a este árbitro?')) return
+    if (!(await confirmar('¿Quitar a este árbitro?'))) return
     const { error } = await eliminarArbitro(id)
     if (!error) cargarArbitros()
   }
@@ -773,7 +774,7 @@ export default function PantallaTorneos({ esAdmin = false, torneoId = null, onVo
     const reglas = { ...(torneoRow.reglas || {}), reglamento: reglamentoEdit || '' }
     const { error } = await guardarReglasTorneo(torneoRow.id, reglas)
     setGuardandoRegl(false)
-    if (error) { alert('No se pudo guardar: ' + error); return }
+    if (error) { aviso('No se pudo guardar: ' + error); return }
     if (torneoRow) torneoRow.reglas = reglas
     setReglamentoEdit(null)
     setRecarga((r) => r + 1)
@@ -1213,7 +1214,7 @@ export default function PantallaTorneos({ esAdmin = false, torneoId = null, onVo
                 <div style={{ color: T.textoFuerte, fontSize: 14.5, fontWeight: 700 }}>{j.nombre}</div>
                 <div style={{ color: T.muyTenue, fontSize: 12 }}>{j.equipo} · {j.val} val</div>
               </div>
-              <button onClick={() => alert('Voto registrado (demo) 🏀')} style={{ border: 'none', borderRadius: 20, padding: '9px 18px', background: T.boton, color: T.botonTexto, fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>Votar</button>
+              <button onClick={() => aviso('Voto registrado (demo) 🏀')} style={{ border: 'none', borderRadius: 20, padding: '9px 18px', background: T.boton, color: T.botonTexto, fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>Votar</button>
             </div>
           ))}
         </>
@@ -1729,7 +1730,7 @@ export default function PantallaTorneos({ esAdmin = false, torneoId = null, onVo
                   <div style={{ color: T.textoFuerte, fontSize: 13.5, fontWeight: 800, marginBottom: 4 }}>Regenerar calendario</div>
                   <div style={{ color: T.muyTenue, fontSize: 11.5, lineHeight: 1.5, marginBottom: 12 }}>Borra los partidos que aún no se han jugado y crea unos nuevos. Los partidos ya jugados no se tocan.</div>
                   {selectorVueltas}
-                  <button onClick={() => { if (window.confirm('¿Regenerar el calendario? Se borran los partidos no jugados y se crean nuevos con la configuración elegida.')) alGenerar(true) }} disabled={generando} style={{ width: '100%', border: `1.5px solid ${T.borde}`, borderRadius: 12, padding: 12, background: 'transparent', color: T.acento, fontSize: 13.5, fontWeight: 800, cursor: generando ? 'default' : 'pointer', opacity: generando ? 0.6 : 1 }}>
+                  <button onClick={async () => { if (await confirmar('¿Regenerar el calendario? Se borran los partidos no jugados y se crean nuevos con la configuración elegida.')) alGenerar(true) }} disabled={generando} style={{ width: '100%', border: `1.5px solid ${T.borde}`, borderRadius: 12, padding: 12, background: 'transparent', color: T.acento, fontSize: 13.5, fontWeight: 800, cursor: generando ? 'default' : 'pointer', opacity: generando ? 0.6 : 1 }}>
                     {generando ? 'Regenerando…' : '🔄 Regenerar calendario'}
                   </button>
                   {errorGen && <div style={{ color: '#f09595', fontSize: 12.5, marginTop: 10 }}>{errorGen}</div>}

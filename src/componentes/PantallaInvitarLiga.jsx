@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { aviso, confirmar } from './Avisos'
 import { buscarPersonas } from '../torneos'
 import { leerMiembrosLiga, quitarMiembroLiga, invitarMiembroLiga, leerInvitacionesLiga, confirmarMiembroLigaConCodigo } from '../ligas'
 
@@ -72,7 +73,7 @@ export default function PantallaInvitarLiga({ liga, onVolver }) {
     if (!ligaId || yaEsMiembro(p.id) || yaInvitado(p.id)) return
     setAgregando(p.id)
     const { error } = await invitarMiembroLiga(ligaId, p.id, 'miembro')
-    if (error) alert('No se pudo invitar: ' + error)
+    if (error) aviso('No se pudo invitar: ' + error)
     else { setBuscar(''); setResultados([]); cargarPendientes() }
     setAgregando(null)
   }
@@ -91,15 +92,15 @@ export default function PantallaInvitarLiga({ liga, onVolver }) {
     cerrarConfirmar()
     setBuscar(''); setResultados([])
     cargarMiembros(); cargarPendientes()
-    alert('✓ ' + (nom || 'Miembro') + ' confirmado')
+    aviso('✓ ' + (nom || 'Miembro') + ' confirmado')
   }
 
   const quitar = async (m) => {
     if (!ligaId) return
-    if (m.rol === 'admin') { alert('El dueño de la liga no se puede quitar.'); return }
-    if (!confirm(`¿Quitar a ${nombreCompleto(m.perfil)} de la liga?`)) return
+    if (m.rol === 'admin') { aviso('El dueño de la liga no se puede quitar.'); return }
+    if (!(await confirmar(`¿Quitar a ${nombreCompleto(m.perfil)} de la liga?`))) return
     const { error } = await quitarMiembroLiga(ligaId, m.perfil_id)
-    if (error) alert('No se pudo quitar: ' + error)
+    if (error) aviso('No se pudo quitar: ' + error)
     else cargarMiembros()
   }
 
@@ -111,7 +112,7 @@ export default function PantallaInvitarLiga({ liga, onVolver }) {
     } catch (e) { /* el usuario canceló o no se pudo */ }
     try {
       await navigator.clipboard.writeText(texto)
-      alert('Invitación copiada. Pégala en WhatsApp o donde quieras.')
+      aviso('Invitación copiada. Pégala en WhatsApp o donde quieras.')
     } catch (e) {
       window.open('https://wa.me/?text=' + encodeURIComponent(texto), '_blank')
     }

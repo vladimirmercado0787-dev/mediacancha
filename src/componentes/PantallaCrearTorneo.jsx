@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { aviso } from './Avisos'
 import { Capacitor } from '@capacitor/core'
 import { Keyboard, KeyboardResize } from '@capacitor/keyboard'
 import { crearTorneo, crearEquipo, agregarJugador, buscarPersonas } from '../torneos'
@@ -233,10 +234,10 @@ export default function PantallaCrearTorneo({ onVolver, onCreado }) {
     setSubiendoLogo(true)
     try {
       const { url, error } = await subirFotoTorneo(blob)
-      if (error || !url) alert('No se pudo subir el logo: ' + (error || 'intenta de nuevo'))
+      if (error || !url) aviso('No se pudo subir el logo: ' + (error || 'intenta de nuevo'))
       else setLogoUrl(url)
     } catch (err) {
-      alert('Error: ' + (err.message || err))
+      aviso('Error: ' + (err.message || err))
     }
     setSubiendoLogo(false)
   }
@@ -251,7 +252,7 @@ export default function PantallaCrearTorneo({ onVolver, onCreado }) {
         formato, cantidad_equipos: equipos.length || cantEquipos, estadisticas: stats,
       })
       if (error) {
-        alert('No se pudo crear: ' + error)
+        aviso('No se pudo crear: ' + error)
         setGuardando(false)
         return
       }
@@ -269,7 +270,7 @@ export default function PantallaCrearTorneo({ onVolver, onCreado }) {
       }
       onCreado && onCreado(torneo)
     } catch (e) {
-      alert('Error: ' + (e.message || e))
+      aviso('Error: ' + (e.message || e))
     }
     setGuardando(false)
   }

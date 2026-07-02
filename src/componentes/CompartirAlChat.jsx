@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { aviso } from './Avisos'
 import { listaConversaciones, perfilesDe, enviarResultado } from '../mensajes'
 import { supabase } from '../supabaseClient'
 
@@ -61,7 +62,7 @@ export default function CompartirAlChat({ datos, tema, titulo, onEnviar, onCerra
       setEnviados((prev) => [...prev, paraId])
       onEnviado && onEnviado(paraId)
     } else {
-      alert('No se pudo enviar: ' + (r?.error || 'intenta de nuevo'))
+      aviso('No se pudo enviar: ' + (r?.error || 'intenta de nuevo'))
     }
   }
 

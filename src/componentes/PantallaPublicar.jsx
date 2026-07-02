@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
+import CrearEncuesta from './CrearEncuesta'
+import { aviso } from './Avisos'
 import { Capacitor } from '@capacitor/core'
 import { Keyboard, KeyboardResize } from '@capacitor/keyboard'
 import plAroAtardecer from '../assets/plantillas/plantilla_aro_atardecer.webp'
@@ -35,6 +37,7 @@ export default function PantallaPublicar({ miPerfil, onVolver, onPublicado, onRe
   const [panelEmoji, setPanelEmoji] = useState(false)
   const [panelSentimiento, setPanelSentimiento] = useState(false)
   const [panelUbicacion, setPanelUbicacion] = useState(false)
+  const [panelEncuesta, setPanelEncuesta] = useState(false)
   const [sentimiento, setSentimiento] = useState(null)   // { emoji, label } o null
   const [ubicacion, setUbicacion] = useState(null)        // string o null
   const [ubicacionTmp, setUbicacionTmp] = useState('')
@@ -150,17 +153,17 @@ export default function PantallaPublicar({ miPerfil, onVolver, onPublicado, onRe
   const plantillaActiva = PLANTILLAS.find((x) => x.id === fondoSel) || PLANTILLAS[0]
   const conFondo = plantillaActiva.id > 0
 
-  const avisarPronto = (n) => alert(`${n}: muy pronto 🏀`)
+  const avisarPronto = (n) => aviso(`${n}: muy pronto 🏀`)
   const CHIPS = [
     { id: 'torneo', emoji: '🏆', txt: 'Torneo', activa: false, fn: () => avisarPronto('Etiquetar torneo') },
     { id: 'ubicacion', emoji: '📍', txt: ubicacion || 'Ubicación', activa: !!ubicacion, fn: toggleUbicacion },
     { id: 'sentimiento', emoji: sentimiento ? sentimiento.emoji : '😊', txt: sentimiento ? sentimiento.label : 'Sentimiento', activa: !!sentimiento, fn: toggleSentimiento },
   ]
   const ACCIONES = [
-    { id: 'foto', emoji: '📷', txt: 'Foto', fn: () => { if (fotos.length >= maxFotos) { alert(`Puedes subir hasta ${maxFotos} fotos por publicación.`) } else { inputFotosRef.current && inputFotosRef.current.click() } } },
-    { id: 'video', emoji: '🎥', txt: 'Video', fn: () => { if (fotos.length > 0) { alert('Una publicación lleva fotos o un video, no ambos. Quita las fotos primero.'); return } inputVideoRef.current && inputVideoRef.current.click() } },
+    { id: 'foto', emoji: '📷', txt: 'Foto', fn: () => { if (fotos.length >= maxFotos) { aviso(`Puedes subir hasta ${maxFotos} fotos por publicación.`) } else { inputFotosRef.current && inputFotosRef.current.click() } } },
+    { id: 'video', emoji: '🎥', txt: 'Video', fn: () => { if (fotos.length > 0) { aviso('Una publicación lleva fotos o un video, no ambos. Quita las fotos primero.'); return } inputVideoRef.current && inputVideoRef.current.click() } },
     { id: 'resultado', emoji: '📊', txt: 'Resultado', fn: () => { onResultado && onResultado() } },
-    { id: 'encuesta', emoji: '🗳️', txt: 'Encuesta', fn: () => avisarPronto('Crear encuesta') },
+    { id: 'encuesta', emoji: '🗳️', txt: 'Encuesta', fn: () => { setPanelEmoji(false); setPanelSentimiento(false); setPanelUbicacion(false); setPanelEncuesta(true) } },
     { id: 'gif', emoji: '🎬', txt: 'GIF', fn: () => avisarPronto('GIF') },
   ]
   const EMOJIS = ['🏀', '🔥', '💪', '🏆', '🥇', '⛹️', '🎯', '💥', '⚡', '🌟', '👑', '🚀', '💯', '🙌', '😤', '😎', '👏', '🤝', '😅', '😱', '💀', '😈', '🗣️', '👀']
@@ -172,7 +175,7 @@ export default function PantallaPublicar({ miPerfil, onVolver, onPublicado, onRe
     if (inputFotosRef.current) inputFotosRef.current.value = ''
     if (!archivos.length) return
     const espacio = maxFotos - fotos.length
-    if (espacio <= 0) { alert(`Puedes subir hasta ${maxFotos} fotos por publicación.`); return }
+    if (espacio <= 0) { aviso(`Puedes subir hasta ${maxFotos} fotos por publicación.`); return }
     const aUsar = archivos.slice(0, espacio)
     // Una sola foto en total → recortador
     if (aUsar.length === 1 && fotos.length === 0) {
@@ -208,9 +211,9 @@ export default function PantallaPublicar({ miPerfil, onVolver, onPublicado, onRe
   const alElegirVideo = async (e) => {
     const file = e.target.files && e.target.files[0]; if (e.target) e.target.value = ''
     if (!file) return
-    if (fotos.length > 0) { alert('Una publicación lleva fotos o un video, no ambos. Quita las fotos primero.'); return }
+    if (fotos.length > 0) { aviso('Una publicación lleva fotos o un video, no ambos. Quita las fotos primero.'); return }
     const dur = await duracionDeVideo(file)
-    if (dur && dur > MAX_VIDEO_TECHADO + 0.6) { alert('El video del Techado debe ser de un minuto o menos.'); return }
+    if (dur && dur > MAX_VIDEO_TECHADO + 0.6) { aviso('El video del Techado debe ser de un minuto o menos.'); return }
     if (video && video.url) { try { URL.revokeObjectURL(video.url) } catch (x) {} }
     setVideo({ file, url: URL.createObjectURL(file), dur })
   }
@@ -227,7 +230,7 @@ export default function PantallaPublicar({ miPerfil, onVolver, onPublicado, onRe
     const hayVideo = !!video
     if (publicando) return
     if (!textoFinal && !hayFotos && !hayVideo) {
-      alert('Escribe algo, elige un sentimiento o ubicación, o agrega una foto o video para publicar 🏀')
+      aviso('Escribe algo, elige un sentimiento o ubicación, o agrega una foto o video para publicar 🏀')
       return
     }
     setPublicando(true)
@@ -247,11 +250,11 @@ export default function PantallaPublicar({ miPerfil, onVolver, onPublicado, onRe
         const { subirVideoTechado } = await import('../historias')
         const rv = await subirVideoTechado(video.file)
         if (rv && rv.url) videoUrl = rv.url
-        else { alert('No se pudo subir el video.'); setPublicando(false); return }
+        else { aviso('No se pudo subir el video.'); setPublicando(false); return }
       }
       const res = await publicarTexto({ texto: textoFinal, imagenes: urls.length ? urls : null, video: videoUrl, fondo: (urls.length || videoUrl) ? null : fondoElegido })
       if (res && res.error) {
-        alert('No se pudo publicar: ' + res.error)
+        aviso('No se pudo publicar: ' + res.error)
       } else {
         setTexto(''); setFondoSel(0); setSentimiento(null); setUbicacion(null); setUbicacionTmp('')
         fotos.forEach((f) => { try { URL.revokeObjectURL(f.previa) } catch (e) {} })
@@ -261,7 +264,7 @@ export default function PantallaPublicar({ miPerfil, onVolver, onPublicado, onRe
         onVolver && onVolver()
       }
     } catch (e) {
-      alert('Error al publicar: ' + (e.message || e))
+      aviso('Error al publicar: ' + (e.message || e))
     }
     setPublicando(false)
   }
@@ -275,8 +278,28 @@ export default function PantallaPublicar({ miPerfil, onVolver, onPublicado, onRe
   `
 
   // ===== ESTRUCTURA DEL CHAT: raíz que sube con el teclado (height calc) =====
+  const modalEncuesta = panelEncuesta ? (
+    <CrearEncuesta
+      onCerrar={() => setPanelEncuesta(false)}
+      onCrear={async (pregunta, opciones) => {
+        const { crearEncuesta } = await import('../encuestas')
+        const { publicarEncuesta } = await import('../techado')
+        const r = await crearEncuesta({ pregunta, opciones })
+        if (r.error) { aviso('No se pudo crear la encuesta: ' + r.error); return false }
+        const rp = await publicarEncuesta({ encuestaId: r.encuesta.id, pregunta, opciones })
+        if (rp && rp.error) { aviso('No se pudo publicar: ' + rp.error); return false }
+        setPanelEncuesta(false)
+        aviso('\u00a1Encuesta publicada en el Techado! \ud83d\udcca')
+        onPublicado && onPublicado()
+        onVolver && onVolver()
+        return true
+      }}
+    />
+  ) : null
+
   return (
     <div style={{ fontFamily: font, color: T.textoBody, background: T.fondo, display: 'flex', flexDirection: 'column', position: 'fixed', top: 0, left: 0, right: 0, zIndex: 300, height: kbAlto > 0 ? `calc(100dvh - ${Math.max(0, kbAlto - ajusteTeclado)}px)` : '100dvh', overflow: 'hidden', transition: 'height .25s cubic-bezier(.25,.8,.25,1)' }}>
+      {modalEncuesta}
       <style>{css}</style>
 
       {/* Glow deportivo de fondo */}

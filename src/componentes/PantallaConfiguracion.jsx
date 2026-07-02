@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { confirmar } from './Avisos'
 import { supabase } from '../supabaseClient'
 import { cargarMiPerfil, guardarMiPerfil, cambiarMiPin } from '../social'
 import { subirFotoPerfil, subirFoto, subirFotoJugador } from '../fotos'
@@ -155,7 +156,7 @@ export default function PantallaConfiguracion({ onVolver, onSalir }) {
   }
 
   const cerrarSesion = async () => {
-    if (!confirm('¿Cerrar sesión?')) return
+    if (!(await confirmar('¿Cerrar sesión?'))) return
     try { await supabase.auth.signOut() } catch (e) {}
     onSalir && onSalir()
   }

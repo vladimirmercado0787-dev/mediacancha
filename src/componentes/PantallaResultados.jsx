@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { aviso, confirmar } from './Avisos'
 import fondoCancha from '../assets/fondo-cancha.webp'
 import fondoTarjetaMiembro from '../assets/fondo-tarjeta-miembro.webp'
 import texturaCuero from '../assets/textura-cuero.webp'
@@ -150,8 +151,8 @@ export default function PantallaResultados({ onVolver, onNuevoJuego, onAccion })
     }
   }, [juegoAPublicar])
 
-  const eliminarJuego = (j) => {
-    if (!window.confirm(`¿Eliminar este juego (${j.nombreA} vs ${j.nombreB})? No se puede deshacer.`)) return
+  const eliminarJuego = async (j) => {
+    if (!(await confirmar(`¿Eliminar este juego (${j.nombreA} vs ${j.nombreB})? No se puede deshacer.`))) return
     borrarJuegoDelDia(j.id)
     setJuegos((prev) => prev.filter((x) => x.id !== j.id))
   }
@@ -172,14 +173,14 @@ export default function PantallaResultados({ onVolver, onNuevoJuego, onAccion })
         textoExtra: (comentario || '').trim() || null,
       })
       if (res.error) {
-        alert('No se pudo publicar: ' + res.error)
+        aviso('No se pudo publicar: ' + res.error)
       } else {
         setPublicadoIds((prev) => [...prev, j.id])
         setJuegoAPublicar(null)
         setComentarioPub('')
       }
     } catch (e) {
-      alert('Error al publicar: ' + (e.message || e))
+      aviso('Error al publicar: ' + (e.message || e))
     }
     setPublicandoId(null)
   }
